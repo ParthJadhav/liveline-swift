@@ -1,0 +1,25 @@
+name: LivelineDemo
+options:
+  bundleIdPrefix: com.liveline
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  Liveline:
+    path: ../..
+targets:
+  LivelineDemo:
+    type: application
+    platform: iOS
+    sources:
+      - Sources
+    dependencies:
+      - package: Liveline
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.liveline.demo
+        INFOPLIST_FILE: Sources/Info.plist
+        SWIFT_VERSION: 5.0
+        TARGETED_DEVICE_FAMILY: 1,2
+        SUPPORTS_MACCATALYST: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
