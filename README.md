@@ -25,7 +25,7 @@ In `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ParthJadhav/liveline-swift.git", branch: "main")
+    .package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.1.1")
 ],
 targets: [
     .target(

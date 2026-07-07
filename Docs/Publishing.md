@@ -28,14 +28,14 @@ git push -u origin main
 SwiftPM can consume a branch, but app teams usually prefer version tags.
 
 ```bash
-git tag 0.1.0
-git push origin 0.1.0
+git tag 0.1.1
+git push origin 0.1.1
 ```
 
 Then depend on:
 
 ```swift
-.package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.1.0")
+.package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.1.1")
 ```
 
 ## Verification Before Release
