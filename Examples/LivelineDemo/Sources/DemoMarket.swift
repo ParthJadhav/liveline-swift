@@ -18,20 +18,22 @@ final class DemoMarket: ObservableObject {
 
     init() {
         let now = Date().timeIntervalSince1970
-        startTime = now - 210
+        let seedCount = 220
+        startTime = now - Double(seedCount - 1)
         var value = 42_100.0
         var generatedTicks: [LivelinePoint] = []
-        for index in 0..<220 {
+        for index in 0..<seedCount {
             let time = startTime + Double(index)
             value += sin(Double(index) * 0.12) * 10 + cos(Double(index) * 0.03) * 5
             generatedTicks.append(LivelinePoint(time: time, value: value))
         }
         let initialLatest = generatedTicks.last?.value ?? value
         let initialCandles = DemoMarket.makeCandles(from: generatedTicks, candleWidth: candleWidth)
+        let initialLiveCandle = initialCandles.last ?? LivelineCandle(time: now, open: initialLatest, high: initialLatest, low: initialLatest, close: initialLatest)
         ticks = generatedTicks
         latest = initialLatest
-        candles = initialCandles
-        liveCandle = initialCandles.last ?? LivelineCandle(time: now, open: initialLatest, high: initialLatest, low: initialLatest, close: initialLatest)
+        candles = Array(initialCandles.dropLast())
+        liveCandle = initialLiveCandle
         spread = DemoMarket.makeSeries(from: generatedTicks)
         orderbook = DemoMarket.makeOrderbook(mid: initialLatest)
     }
