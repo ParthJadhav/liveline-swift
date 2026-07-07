@@ -60,6 +60,8 @@ LivelineChartConfiguration(
 )
 ```
 
+The Swift API keeps the upstream React feature surface but maps union-style props into typed fields. Web `momentum={false}` is `autoDetectMomentum: false`; web `momentum="up"` is `momentum: .up`. Web `degen={true}` is `degen: LivelineDegenOptions()`, and web `degen={false}` is `degen: nil`.
+
 Important options:
 
 | Option | Default | Notes |

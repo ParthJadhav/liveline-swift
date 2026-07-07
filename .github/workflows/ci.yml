@@ -22,6 +22,12 @@ jobs:
       - name: Test package
         run: swift test
 
+      - name: Build package for release
+        run: swift build -c release
+
+      - name: Build package for macOS
+        run: xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
+
   ios-demo:
     name: iOS Demo
     runs-on: macos-latest

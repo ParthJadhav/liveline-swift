@@ -1,26 +1,37 @@
-# Publishing Checklist
+# Release Checklist
 
-## Private Repository
+## Repository Visibility
 
-The repository is intended to be published as a private GitHub repository and consumed through Swift Package Manager.
+This checklist prepares tags, release notes, and package verification without changing GitHub repository visibility.
 
-The helper script creates or reuses the private repository, configures `origin`, and pushes `main`:
+- Do not change the repository from private to public as part of release work.
+- A GitHub release can be created while the repository remains private.
+- Public SwiftPM access requires public repository visibility or explicit read access; keep that decision outside this checklist.
+
+Confirm the current remote without mutating settings:
 
 ```bash
-scripts/publish-private.sh ParthJadhav liveline-swift
+gh repo view ParthJadhav/liveline-swift --json visibility,latestRelease,url
 ```
 
-Equivalent manual command:
+Confirm local build evidence:
 
 ```bash
-gh repo create ParthJadhav/liveline-swift --private --source . --push
+swift test
+swift build -c release
+xcodegen generate --spec Examples/LivelineDemo/project.yml
+xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
+xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
+scripts/capture-storybook.sh --chart-only
+scripts/diff-storybook.sh --fail-changed-pct 5 --fail-rms 12
 ```
 
-If the remote already exists:
+When the optional platform SDK components are installed, also verify the declared package platforms:
 
 ```bash
-git remote add origin https://github.com/ParthJadhav/liveline-swift.git
-git push -u origin main
+xcodebuild -scheme Liveline -destination 'generic/platform=tvOS' build
+xcodebuild -scheme Liveline -destination 'generic/platform=watchOS' build
+xcodebuild -scheme Liveline -destination 'generic/platform=visionOS' build
 ```
 
 ## Tagging A Release
@@ -28,24 +39,35 @@ git push -u origin main
 SwiftPM can consume a branch, but app teams usually prefer version tags.
 
 ```bash
-git tag 0.1.1
-git push origin 0.1.1
+VERSION=0.1.2
+git tag "$VERSION"
+git push origin "$VERSION"
+```
+
+Confirm that the tag commit is the intended release commit:
+
+```bash
+git show --stat --oneline "$VERSION"
 ```
 
 Then depend on:
 
 ```swift
-.package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.1.1")
+.package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.1.2")
 ```
 
-## Verification Before Release
+## GitHub Release
+
+A pushed tag is not the same thing as a GitHub release. Check existing releases before publishing:
 
 ```bash
-swift test
-xcodegen generate --spec Examples/LivelineDemo/project.yml
-xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
-scripts/capture-storybook.sh --chart-only
-scripts/diff-storybook.sh --fail-changed-pct 5 --fail-rms 12
+gh release list --repo ParthJadhav/liveline-swift --limit 20
+```
+
+Create the release only after the tag points at the intended commit:
+
+```bash
+gh release create "$VERSION" --repo ParthJadhav/liveline-swift --title "$VERSION" --generate-notes
 ```
 
 ## Access

@@ -28,6 +28,10 @@ Drag scrubbing converts the pointer location to a chart time, interpolates a val
 
 Momentum is detected from recent points, not the total visible range. The live dot and arrows use semantic green/red for up/down movement. Passing `momentum` in the configuration overrides automatic detection.
 
+## Candle Line Mode
+
+Candlestick charts animate between OHLC bars and line mode with the same staged transition as the web implementation. Candle bodies collapse toward their close values, the line fades in with accent-color blending, tick-level line density ramps in after the first part of the morph, and the candle close-price dash crossfades into the line dash.
+
 ## Degen Effects
 
 `LivelineDegenOptions` adds particle bursts and a short chart shake on momentum changes. This is intentionally opt-in.

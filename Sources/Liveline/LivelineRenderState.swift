@@ -31,6 +31,16 @@ final class LivelineRenderState: ObservableObject {
     var timeAxisLabels: [Int: TimeAxisLabelState] = [:]
     var seriesAlpha: [String: Double] = [:]
     var lastHover: LivelineHoverPoint?
+    var candleDisplayLive: LivelineCandle?
+    var candleLiveBirthAlpha: Double = 1
+    var candleLiveBullBlend: Double = 0.5
+    var candleCloseLineSmooth: Double?
+    var candleLineSmoothClose: Double?
+    var candleLineTickSmooth: Double?
+    var candleLineModeProgress: Double = 0
+    var candleLineModeTransition: TimedTransition?
+    var candleLineDensityProgress: Double = 0
+    var candleLineDensityTransition: TimedTransition?
 
     func deltaTime(for timestamp: TimeInterval) -> TimeInterval {
         defer { lastTimestamp = timestamp }
@@ -80,6 +90,34 @@ final class LivelineRenderState: ObservableObject {
         state ^= state &+ ((state ^ (state >> 7)) &* (state | 61))
         return Double(state ^ (state >> 14)) / 4_294_967_296.0
     }
+
+    func timedProgress(
+        current: Double,
+        target: Double,
+        duration: TimeInterval,
+        timestamp: TimeInterval,
+        transition keyPath: ReferenceWritableKeyPath<LivelineRenderState, TimedTransition?>
+    ) -> Double {
+        if self[keyPath: keyPath]?.target != target {
+            self[keyPath: keyPath] = TimedTransition(from: current, target: target, startTimestamp: timestamp)
+        }
+
+        guard var transition = self[keyPath: keyPath] else {
+            return target
+        }
+
+        let elapsed = max(0, timestamp - transition.startTimestamp)
+        guard duration > 0, elapsed < duration else {
+            self[keyPath: keyPath] = nil
+            return target
+        }
+
+        let t = elapsed / duration
+        let eased = (1 - cos(t * .pi)) / 2
+        transition.lastValue = transition.from + (transition.target - transition.from) * eased
+        self[keyPath: keyPath] = transition
+        return transition.lastValue
+    }
 }
 
 struct Particle: Identifiable {
@@ -105,4 +143,18 @@ struct OrderbookLabel: Identifiable {
 struct TimeAxisLabelState {
     var alpha: Double
     var text: String
+}
+
+struct TimedTransition {
+    var from: Double
+    var target: Double
+    var startTimestamp: TimeInterval
+    var lastValue: Double
+
+    init(from: Double, target: Double, startTimestamp: TimeInterval) {
+        self.from = from
+        self.target = target
+        self.startTimestamp = startTimestamp
+        self.lastValue = from
+    }
 }

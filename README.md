@@ -18,14 +18,14 @@ In Xcode:
 
 1. Open your app project.
 2. Select **File > Add Package Dependencies...**
-3. Add the private repository URL.
+3. Add the repository URL.
 4. Choose the `Liveline` product.
 
 In `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.1.1")
+    .package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.1.2")
 ],
 targets: [
     .target(
@@ -35,7 +35,7 @@ targets: [
 ]
 ```
 
-For private GitHub access, use an account or deploy key that can read the repository.
+If the repository remains private, use a GitHub account or deploy key that can read it.
 
 ## Quick Start
 
@@ -148,6 +148,8 @@ scripts/record-demo.sh
 
 ```bash
 swift test
+swift build -c release
+xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
 xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
 scripts/capture-storybook.sh
 scripts/capture-storybook.sh --chart-only
@@ -159,15 +161,20 @@ Use the chart-only capture plus web-reference diff when comparing the native ren
 
 The normal CI workflow runs package tests and the iOS demo build. The manual `Visual Parity` workflow captures upstream/native Storybook screenshots, runs the diff gate, and uploads the visual artifacts.
 
-## Publishing
+## Release
 
-For private GitHub publishing:
+For release verification and tagging:
 
 ```bash
-scripts/publish-private.sh ParthJadhav liveline-swift
+swift test
+swift build -c release
+xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
+xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
+scripts/capture-storybook.sh --chart-only
+scripts/diff-storybook.sh --fail-changed-pct 5 --fail-rms 12
 ```
 
-See [Docs/Publishing.md](Docs/Publishing.md) for release tags and private SwiftPM access notes.
+See [Docs/Publishing.md](Docs/Publishing.md) for the release checklist. Repository visibility is intentionally left unchanged by the release process.
 
 ## Documentation
 
@@ -177,6 +184,7 @@ See [Docs/Publishing.md](Docs/Publishing.md) for release tags and private SwiftP
 - [Scenario matrix](Docs/ScenarioMatrix.md)
 - [Visual parity status](Docs/ParityStatus.md)
 - [Publishing checklist](Docs/Publishing.md)
+- [Changelog](CHANGELOG.md)
 
 ## Attribution
 

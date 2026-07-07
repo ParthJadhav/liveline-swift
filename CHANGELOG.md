@@ -1,0 +1,16 @@
+# Changelog
+
+## 0.1.2 - 2026-07-07
+
+- Adds candle line-mode morphing with staged OHLC collapse, line density ramping, close-price dash crossfade, and smoother live-candle transitions.
+- Refreshes deterministic Storybook captures and visual parity artifacts; the accepted diff gate remains `--fail-changed-pct 5 --fail-rms 12`.
+- Adds release, optimized package, and macOS package build checks to CI and the release checklist.
+- Updates release documentation so tagging and GitHub releases do not imply a repository visibility change.
+
+## 0.1.1 - 2026-07-06
+
+- Documents the SwiftPM release tag and private repository install path.
+
+## 0.1.0 - 2026-07-06
+
+- Initial native SwiftUI Liveline package with line, candlestick, multi-series, Storybook, demo, and visual parity tooling.

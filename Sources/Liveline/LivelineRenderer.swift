@@ -47,6 +47,12 @@ enum LivelineRenderer {
     private static let orderbookTextStrokePercent: CGFloat = -31
     private static let orderbookTextOffsetX: CGFloat = -4
     private static let orderbookTextOffsetY: CGFloat = 0
+    private static let candleLineMorphDuration: TimeInterval = 0.50
+    private static let candleLineDensityDuration: TimeInterval = 0.35
+    private static let candleLiveLerpSpeed = 0.25
+    private static let candleCloseLineLerpSpeed = 0.25
+    private static let candleLineLerpBase = 0.08
+    private static let candleLineAdaptiveBoost = 0.20
 
     static func draw(context: inout GraphicsContext, state: LivelineRenderState, input: LivelineRenderInput) {
         guard input.size.width > 8, input.size.height > 8 else { return }
@@ -157,11 +163,11 @@ enum LivelineRenderer {
             drawReferenceLine(context: &layer, layout: layout, palette: palette, referenceLine: config.referenceLine!, formatValue: config.formatValue, alpha: state.chartReveal)
         }
 
-        if config.grid {
+        if config.grid, !input.content.isCandle {
             drawGrid(context: &layer, layout: layout, palette: palette, state: state, formatValue: config.formatValue, alpha: revealRamp(state.chartReveal, 0.15, 0.70), deltaTime: dt)
         }
 
-        if let orderbook = config.orderbook, !isMultiSeries {
+        if let orderbook = config.orderbook, !isMultiSeries, !input.content.isCandle {
             drawOrderbook(context: &layer, layout: layout, palette: palette, state: state, orderbook: orderbook, randomSeed: config.randomSeed, deltaTime: dt, swingMagnitude: swingMagnitude, alpha: state.chartReveal)
         }
 
@@ -202,54 +208,28 @@ enum LivelineRenderer {
             )
 
         case let .candle(_, _, candles, candleWidth, liveCandle, lineData, lineValue):
-            if config.lineMode {
-                let points = drawLine(
-                    context: &layer,
-                    layout: layout,
-                    palette: palette,
-                    points: renderData.primaryVisible.isEmpty ? lineData.visible(in: leftEdge...rightEdge) : renderData.primaryVisible,
-                    smoothValue: lineValue ?? smoothValue,
-                    now: anchor,
-                    showFill: config.fill,
-                    hoverX: hover?.x,
-                    scrubAmount: scrubAmount,
-                    reveal: state.chartReveal,
-                    timestamp: animationTimestamp
-                )
-                drawLineDecorations(
-                    context: &layer,
-                    state: state,
-                    layout: layout,
-                    palette: palette,
-                    points: points,
-                    momentum: resolvedMomentum(config: config, points: renderData.primaryVisible),
-                    config: config,
-                    hover: hover,
-                    scrubAmount: scrubAmount,
-                    smoothValue: lineValue ?? smoothValue,
-                    swingMagnitude: swingMagnitude,
-                    timestamp: animationTimestamp,
-                    deltaTime: dt
-                )
-            } else {
-                drawCandles(
-                    context: &layer,
-                    layout: layout,
-                    palette: palette,
-                    candles: candles.visibleCandles(in: leftEdge...rightEdge, candleWidth: candleWidth),
-                    candleWidth: candleWidth,
-                    liveCandle: liveCandle,
-                    timestamp: animationTimestamp,
-                    scrubX: hover?.x,
-                    scrubAmount: scrubAmount,
-                    reveal: state.chartReveal
-                )
-                if let liveCandle {
-                    drawCurrentPriceLine(context: &layer, layout: layout, palette: palette, value: liveCandle.close, isUp: liveCandle.close >= liveCandle.open, alpha: state.chartReveal * (1 - scrubAmount * 0.3))
-                }
-                drawCandleCrosshair(context: &layer, layout: layout, palette: palette, hover: hover, candles: candles, candleWidth: candleWidth, config: config, alpha: scrubAmount)
-            }
-            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealRamp(state.chartReveal, 0.15, 0.70), deltaTime: dt)
+            drawCandleMode(
+                context: &layer,
+                state: state,
+                layout: layout,
+                palette: palette,
+                candles: candles,
+                candleWidth: candleWidth,
+                liveCandle: liveCandle,
+                lineData: lineData,
+                lineValue: lineValue,
+                config: config,
+                hover: hover,
+                scrubAmount: scrubAmount,
+                now: anchor,
+                leftEdge: leftEdge,
+                rightEdge: rightEdge,
+                activeWindow: input.activeWindow,
+                reveal: state.chartReveal,
+                timestamp: animationTimestamp,
+                deltaTime: dt,
+                smoothValue: smoothValue
+            )
 
         case let .series(series):
             let endpoints = drawSeries(
@@ -811,7 +791,10 @@ private extension LivelineRenderer {
         hoverX: CGFloat?,
         scrubAmount: Double,
         reveal: Double,
-        timestamp: TimeInterval
+        timestamp: TimeInterval,
+        colorBlend: Double = 1,
+        skipDashLine: Bool = false,
+        fillScale: Double = 1
     ) -> [CGPoint] {
         guard !points.isEmpty else { return [] }
 
@@ -847,7 +830,7 @@ private extension LivelineRenderer {
         var clipped = context
         clipped.clip(to: Path(clipRect))
 
-        let fillAlpha = reveal < 1 ? reveal : 1
+        let fillAlpha = reveal < 1 ? reveal * fillScale : fillScale
         let lineAlpha = reveal < 1 ? LivelineMath.loadingBreath(timestamp) + (1 - LivelineMath.loadingBreath(timestamp)) * reveal : 1
 
         if showFill, fillAlpha > 0.01 {
@@ -872,8 +855,8 @@ private extension LivelineRenderer {
             var layer = target
             layer.opacity *= opacity
             let strokeColor: Color
-            if reveal < 1 {
-                let colorProgress = min(1, reveal * 3)
+            if reveal < 1 || colorBlend < 1 {
+                let colorProgress = min(1, reveal * 3) * LivelineMath.clamp(colorBlend, 0, 1)
                 strokeColor = palette.gridLabelRGB.blended(to: palette.lineRGB, t: colorProgress).color
             } else {
                 strokeColor = palette.line
@@ -897,15 +880,17 @@ private extension LivelineRenderer {
             stroke(&clipped, opacity: lineAlpha)
         }
 
-        let currentY = reveal < 1
-            ? centerY + (LivelineMath.clamp(layout.y(for: smoothValue), layout.padding.top, layout.bottomY) - centerY) * CGFloat(reveal)
-            : LivelineMath.clamp(layout.y(for: smoothValue), layout.padding.top, layout.bottomY)
-        var dash = Path()
-        dash.move(to: CGPoint(x: layout.padding.left, y: currentY))
-        dash.addLine(to: CGPoint(x: layout.rightX, y: currentY))
-        var dashLayer = context
-        dashLayer.opacity *= reveal * (1 - scrubAmount * 0.2)
-        dashLayer.stroke(dash, with: .color(palette.dashLine), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+        if !skipDashLine {
+            let currentY = reveal < 1
+                ? centerY + (LivelineMath.clamp(layout.y(for: smoothValue), layout.padding.top, layout.bottomY) - centerY) * CGFloat(reveal)
+                : LivelineMath.clamp(layout.y(for: smoothValue), layout.padding.top, layout.bottomY)
+            var dash = Path()
+            dash.move(to: CGPoint(x: layout.padding.left, y: currentY))
+            dash.addLine(to: CGPoint(x: layout.rightX, y: currentY))
+            var dashLayer = context
+            dashLayer.opacity *= reveal * (1 - scrubAmount * 0.2)
+            dashLayer.stroke(dash, with: .color(palette.dashLine), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+        }
 
         if let index = screenPoints.indices.last {
             screenPoints[index].y = LivelineMath.clamp(screenPoints[index].y, 10, layout.size.height - 10)
@@ -1168,36 +1153,472 @@ private extension LivelineRenderer {
 }
 
 private extension LivelineRenderer {
+    static func drawCandleMode(
+        context: inout GraphicsContext,
+        state: LivelineRenderState,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        candles: [LivelineCandle],
+        candleWidth: TimeInterval,
+        liveCandle: LivelineCandle?,
+        lineData: [LivelinePoint],
+        lineValue: Double?,
+        config: LivelineChartConfiguration,
+        hover: LivelineHoverPoint?,
+        scrubAmount: Double,
+        now: TimeInterval,
+        leftEdge: TimeInterval,
+        rightEdge: TimeInterval,
+        activeWindow: TimeInterval,
+        reveal: Double,
+        timestamp: TimeInterval,
+        deltaTime: TimeInterval,
+        smoothValue: Double
+    ) {
+        let pausedDeltaTime = deltaTime * (1 - state.pauseProgress)
+        let lineModeTarget = config.lineMode ? 1.0 : 0.0
+        state.candleLineModeProgress = state.timedProgress(
+            current: state.candleLineModeProgress,
+            target: lineModeTarget,
+            duration: candleLineMorphDuration,
+            timestamp: timestamp,
+            transition: \.candleLineModeTransition
+        )
+        let lineModeProgress = state.candleLineModeProgress
+
+        let smoothLive = smoothLiveCandle(state: state, liveCandle: liveCandle, deltaTime: pausedDeltaTime)
+        updateCandleLineSmoothing(
+            state: state,
+            liveCandle: liveCandle,
+            lineValue: lineValue,
+            hasTickData: !lineData.isEmpty,
+            displayMin: layout.minValue,
+            displayMax: layout.maxValue,
+            deltaTime: pausedDeltaTime
+        )
+
+        let hasTickData = !lineData.isEmpty
+        let densityTarget = config.lineMode && lineModeProgress >= 0.30 && hasTickData ? 1.0 : 0.0
+        state.candleLineDensityProgress = state.timedProgress(
+            current: state.candleLineDensityProgress,
+            target: densityTarget,
+            duration: candleLineDensityDuration,
+            timestamp: timestamp,
+            transition: \.candleLineDensityTransition
+        )
+        let lineDensityProgress = state.candleLineDensityProgress
+
+        var visibleCandles = candles.visibleCandles(in: leftEdge...rightEdge, candleWidth: candleWidth)
+        if let smoothLive, smoothLive.time + candleWidth >= leftEdge, smoothLive.time <= rightEdge {
+            visibleCandles.append(smoothLive)
+        }
+
+        var candlesToDraw = visibleCandles
+        if lineModeProgress > 0.01,
+           let live = smoothLive,
+           let lineSmoothClose = state.candleLineSmoothClose {
+            let blendedClose = live.close + (lineSmoothClose - live.close) * lineModeProgress
+            let blendedLive = LivelineCandle(
+                time: live.time,
+                open: live.open,
+                high: live.high,
+                low: live.low,
+                close: blendedClose
+            )
+            if let liveIndex = candlesToDraw.lastIndex(where: { $0.time == live.time }) {
+                candlesToDraw[liveIndex] = blendedLive
+            }
+        }
+
+        if lineModeProgress > 0.01, lineModeProgress < 0.99 {
+            candlesToDraw = candlesToDraw.map { collapse(candle: $0, scale: 1 - lineModeProgress) }
+        }
+
+        let lineResult = candleLineData(
+            candles: candlesToDraw,
+            lineData: lineData,
+            lineValue: lineValue,
+            lineDensityProgress: lineDensityProgress,
+            lineModeProgress: lineModeProgress,
+            lineSmoothClose: state.candleLineSmoothClose,
+            lineTickSmooth: state.candleLineTickSmooth,
+            fallbackSmoothValue: smoothValue,
+            candleWidth: candleWidth,
+            leftEdge: leftEdge,
+            rightEdge: rightEdge
+        )
+
+        let fullLineMode = lineModeProgress >= 0.99
+        let revealLine = fullLineMode ? (1 - reveal) : pow(1 - reveal, 3)
+        let linePresence = max(lineModeProgress, revealLine)
+        let colorBlend = linePresence > 0.001 ? lineModeProgress / linePresence : 1
+
+        if config.grid {
+            drawGrid(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                state: state,
+                formatValue: config.formatValue,
+                alpha: revealRamp(reveal, 0.25, 0.60),
+                deltaTime: deltaTime
+            )
+        }
+
+        var linePoints: [CGPoint] = []
+        if linePresence > 0.01, lineResult.points.count >= 2 {
+            var lineLayer = context
+            lineLayer.opacity *= linePresence
+            linePoints = drawLine(
+                context: &lineLayer,
+                layout: layout,
+                palette: palette,
+                points: paddedLinePointsForReveal(lineResult.points, leftEdge: leftEdge, rightEdge: rightEdge, reveal: reveal),
+                smoothValue: lineResult.smoothValue,
+                now: now,
+                showFill: config.fill && lineModeProgress > 0.01,
+                hoverX: hover?.x,
+                scrubAmount: scrubAmount,
+                reveal: reveal,
+                timestamp: timestamp,
+                colorBlend: colorBlend,
+                skipDashLine: !fullLineMode,
+                fillScale: lineModeProgress
+            )
+        }
+
+        let closeAlpha = revealRamp(reveal, 0.40, 0.80)
+        let closeSource = closePriceCandle(state: state, liveCandle: liveCandle)
+        if let closeSource, closeAlpha > 0.01 {
+            if linePresence < 0.99 {
+                drawCurrentPriceLine(
+                    context: &context,
+                    layout: layout,
+                    palette: palette,
+                    value: closeSource.close,
+                    isUp: closeSource.close >= closeSource.open,
+                    alpha: closeAlpha * (1 - linePresence) * (1 - scrubAmount * 0.3),
+                    colorOverride: candleColor(isUp: closeSource.close >= closeSource.open, bullBlend: state.candleLiveBullBlend).color
+                )
+            }
+
+            if linePresence > 0.01, !fullLineMode {
+                drawCurrentPriceLine(
+                    context: &context,
+                    layout: layout,
+                    palette: palette,
+                    value: closeSource.close,
+                    isUp: closeSource.close >= closeSource.open,
+                    alpha: closeAlpha * linePresence * (1 - scrubAmount * 0.2),
+                    colorOverride: palette.dashLine,
+                    opacityScale: 1
+                )
+            }
+        }
+
+        let candleAlpha = reveal * (1 - linePresence)
+        if candleAlpha > 0.01, !candlesToDraw.isEmpty {
+            let ohlcScale = smoothstep(reveal)
+            let revealCandles = ohlcScale < 0.99
+                ? candlesToDraw.map { collapse(candle: $0, scale: ohlcScale) }
+                : candlesToDraw
+            drawCandles(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                candles: revealCandles,
+                candleWidth: candleWidth,
+                liveTime: smoothLive?.time,
+                timestamp: timestamp,
+                scrubX: hover?.x,
+                scrubAmount: scrubAmount,
+                alpha: candleAlpha,
+                liveBirthAlpha: state.candleLiveBirthAlpha,
+                liveBullBlend: state.candleLiveBullBlend,
+                accentBlend: linePresence
+            )
+        }
+
+        if lineModeProgress > 0.5,
+           let lastPoint = linePoints.last,
+           reveal > 0.3 {
+            let lineFade = (lineModeProgress - 0.5) * 2
+            let dotAlpha = lineFade * ((reveal - 0.3) / 0.7)
+            if dotAlpha > 0.01 {
+                drawDot(
+                    context: &context,
+                    at: lastPoint,
+                    palette: palette,
+                    momentum: resolvedMomentum(config: config, points: lineResult.points),
+                    showPulse: config.pulse && lineModeProgress > 0.8 && reveal > 0.6 && state.pauseProgress < 0.5,
+                    scrubAmount: scrubAmount,
+                    alpha: dotAlpha,
+                    timestamp: timestamp
+                )
+            }
+
+            if config.badge {
+                drawBadge(
+                    context: &context,
+                    layout: layout,
+                    palette: palette,
+                    value: lineResult.smoothValue,
+                    momentum: resolvedMomentum(config: config, points: lineResult.points),
+                    y: lastPoint.y,
+                    config: config,
+                    alpha: reveal * lineFade
+                )
+            }
+        }
+
+        drawTimeAxis(
+            context: &context,
+            layout: layout,
+            palette: palette,
+            state: state,
+            window: activeWindow,
+            formatTime: config.formatTime,
+            alpha: revealRamp(reveal, 0.25, 0.60),
+            deltaTime: deltaTime
+        )
+
+        if reveal > 0.7 {
+            if lineModeProgress > 0.5 {
+                if let hover {
+                    drawLineCrosshair(
+                        context: &context,
+                        layout: layout,
+                        palette: palette,
+                        hover: hover,
+                        livePoint: linePoints.last ?? CGPoint(x: layout.rightX, y: layout.y(for: lineResult.smoothValue)),
+                        config: config,
+                        alpha: scrubAmount
+                    )
+                }
+            } else {
+                drawCandleCrosshair(
+                    context: &context,
+                    layout: layout,
+                    palette: palette,
+                    hover: hover,
+                    candles: candlesToDraw,
+                    candleWidth: candleWidth,
+                    config: config,
+                    alpha: scrubAmount
+                )
+            }
+        }
+
+    }
+
+    static func smoothLiveCandle(
+        state: LivelineRenderState,
+        liveCandle: LivelineCandle?,
+        deltaTime: TimeInterval
+    ) -> LivelineCandle? {
+        guard let liveCandle else {
+            state.candleDisplayLive = nil
+            state.candleLiveBirthAlpha = 1
+            state.candleLiveBullBlend = 0.5
+            return nil
+        }
+
+        if state.candleDisplayLive?.time != liveCandle.time {
+            state.candleDisplayLive = LivelineCandle(
+                time: liveCandle.time,
+                open: liveCandle.open,
+                high: liveCandle.open,
+                low: liveCandle.open,
+                close: liveCandle.open
+            )
+            state.candleLiveBirthAlpha = 0
+        } else if var display = state.candleDisplayLive {
+            display.open = LivelineMath.lerp(display.open, liveCandle.open, speed: candleLiveLerpSpeed, deltaTime: deltaTime)
+            display.high = LivelineMath.lerp(display.high, liveCandle.high, speed: candleLiveLerpSpeed, deltaTime: deltaTime)
+            display.low = LivelineMath.lerp(display.low, liveCandle.low, speed: candleLiveLerpSpeed, deltaTime: deltaTime)
+            display.close = LivelineMath.lerp(display.close, liveCandle.close, speed: candleLiveLerpSpeed, deltaTime: deltaTime)
+            state.candleDisplayLive = display
+        }
+
+        state.candleLiveBirthAlpha = LivelineMath.lerp(state.candleLiveBirthAlpha, 1, speed: 0.20, deltaTime: deltaTime)
+        if state.candleLiveBirthAlpha > 0.99 { state.candleLiveBirthAlpha = 1 }
+
+        if let display = state.candleDisplayLive {
+            let bullTarget = display.close >= display.open ? 1.0 : 0.0
+            state.candleLiveBullBlend = LivelineMath.lerp(state.candleLiveBullBlend, bullTarget, speed: 0.12, deltaTime: deltaTime)
+            if state.candleLiveBullBlend > 0.99 { state.candleLiveBullBlend = 1 }
+            if state.candleLiveBullBlend < 0.01 { state.candleLiveBullBlend = 0 }
+        }
+
+        return state.candleDisplayLive
+    }
+
+    static func updateCandleLineSmoothing(
+        state: LivelineRenderState,
+        liveCandle: LivelineCandle?,
+        lineValue: Double?,
+        hasTickData: Bool,
+        displayMin: Double,
+        displayMax: Double,
+        deltaTime: TimeInterval
+    ) {
+        let range = max(0.001, displayMax - displayMin)
+
+        if let liveCandle {
+            if let current = state.candleCloseLineSmooth {
+                var next = LivelineMath.lerp(current, liveCandle.close, speed: candleCloseLineLerpSpeed, deltaTime: deltaTime)
+                if abs(next - liveCandle.close) < range * 0.0005 { next = liveCandle.close }
+                state.candleCloseLineSmooth = next
+            } else {
+                state.candleCloseLineSmooth = liveCandle.close
+            }
+
+            if let current = state.candleLineSmoothClose {
+                let gapRatio = min(abs(liveCandle.close - current) / range, 1)
+                let speed = candleLineLerpBase + (1 - gapRatio) * candleLineAdaptiveBoost
+                var next = LivelineMath.lerp(current, liveCandle.close, speed: speed, deltaTime: deltaTime)
+                if abs(next - liveCandle.close) < range * 0.001 { next = liveCandle.close }
+                state.candleLineSmoothClose = next
+            } else {
+                state.candleLineSmoothClose = liveCandle.close
+            }
+        } else {
+            state.candleCloseLineSmooth = nil
+            state.candleLineSmoothClose = nil
+        }
+
+        if let lineValue, hasTickData {
+            if let current = state.candleLineTickSmooth {
+                let gapRatio = min(abs(lineValue - current) / range, 1)
+                let speed = candleLineLerpBase + (1 - gapRatio) * candleLineAdaptiveBoost
+                var next = LivelineMath.lerp(current, lineValue, speed: speed, deltaTime: deltaTime)
+                if abs(next - lineValue) < range * 0.001 { next = lineValue }
+                state.candleLineTickSmooth = next
+            } else {
+                state.candleLineTickSmooth = lineValue
+            }
+        } else {
+            state.candleLineTickSmooth = nil
+        }
+    }
+
+    static func closePriceCandle(state: LivelineRenderState, liveCandle: LivelineCandle?) -> LivelineCandle? {
+        guard var liveCandle else { return nil }
+        if let close = state.candleCloseLineSmooth {
+            liveCandle.close = close
+        }
+        return liveCandle
+    }
+
+    static func candleLineData(
+        candles: [LivelineCandle],
+        lineData: [LivelinePoint],
+        lineValue: Double?,
+        lineDensityProgress: Double,
+        lineModeProgress: Double,
+        lineSmoothClose: Double?,
+        lineTickSmooth: Double?,
+        fallbackSmoothValue: Double,
+        candleWidth: TimeInterval,
+        leftEdge: TimeInterval,
+        rightEdge: TimeInterval
+    ) -> (points: [LivelinePoint], smoothValue: Double) {
+        let shouldUseTickData = !lineData.isEmpty && (lineDensityProgress > 0.01 || lineModeProgress > 0.05)
+        if shouldUseTickData {
+            let refs = candles.map {
+                LivelinePoint(time: $0.time + candleWidth / 2, value: $0.close)
+            }
+            let visibleTicks = lineData.visible(in: leftEdge...rightEdge)
+            let points = visibleTicks.map { point -> LivelinePoint in
+                let close = LivelineMath.interpolate(points: refs, at: point.time) ?? point.value
+                return LivelinePoint(
+                    time: point.time,
+                    value: close + (point.value - close) * lineDensityProgress
+                )
+            }
+            let smoothTick = lineTickSmooth ?? lineValue ?? visibleTicks.last?.value ?? fallbackSmoothValue
+            let smoothClose = lineSmoothClose ?? refs.last?.value ?? fallbackSmoothValue
+            return (points, smoothClose + (smoothTick - smoothClose) * lineDensityProgress)
+        }
+
+        let points = candles.map {
+            LivelinePoint(time: $0.time + candleWidth / 2, value: $0.close)
+        }
+        return (points, lineSmoothClose ?? points.last?.value ?? fallbackSmoothValue)
+    }
+
+    static func paddedLinePointsForReveal(
+        _ points: [LivelinePoint],
+        leftEdge: TimeInterval,
+        rightEdge: TimeInterval,
+        reveal: Double
+    ) -> [LivelinePoint] {
+        guard reveal < 1, points.count >= 2, let first = points.first else { return points }
+        let span = rightEdge - leftEdge
+        guard span > 0, first.time - leftEdge > span * 0.05 else { return points }
+        let step = span / 32
+        var padded: [LivelinePoint] = []
+        var time = leftEdge
+        while time < first.time - step * 0.5 {
+            padded.append(LivelinePoint(time: time, value: first.value))
+            time += step
+        }
+        padded.append(contentsOf: points)
+        return padded
+    }
+
+    static func collapse(candle: LivelineCandle, scale: Double) -> LivelineCandle {
+        LivelineCandle(
+            time: candle.time,
+            open: candle.close + (candle.open - candle.close) * scale,
+            high: candle.close + (candle.high - candle.close) * scale,
+            low: candle.close + (candle.low - candle.close) * scale,
+            close: candle.close
+        )
+    }
+
+    static func smoothstep(_ value: Double) -> Double {
+        let t = LivelineMath.clamp(value, 0, 1)
+        return t * t * (3 - 2 * t)
+    }
+
     static func drawCandles(
         context: inout GraphicsContext,
         layout: LivelineLayout,
         palette: LivelinePalette,
         candles: [LivelineCandle],
         candleWidth: TimeInterval,
-        liveCandle: LivelineCandle?,
+        liveTime: TimeInterval?,
         timestamp: TimeInterval,
         scrubX: CGFloat?,
         scrubAmount: Double,
-        reveal: Double
+        alpha: Double,
+        liveBirthAlpha: Double = 1,
+        liveBullBlend: Double = 0.5,
+        accentBlend: Double = 0
     ) {
-        guard !candles.isEmpty || liveCandle != nil else { return }
-        let allCandles = candles + [liveCandle].compactMap { $0 }
+        guard !candles.isEmpty else { return }
         let pxPerSecond = layout.chartWidth / CGFloat(max(0.001, layout.rightEdge - layout.leftEdge))
         let bodyWidth = max(1, candleWidth * pxPerSecond * 0.70)
         let wickWidth = max(0.8, min(2, bodyWidth * 0.15))
         let radius: CGFloat = bodyWidth > 6 ? 1.5 : 0
 
         var layer = context
-        layer.opacity *= reveal
+        layer.opacity *= alpha
         layer.clip(to: Path(CGRect(x: layout.padding.left - 2, y: layout.padding.top, width: layout.chartWidth + 4, height: layout.chartHeight)))
 
-        for candle in allCandles {
+        for candle in candles {
             let centerX = layout.x(for: candle.time + candleWidth / 2)
-            let isLive = candle.time == liveCandle?.time
+            let isLive = candle.time == liveTime
             let isUp = candle.close >= candle.open
-            let color = isUp ? Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255) : Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255)
+            let color = candleColor(isUp: isUp, bullBlend: isLive ? liveBullBlend : nil)
+                .blended(to: palette.lineRGB, t: accentBlend)
+                .color
 
             var candleAlpha = 1.0
+            if isLive {
+                candleAlpha *= liveBirthAlpha
+            }
             if let scrubX, centerX > scrubX {
                 let distance = min((centerX - scrubX) / max(bodyWidth * 1.5, 1), 1)
                 candleAlpha *= 1 - scrubAmount * 0.5 * Double(distance)
@@ -1247,7 +1668,9 @@ private extension LivelineRenderer {
         palette: LivelinePalette,
         value: Double,
         isUp: Bool,
-        alpha: Double
+        alpha: Double,
+        colorOverride: Color? = nil,
+        opacityScale: Double = 0.4
     ) {
         let y = layout.y(for: value)
         guard y >= layout.padding.top, y <= layout.bottomY else { return }
@@ -1255,9 +1678,18 @@ private extension LivelineRenderer {
         path.move(to: CGPoint(x: layout.padding.left, y: y))
         path.addLine(to: CGPoint(x: layout.rightX, y: y))
         var layer = context
-        layer.opacity *= alpha * 0.4
-        layer.stroke(path, with: .color(isUp ? Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255) : Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255)), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+        layer.opacity *= alpha * opacityScale
+        layer.stroke(path, with: .color(colorOverride ?? candleColor(isUp: isUp).color), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
         _ = palette
+    }
+
+    static func candleColor(isUp: Bool, bullBlend: Double? = nil) -> LivelineRGBA {
+        let bear = LivelineRGBA(red: 239 / 255, green: 68 / 255, blue: 68 / 255, alpha: 1)
+        let bull = LivelineRGBA(red: 34 / 255, green: 197 / 255, blue: 94 / 255, alpha: 1)
+        if let bullBlend {
+            return bear.blended(to: bull, t: bullBlend)
+        }
+        return isUp ? bull : bear
     }
 
     static func drawCandleCrosshair(
