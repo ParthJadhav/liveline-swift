@@ -80,6 +80,7 @@ Important options:
 | `paused` | `false` | Freezes animation progress visually. |
 | `orderbook` | `nil` | Draws streaming bid/ask size labels behind the line. |
 | `referenceLine` | `nil` | Keeps a horizontal reference value visible. |
+| `snapshotElapsedTime` | `nil` | Runs animations on a fixed 60fps cursor until this elapsed time, then freezes for deterministic screenshots and tests. |
 | `lineMode` | `false` | Renders candle input as a line. |
 
 ## Callbacks

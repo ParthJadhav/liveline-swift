@@ -196,13 +196,16 @@ enum LivelineMath {
     }
 
     static func loadingY(progress: CGFloat, centerY: CGFloat, amplitude: CGFloat, phase: Double) -> CGFloat {
-        let primary = sin(Double(progress) * .pi * 3.2 + phase)
-        let secondary = sin(Double(progress) * .pi * 7.0 + phase * 0.63) * 0.32
-        return centerY + CGFloat(primary + secondary) * amplitude
+        let t = Double(progress)
+        return centerY + amplitude * CGFloat(
+            sin(t * 9.4 + phase) * 0.55 +
+            sin(t * 15.7 + phase * 1.3) * 0.30 +
+            sin(t * 4.2 + phase * 0.7) * 0.15
+        )
     }
 
     static func loadingBreath(_ time: TimeInterval) -> Double {
-        0.35 + (sin(time * 0.003) + 1) * 0.18
+        0.22 + 0.08 * sin(time / 1.2 * .pi)
     }
 }
 
@@ -213,8 +216,9 @@ struct LivelineLayout {
     var maxValue: Double
     var leftEdge: TimeInterval
     var rightEdge: TimeInterval
+    var dataRightReserve: CGFloat = 0
 
-    var chartWidth: CGFloat { max(1, size.width - padding.left - padding.right) }
+    var chartWidth: CGFloat { max(1, size.width - padding.left - padding.right - dataRightReserve) }
     var chartHeight: CGFloat { max(1, size.height - padding.top - padding.bottom) }
     var bottomY: CGFloat { size.height - padding.bottom }
     var rightX: CGFloat { size.width - padding.right }

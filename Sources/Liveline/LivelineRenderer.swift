@@ -1,6 +1,12 @@
 import Foundation
 import SwiftUI
 
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
+
 struct LivelineRenderInput {
     var content: LivelineChartContent
     var accent: Color
@@ -29,29 +35,52 @@ enum LivelineChartContent {
 enum LivelineRenderer {
     private static let windowBuffer = 0.05
     private static let windowBufferNoBadge = 0.015
-    private static let loadingAmplitudeRatio: CGFloat = 0.14
-    private static let loadingScrollSpeed: Double = 0.003
+    private static let loadingAmplitudeRatio: CGFloat = 0.07
+    private static let loadingScrollSpeed: Double = 1.0
     private static let fadeEdgeWidth: CGFloat = 40
+    private static let badgePaddingX: CGFloat = 10
+    private static let badgePaddingY: CGFloat = 3
+    private static let badgeTailLength: CGFloat = 5
+    private static let badgeTailSpread: CGFloat = 2.5
+    private static let badgeLineHeight: CGFloat = 16
+    private static let axisLabelOffsetX: CGFloat = 7.33
+    private static let orderbookTextStrokePercent: CGFloat = -31
+    private static let orderbookTextOffsetX: CGFloat = -4
+    private static let orderbookTextOffsetY: CGFloat = 0
 
     static func draw(context: inout GraphicsContext, state: LivelineRenderState, input: LivelineRenderInput) {
         guard input.size.width > 8, input.size.height > 8 else { return }
 
         let dt = state.deltaTime(for: input.timestamp)
+        let animationTimestamp = state.animationTime(for: input.timestamp)
         let config = input.configuration
         let palette = LivelinePalette.resolve(accent: input.accent, mode: config.theme, lineWidth: config.lineWidth)
         let isMultiSeries = input.content.isMultiSeries
         let showBadge = !isMultiSeries && config.badge
-        let resolvedPadding = resolvePadding(config.padding, showBadge: showBadge, showGrid: config.grid)
+        let resolvedPadding = resolvePadding(config.padding, badgeEnabled: config.badge, showGrid: config.grid)
+        let dataRightReserve = dataRightReserve(for: input.content, context: context, reveal: state.chartReveal)
         let anchor = anchorTime(for: input.content, timelineTimestamp: input.timestamp, window: input.activeWindow)
-        let rightEdge = anchor + input.activeWindow * (showBadge ? windowBuffer : windowBufferNoBadge)
+        let baseBuffer = input.content.isCandle ? windowBufferNoBadge : (showBadge ? windowBuffer : windowBufferNoBadge)
+        let chartWidth = max(1, input.size.width - resolvedPadding.left - resolvedPadding.right - dataRightReserve)
+        let needsArrowRoom = input.content.isSingleLine && showBadge && (config.autoDetectMomentum || config.momentum != nil)
+        let buffer = needsArrowRoom ? max(baseBuffer, Double(37 / chartWidth)) : baseBuffer
+        let rightEdge = anchor + input.activeWindow * buffer
         let leftEdge = rightEdge - input.activeWindow
 
-        let renderData = renderData(for: input.content, hiddenSeries: input.hiddenSeries, leftEdge: leftEdge, rightEdge: rightEdge)
+        let renderData = renderData(for: input.content, hiddenSeries: input.hiddenSeries, leftEdge: leftEdge, rightEdge: rightEdge, config: config)
         let hasRenderableData = renderData.hasData
         let targetReveal = hasRenderableData && !config.loading ? 1.0 : 0.0
         let revealSpeed = targetReveal > state.chartReveal ? 0.09 : 0.14
         state.chartReveal = LivelineMath.lerp(state.chartReveal, targetReveal, speed: revealSpeed, deltaTime: dt)
         state.pauseProgress = LivelineMath.lerp(state.pauseProgress, config.paused ? 1 : 0, speed: 0.12, deltaTime: dt)
+        if abs(state.chartReveal - targetReveal) < 0.005 {
+            state.chartReveal = targetReveal
+        }
+        if state.pauseProgress < 0.005 {
+            state.pauseProgress = 0
+        } else if state.pauseProgress > 0.995 {
+            state.pauseProgress = 1
+        }
         state.resetIfNeeded(anchorValue: renderData.primaryValue, window: input.activeWindow)
 
         let noMotion = input.configuration.paused
@@ -68,8 +97,29 @@ enum LivelineRenderer {
             state.displayMin = range.lowerBound
             state.displayMax = range.upperBound
         } else {
-            state.displayMin = LivelineMath.lerp(state.displayMin ?? range.lowerBound, range.lowerBound, speed: 0.15, deltaTime: dt)
-            state.displayMax = LivelineMath.lerp(state.displayMax ?? range.upperBound, range.upperBound, speed: 0.15, deltaTime: dt)
+            let currentMin = state.displayMin ?? range.lowerBound
+            let currentMax = state.displayMax ?? range.upperBound
+            let currentRange = max(0.001, currentMax - currentMin)
+            let chartHeight = max(1, input.size.height - resolvedPadding.top - resolvedPadding.bottom)
+            let rangeSpeed: Double
+            if isMultiSeries {
+                rangeSpeed = config.lerpSpeed + 0.10
+            } else if input.content.isCandle {
+                let gapMin = abs(currentMin - range.lowerBound)
+                let gapMax = abs(currentMax - range.upperBound)
+                let gapRatio = min((gapMin + gapMax) / currentRange, 1)
+                rangeSpeed = 0.15 + (1 - gapRatio) * 0.20
+            } else {
+                rangeSpeed = noMotion ? 1 : adaptiveSpeed
+            }
+
+            var nextMin = LivelineMath.lerp(currentMin, range.lowerBound, speed: rangeSpeed, deltaTime: dt)
+            var nextMax = LivelineMath.lerp(currentMax, range.upperBound, speed: rangeSpeed, deltaTime: dt)
+            let pixelThreshold = max(0.001, 0.5 * currentRange / Double(chartHeight))
+            if abs(nextMin - range.lowerBound) < pixelThreshold { nextMin = range.lowerBound }
+            if abs(nextMax - range.upperBound) < pixelThreshold { nextMax = range.upperBound }
+            state.displayMin = nextMin
+            state.displayMax = nextMax
         }
 
         state.displayWindow = LivelineMath.lerp(state.displayWindow ?? input.activeWindow, input.activeWindow, speed: 0.08, deltaTime: dt)
@@ -80,11 +130,13 @@ enum LivelineRenderer {
             minValue: state.displayMin ?? range.lowerBound,
             maxValue: state.displayMax ?? range.upperBound,
             leftEdge: leftEdge,
-            rightEdge: rightEdge
+            rightEdge: rightEdge,
+            dataRightReserve: dataRightReserve
         )
+        let swingMagnitude = swingMagnitude(points: renderData.primaryVisible, valueRange: layout.maxValue - layout.minValue)
 
         if config.loading || !hasRenderableData {
-            drawLoadingOrEmpty(context: &context, layout: layout, palette: palette, input: input, showText: !config.loading)
+            drawLoadingOrEmpty(context: &context, layout: layout, palette: palette, input: input, animationTimestamp: animationTimestamp, showText: !config.loading)
         }
 
         guard hasRenderableData else {
@@ -106,11 +158,11 @@ enum LivelineRenderer {
         }
 
         if config.grid {
-            drawGrid(context: &layer, layout: layout, palette: palette, formatValue: config.formatValue, alpha: revealRamp(state.chartReveal, 0.15, 0.70))
+            drawGrid(context: &layer, layout: layout, palette: palette, state: state, formatValue: config.formatValue, alpha: revealRamp(state.chartReveal, 0.15, 0.70), deltaTime: dt)
         }
 
         if let orderbook = config.orderbook, !isMultiSeries {
-            drawOrderbook(context: &layer, layout: layout, palette: palette, state: state, orderbook: orderbook, deltaTime: dt, swingMagnitude: renderData.swingMagnitude, alpha: state.chartReveal)
+            drawOrderbook(context: &layer, layout: layout, palette: palette, state: state, orderbook: orderbook, randomSeed: config.randomSeed, deltaTime: dt, swingMagnitude: swingMagnitude, alpha: state.chartReveal)
         }
 
         let hover = hoverState(input: input, layout: layout, points: renderData.primaryVisible)
@@ -130,8 +182,9 @@ enum LivelineRenderer {
                 hoverX: hover?.x,
                 scrubAmount: scrubAmount,
                 reveal: state.chartReveal,
-                timestamp: input.timestamp
+                timestamp: animationTimestamp
             )
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealRamp(state.chartReveal, 0.15, 0.70), deltaTime: dt)
             drawLineDecorations(
                 context: &layer,
                 state: state,
@@ -142,7 +195,9 @@ enum LivelineRenderer {
                 config: config,
                 hover: hover,
                 scrubAmount: scrubAmount,
-                timestamp: input.timestamp,
+                smoothValue: smoothValue,
+                swingMagnitude: swingMagnitude,
+                timestamp: animationTimestamp,
                 deltaTime: dt
             )
 
@@ -159,7 +214,7 @@ enum LivelineRenderer {
                     hoverX: hover?.x,
                     scrubAmount: scrubAmount,
                     reveal: state.chartReveal,
-                    timestamp: input.timestamp
+                    timestamp: animationTimestamp
                 )
                 drawLineDecorations(
                     context: &layer,
@@ -171,7 +226,9 @@ enum LivelineRenderer {
                     config: config,
                     hover: hover,
                     scrubAmount: scrubAmount,
-                    timestamp: input.timestamp,
+                    smoothValue: lineValue ?? smoothValue,
+                    swingMagnitude: swingMagnitude,
+                    timestamp: animationTimestamp,
                     deltaTime: dt
                 )
             } else {
@@ -182,7 +239,7 @@ enum LivelineRenderer {
                     candles: candles.visibleCandles(in: leftEdge...rightEdge, candleWidth: candleWidth),
                     candleWidth: candleWidth,
                     liveCandle: liveCandle,
-                    timestamp: input.timestamp,
+                    timestamp: animationTimestamp,
                     scrubX: hover?.x,
                     scrubAmount: scrubAmount,
                     reveal: state.chartReveal
@@ -192,23 +249,33 @@ enum LivelineRenderer {
                 }
                 drawCandleCrosshair(context: &layer, layout: layout, palette: palette, hover: hover, candles: candles, candleWidth: candleWidth, config: config, alpha: scrubAmount)
             }
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealRamp(state.chartReveal, 0.15, 0.70), deltaTime: dt)
 
         case let .series(series):
-            drawSeries(
+            let endpoints = drawSeries(
                 context: &layer,
                 state: state,
                 layout: layout,
                 series: series,
                 hiddenSeries: input.hiddenSeries,
                 config: config,
-                timestamp: input.timestamp,
+                timestamp: animationTimestamp,
+                now: anchor,
                 hover: hover,
+                deltaTime: dt,
                 alpha: state.chartReveal
+            )
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealRamp(state.chartReveal, 0.15, 0.70), deltaTime: dt)
+            drawSeriesEndpoints(
+                context: &layer,
+                endpoints: endpoints,
+                alpha: state.chartReveal,
+                showPulse: config.pulse && state.chartReveal > 0.6 && state.pauseProgress < 0.5,
+                timestamp: animationTimestamp
             )
             drawMultiCrosshair(context: &layer, layout: layout, palette: palette, series: series, hiddenSeries: input.hiddenSeries, hover: hover, config: config, alpha: scrubAmount)
         }
 
-        drawTimeAxis(context: &layer, layout: layout, palette: palette, window: input.activeWindow, formatTime: config.formatTime, alpha: revealRamp(state.chartReveal, 0.15, 0.70))
         drawLeftFade(context: &context, layout: layout)
 
         if let hover {
@@ -222,13 +289,24 @@ enum LivelineRenderer {
 }
 
 private extension LivelineRenderer {
-    static func resolvePadding(_ padding: LivelinePadding, showBadge: Bool, showGrid: Bool) -> LivelineResolvedPadding {
+    static func resolvePadding(_ padding: LivelinePadding, badgeEnabled: Bool, showGrid: Bool) -> LivelineResolvedPadding {
         LivelineResolvedPadding(
             top: padding.top ?? 12,
-            right: padding.right ?? (showBadge ? 80 : showGrid ? 54 : 12),
+            right: padding.right ?? (badgeEnabled ? 80 : showGrid ? 54 : 12),
             bottom: padding.bottom ?? 28,
             left: padding.left ?? 12
         )
+    }
+
+    static func dataRightReserve(for content: LivelineChartContent, context: GraphicsContext, reveal: Double) -> CGFloat {
+        guard case let .series(series) = content else { return 0 }
+        let font = Font.system(size: 10, weight: .semibold)
+        let labels = series.compactMap(\.label)
+        guard !labels.isEmpty else { return 0 }
+        let maxLabelWidth = labels.reduce(CGFloat.zero) { current, label in
+            max(current, measureText(label, context: context, font: font).width)
+        }
+        return max(0, maxLabelWidth - 2) * CGFloat(reveal)
     }
 
     static func anchorTime(for content: LivelineChartContent, timelineTimestamp: TimeInterval, window: TimeInterval) -> TimeInterval {
@@ -256,14 +334,11 @@ private extension LivelineRenderer {
         smoothValue: Double,
         config: LivelineChartConfiguration
     ) -> ClosedRange<Double> {
+        if let rangeOverride = renderData.rangeOverride {
+            return rangeOverride
+        }
+
         switch content {
-        case .candle(_, _, let candles, _, let liveCandle, _, _) where !config.lineMode:
-            return LivelineMath.computeCandleRange(
-                candles: candles,
-                liveCandle: liveCandle,
-                referenceValue: config.referenceLine?.value,
-                exaggerate: config.exaggerate
-            )
         default:
             return LivelineMath.computeRange(
                 points: renderData.rangePoints,
@@ -292,8 +367,8 @@ private extension LivelineRenderer {
 private struct RenderData {
     var primaryVisible: [LivelinePoint]
     var rangePoints: [LivelinePoint]
+    var rangeOverride: ClosedRange<Double>?
     var primaryValue: Double
-    var swingMagnitude: Double
 
     var hasData: Bool {
         !rangePoints.isEmpty
@@ -301,20 +376,30 @@ private struct RenderData {
 }
 
 private extension LivelineRenderer {
-    static func renderData(for content: LivelineChartContent, hiddenSeries: Set<String>, leftEdge: TimeInterval, rightEdge: TimeInterval) -> RenderData {
+    static func renderData(
+        for content: LivelineChartContent,
+        hiddenSeries: Set<String>,
+        leftEdge: TimeInterval,
+        rightEdge: TimeInterval,
+        config: LivelineChartConfiguration
+    ) -> RenderData {
         switch content {
         case let .line(data, value):
             let visible = data.visible(in: (leftEdge - 2)...rightEdge)
             return RenderData(
                 primaryVisible: visible,
                 rangePoints: visible.isEmpty ? data.suffixArray(8) : visible,
-                primaryValue: value,
-                swingMagnitude: swingMagnitude(points: visible)
+                rangeOverride: nil,
+                primaryValue: value
             )
 
-        case let .candle(data, value, candles, _, liveCandle, lineData, lineValue):
+        case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
             let visible = (lineData.isEmpty ? data : lineData).visible(in: (leftEdge - 2)...rightEdge)
             var range = visible
+            for candle in candles.visibleCandles(in: (leftEdge - 2)...rightEdge, candleWidth: candleWidth) {
+                range.append(LivelinePoint(time: candle.time, value: candle.high))
+                range.append(LivelinePoint(time: candle.time, value: candle.low))
+            }
             if range.isEmpty {
                 range = (lineData.isEmpty ? data : lineData).suffixArray(8)
             }
@@ -328,8 +413,8 @@ private extension LivelineRenderer {
             return RenderData(
                 primaryVisible: visible,
                 rangePoints: range,
-                primaryValue: lineValue ?? liveCandle?.close ?? value,
-                swingMagnitude: swingMagnitude(points: visible)
+                rangeOverride: nil,
+                primaryValue: lineValue ?? liveCandle?.close ?? value
             )
 
         case let .series(series):
@@ -338,22 +423,34 @@ private extension LivelineRenderer {
             let fallback = visibleSeries.flatMap { $0.data.suffixArray(8) }
             let firstSeries = visibleSeries.first ?? series.first
             let primaryVisible = firstSeries?.data.visible(in: (leftEdge - 2)...rightEdge) ?? []
+            var lower = Double.infinity
+            var upper = -Double.infinity
+            for entry in visibleSeries {
+                let visible = entry.data.visible(in: (leftEdge - 2)...rightEdge)
+                guard visible.count >= 2 else { continue }
+                let range = LivelineMath.computeRange(
+                    points: visible,
+                    currentValue: entry.value,
+                    referenceValue: config.referenceLine?.value,
+                    exaggerate: config.exaggerate
+                )
+                lower = min(lower, range.lowerBound)
+                upper = max(upper, range.upperBound)
+            }
             return RenderData(
                 primaryVisible: primaryVisible,
                 rangePoints: visiblePoints.isEmpty ? fallback : visiblePoints,
-                primaryValue: firstSeries?.value ?? 0,
-                swingMagnitude: swingMagnitude(points: primaryVisible)
+                rangeOverride: lower.isFinite && upper.isFinite ? lower...upper : nil,
+                primaryValue: firstSeries?.value ?? 0
             )
         }
     }
 
-    static func swingMagnitude(points: [LivelinePoint]) -> Double {
-        guard points.count >= 6 else { return 0 }
-        let tail = points.suffix(6)
-        guard let first = tail.first?.value, let last = tail.last?.value else { return 0 }
-        let values = tail.map(\.value)
-        let range = max(0.001, (values.max() ?? last) - (values.min() ?? first))
-        return min(abs(last - first) / range, 1)
+    static func swingMagnitude(points: [LivelinePoint], valueRange: Double) -> Double {
+        guard points.count >= 2, valueRange > 0 else { return 0 }
+        let lookback = min(5, points.count - 1)
+        let recentDelta = abs(points[points.count - 1].value - points[points.count - 1 - lookback].value)
+        return min(recentDelta / valueRange, 1)
     }
 }
 
@@ -363,36 +460,58 @@ private extension LivelineRenderer {
         layout: LivelineLayout,
         palette: LivelinePalette,
         input: LivelineRenderInput,
+        animationTimestamp: TimeInterval,
         showText: Bool
     ) {
         let centerY = layout.padding.top + layout.chartHeight / 2
         let amplitude = layout.chartHeight * loadingAmplitudeRatio
-        let phase = input.timestamp * loadingScrollSpeed
-        let count = max(12, Int(layout.chartWidth / 18))
+        let phase = animationTimestamp * loadingScrollSpeed
+        let count = 32
         var points: [CGPoint] = []
-        for index in 0..<count {
-            let progress = CGFloat(index) / CGFloat(count - 1)
+        for index in 0...count {
+            let progress = CGFloat(index) / CGFloat(count)
             let x = layout.padding.left + progress * layout.chartWidth
             let y = LivelineMath.loadingY(progress: progress, centerY: centerY, amplitude: amplitude, phase: phase)
             points.append(CGPoint(x: x, y: y))
         }
 
         var lineContext = context
-        lineContext.opacity *= LivelineMath.loadingBreath(input.timestamp)
+        lineContext.opacity *= LivelineMath.loadingBreath(animationTimestamp)
+        let lineColor: Color = input.configuration.loading && input.content.isSingleLine ? palette.line : palette.gridLabel
         lineContext.stroke(
             LivelineMath.monotoneSplinePath(points: points),
-            with: .color(palette.gridLabel),
-            style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round)
+            with: .color(lineColor),
+            style: StrokeStyle(lineWidth: palette.lineWidth, lineCap: .round, lineJoin: .round)
         )
 
         if showText {
+            let font = Font.system(size: 12, weight: .regular)
+            let size = measureText(input.configuration.emptyText, context: context, font: font)
+            let gapHalf = size.width / 2 + 20
+            let fadeWidth: CGFloat = 30
+            let gapLeft = layout.padding.left + layout.chartWidth / 2 - gapHalf - fadeWidth
+            let gapRight = layout.padding.left + layout.chartWidth / 2 + gapHalf + fadeWidth
+            let eraseHeight = amplitude * 2 + palette.lineWidth + 6
+            context.fill(
+                Path(CGRect(x: gapLeft, y: centerY - eraseHeight / 2, width: gapRight - gapLeft, height: eraseHeight)),
+                with: .linearGradient(
+                    Gradient(stops: [
+                        .init(color: palette.backgroundRGB.withAlpha(0), location: 0),
+                        .init(color: palette.backgroundRGB.color, location: fadeWidth / max(gapRight - gapLeft, 1)),
+                        .init(color: palette.backgroundRGB.color, location: 1 - fadeWidth / max(gapRight - gapLeft, 1)),
+                        .init(color: palette.backgroundRGB.withAlpha(0), location: 1),
+                    ]),
+                    startPoint: CGPoint(x: gapLeft, y: centerY),
+                    endPoint: CGPoint(x: gapRight, y: centerY)
+                )
+            )
             drawText(
                 input.configuration.emptyText,
                 context: &context,
-                at: CGPoint(x: layout.size.width / 2, y: centerY + 34),
+                at: CGPoint(x: layout.padding.left + layout.chartWidth / 2, y: centerY),
                 anchor: .center,
-                color: palette.gridLabel,
-                font: .system(size: 13, weight: .medium, design: .monospaced)
+                color: palette.gridLabel.opacity(0.35),
+                font: font
             )
         }
     }
@@ -401,29 +520,79 @@ private extension LivelineRenderer {
         context: inout GraphicsContext,
         layout: LivelineLayout,
         palette: LivelinePalette,
+        state: LivelineRenderState,
         formatValue: (Double) -> String,
-        alpha: Double
+        alpha: Double,
+        deltaTime: TimeInterval
     ) {
         guard alpha > 0.01 else { return }
         var layer = context
         layer.opacity *= alpha
 
-        let ticks = 5
-        for index in 0..<ticks {
-            let progress = Double(index) / Double(ticks - 1)
-            let value = layout.maxValue - (layout.maxValue - layout.minValue) * progress
+        let valueRange = layout.maxValue - layout.minValue
+        guard valueRange > 0, layout.chartHeight > 0 else { return }
+        let pxPerUnit = Double(layout.chartHeight) / valueRange
+        let coarse = pickGridInterval(valueRange: valueRange, pxPerUnit: pxPerUnit, minGap: 36, previous: state.gridInterval)
+        state.gridInterval = coarse
+        let fine = coarse / 2
+        let finePx = fine * pxPerUnit
+        let fineTarget = finePx < 40 ? 0 : finePx >= 60 ? 1 : (finePx - 40) / 20
+
+        var targets: [Int: Double] = [:]
+        let first = ceil(layout.minValue / fine) * fine
+        var value = first
+        var count = 0
+        while value <= layout.maxValue + fine * 0.5, count < 32 {
             let y = layout.y(for: value)
+            defer {
+                value += fine
+                count += 1
+            }
+            guard y >= layout.padding.top - 2, y <= layout.bottomY + 2 else { continue }
+
+            let edgeDistance = min(y - layout.padding.top, layout.bottomY - y)
+            let edgeAlpha = max(0, min(1, edgeDistance / 32))
+            let labelAlpha = (isDivisible(value, by: coarse) ? 1 : fineTarget) * Double(edgeAlpha)
+            let key = Int((value * 1000).rounded())
+            targets[key] = labelAlpha
+        }
+
+        for key in Array(state.gridLabelAlphas.keys) {
+            let current = state.gridLabelAlphas[key] ?? 0
+            let target = targets[key] ?? 0
+            let speed = target >= current ? 0.18 : 0.12
+            var next = LivelineMath.lerp(current, target, speed: speed, deltaTime: deltaTime)
+            if abs(next - target) < 0.02 { next = target }
+            if next < 0.01, target == 0 {
+                state.gridLabelAlphas.removeValue(forKey: key)
+            } else {
+                state.gridLabelAlphas[key] = next
+            }
+        }
+
+        for (key, target) in targets where state.gridLabelAlphas[key] == nil {
+            state.gridLabelAlphas[key] = target * 0.18
+        }
+
+        for (key, labelAlpha) in state.gridLabelAlphas {
+            guard labelAlpha > 0.02 else { continue }
+            let value = Double(key) / 1000
+            let y = layout.y(for: value)
+            guard y >= layout.padding.top - 10, y <= layout.bottomY + 10 else { continue }
+
+            var rowLayer = layer
+            rowLayer.opacity *= labelAlpha
 
             var path = Path()
             path.move(to: CGPoint(x: layout.padding.left, y: y))
             path.addLine(to: CGPoint(x: layout.rightX, y: y))
-            layer.stroke(path, with: .color(palette.gridLine), lineWidth: 1)
+            rowLayer.stroke(path, with: .color(palette.gridLine), style: StrokeStyle(lineWidth: 1, dash: [1, 3]))
 
             drawText(
                 formatValue(value),
-                context: &layer,
-                at: CGPoint(x: layout.size.width - 4, y: y),
-                anchor: .trailing,
+                context: &rowLayer,
+                at: CGPoint(x: layout.rightX + axisLabelOffsetX, y: y),
+                anchor: .leading,
                 color: palette.gridLabel,
                 font: .system(size: 11, weight: .regular, design: .monospaced)
             )
@@ -434,31 +603,151 @@ private extension LivelineRenderer {
         context: inout GraphicsContext,
         layout: LivelineLayout,
         palette: LivelinePalette,
+        state: LivelineRenderState,
         window: TimeInterval,
         formatTime: (TimeInterval) -> String,
-        alpha: Double
+        alpha: Double,
+        deltaTime: TimeInterval
     ) {
         guard alpha > 0.01, layout.size.width > 180 else { return }
         var layer = context
         layer.opacity *= alpha
 
-        let count = layout.size.width > 420 ? 4 : 3
-        for index in 0..<count {
-            let progress = Double(index) / Double(count - 1)
-            let time = layout.leftEdge + (layout.rightEdge - layout.leftEdge) * progress
-            let x = layout.padding.left + CGFloat(progress) * layout.chartWidth
-            let anchor: UnitPoint = index == 0 ? .leading : index == count - 1 ? .trailing : .center
-            drawText(
-                formatTime(time),
-                context: &layer,
-                at: CGPoint(x: x, y: layout.size.height - 8),
-                anchor: anchor,
-                color: palette.timeLabel,
-                font: .system(size: 10, weight: .regular, design: .monospaced)
-            )
+        var axis = Path()
+        axis.move(to: CGPoint(x: layout.padding.left, y: layout.bottomY))
+        axis.addLine(to: CGPoint(x: layout.rightX, y: layout.bottomY))
+        layer.stroke(axis, with: .color(palette.gridLine), lineWidth: 1)
+
+        var interval = niceTimeInterval(window)
+        let pxPerSecond = layout.chartWidth / CGFloat(max(window, 0.001))
+        while CGFloat(interval) * pxPerSecond < 60, interval < window {
+            interval *= 2
         }
 
-        _ = window
+        let first = ceil((layout.leftEdge - interval) / interval) * interval
+        var time = first
+        var targets: Set<Int> = []
+        while time <= layout.rightEdge + interval, time.isFinite, targets.count < 30 {
+            let key = Int((time * 100).rounded())
+            targets.insert(key)
+            let text = formatTime(Double(key) / 100)
+            if state.timeAxisLabels[key] == nil {
+                state.timeAxisLabels[key] = TimeAxisLabelState(alpha: 0, text: text)
+            } else {
+                state.timeAxisLabels[key]?.text = text
+            }
+            time += interval
+        }
+
+        for key in Array(state.timeAxisLabels.keys) {
+            guard var label = state.timeAxisLabels[key] else { continue }
+            let labelTime = Double(key) / 100
+            let x = layout.x(for: labelTime)
+            let isTarget = targets.contains(key)
+            let edgeDistance = min(x - layout.padding.left, layout.rightX - x)
+            let target = isTarget ? max(0, min(1, edgeDistance / 50)) : 0
+            var next = LivelineMath.lerp(label.alpha, target, speed: 0.08, deltaTime: deltaTime)
+            if abs(next - target) < 0.02 { next = target }
+            if next < 0.01, target == 0 {
+                state.timeAxisLabels.removeValue(forKey: key)
+            } else {
+                label.alpha = next
+                state.timeAxisLabels[key] = label
+            }
+        }
+
+        var labels: [(x: CGFloat, text: String, alpha: Double, width: CGFloat)] = []
+        for (key, label) in state.timeAxisLabels {
+            guard label.alpha > 0.02 else { continue }
+            let time = Double(key) / 100
+            let x = layout.x(for: time)
+            guard x >= layout.padding.left - 20, x <= layout.rightX else {
+                continue
+            }
+
+            let font = Font.system(size: 11, weight: .regular, design: .monospaced)
+            let width = measureText(label.text, context: layer, font: font).width
+            labels.append((x, label.text, label.alpha, width))
+        }
+
+        var drawn: [(x: CGFloat, text: String, alpha: Double, width: CGFloat)] = []
+        for label in labels.sorted(by: { $0.x < $1.x }) {
+            if let previous = drawn.last {
+                let left = label.x - label.width / 2
+                let previousRight = previous.x + previous.width / 2
+                if left < previousRight + 8 {
+                    if label.alpha > previous.alpha {
+                        drawn[drawn.count - 1] = label
+                    }
+                    continue
+                }
+            }
+            drawn.append(label)
+        }
+
+        for label in drawn where label.alpha > 0.02 {
+            var tickLayer = layer
+            tickLayer.opacity *= label.alpha
+
+            var tick = Path()
+            tick.move(to: CGPoint(x: label.x, y: layout.bottomY))
+            tick.addLine(to: CGPoint(x: label.x, y: layout.bottomY + 5))
+            tickLayer.stroke(tick, with: .color(palette.gridLine), lineWidth: 1)
+
+            drawText(
+                label.text,
+                context: &tickLayer,
+                at: CGPoint(x: label.x, y: layout.bottomY + 15),
+                anchor: .center,
+                color: palette.timeLabel,
+                font: .system(size: 11, weight: .regular, design: .monospaced)
+            )
+        }
+    }
+
+    static func pickGridInterval(valueRange: Double, pxPerUnit: Double, minGap: Double, previous: Double = 0) -> Double {
+        guard valueRange > 0, pxPerUnit > 0 else { return 1 }
+        if previous > 0 {
+            let previousPx = previous * pxPerUnit
+            if previousPx >= minGap * 0.5, previousPx <= minGap * 4 {
+                return previous
+            }
+        }
+
+        let divisorSets: [[Double]] = [[2, 2.5, 2], [2, 2, 2.5], [2.5, 2, 2]]
+        var best = Double.infinity
+        for divisors in divisorSets {
+            var span = pow(10, ceil(log10(valueRange)))
+            var index = 0
+            while span / divisors[index % divisors.count] * pxPerUnit >= minGap {
+                span /= divisors[index % divisors.count]
+                index += 1
+            }
+            best = min(best, span)
+        }
+        return best.isFinite ? best : max(valueRange / 5, 1)
+    }
+
+    static func isDivisible(_ value: Double, by interval: Double) -> Bool {
+        guard interval > 0 else { return false }
+        let ratio = value / interval
+        return abs(ratio - ratio.rounded()) < 0.01
+    }
+
+    static func niceTimeInterval(_ window: TimeInterval) -> TimeInterval {
+        if window <= 15 { return 2 }
+        if window <= 30 { return 5 }
+        if window <= 60 { return 10 }
+        if window <= 120 { return 15 }
+        if window <= 300 { return 30 }
+        if window <= 600 { return 60 }
+        if window <= 1_800 { return 300 }
+        if window <= 3_600 { return 600 }
+        if window <= 14_400 { return 1_800 }
+        if window <= 43_200 { return 3_600 }
+        if window <= 86_400 { return 7_200 }
+        if window <= 604_800 { return 86_400 }
+        return 604_800
     }
 
     static func drawReferenceLine(
@@ -474,19 +763,37 @@ private extension LivelineRenderer {
         var layer = context
         layer.opacity *= alpha
 
-        var path = Path()
-        path.move(to: CGPoint(x: layout.padding.left, y: y))
-        path.addLine(to: CGPoint(x: layout.rightX, y: y))
-        layer.stroke(path, with: .color(palette.referenceLine), style: StrokeStyle(lineWidth: 1, dash: [5, 5]))
+        let label = referenceLine.label ?? ""
+        guard !label.isEmpty else {
+            var path = Path()
+            path.move(to: CGPoint(x: layout.padding.left, y: y))
+            path.addLine(to: CGPoint(x: layout.rightX, y: y))
+            layer.stroke(path, with: .color(palette.referenceLine), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+            return
+        }
 
-        let label = referenceLine.label ?? formatValue(referenceLine.value)
+        let font = Font.system(size: 11, weight: .medium)
+        let labelWidth = measureText(label, context: layer, font: font).width
+        let centerX = layout.padding.left + layout.chartWidth / 2
+        let gapPad: CGFloat = 8
+
+        var left = Path()
+        left.move(to: CGPoint(x: layout.padding.left, y: y))
+        left.addLine(to: CGPoint(x: centerX - labelWidth / 2 - gapPad, y: y))
+        layer.stroke(left, with: .color(palette.referenceLine), lineWidth: 1)
+
+        var right = Path()
+        right.move(to: CGPoint(x: centerX + labelWidth / 2 + gapPad, y: y))
+        right.addLine(to: CGPoint(x: layout.rightX, y: y))
+        layer.stroke(right, with: .color(palette.referenceLine), lineWidth: 1)
+
         drawText(
             label,
             context: &layer,
-            at: CGPoint(x: layout.padding.left + 4, y: y - 8),
-            anchor: .leading,
+            at: CGPoint(x: centerX, y: y),
+            anchor: .center,
             color: palette.referenceLabel,
-            font: .system(size: 10, weight: .medium, design: .monospaced)
+            font: font
         )
     }
 }
@@ -564,9 +871,16 @@ private extension LivelineRenderer {
         func stroke(_ target: inout GraphicsContext, opacity: Double) {
             var layer = target
             layer.opacity *= opacity
+            let strokeColor: Color
+            if reveal < 1 {
+                let colorProgress = min(1, reveal * 3)
+                strokeColor = palette.gridLabelRGB.blended(to: palette.lineRGB, t: colorProgress).color
+            } else {
+                strokeColor = palette.line
+            }
             layer.stroke(
                 linePath,
-                with: .color(palette.line),
+                with: .color(strokeColor),
                 style: StrokeStyle(lineWidth: palette.lineWidth, lineCap: .round, lineJoin: .round)
             )
         }
@@ -609,6 +923,8 @@ private extension LivelineRenderer {
         config: LivelineChartConfiguration,
         hover: LivelineHoverPoint?,
         scrubAmount: Double,
+        smoothValue: Double,
+        swingMagnitude: Double,
         timestamp: TimeInterval,
         deltaTime: TimeInterval
     ) {
@@ -624,12 +940,12 @@ private extension LivelineRenderer {
         }
 
         if let degen = config.degen, state.chartReveal > 0.9 {
-            updateParticles(state: state, origin: lastPoint, palette: palette, momentum: momentum, swingMagnitude: 0.7, options: degen, deltaTime: deltaTime)
+            updateParticles(state: state, origin: lastPoint, palette: palette, momentum: momentum, swingMagnitude: swingMagnitude, options: degen, deltaTime: deltaTime)
             drawParticles(context: &context, state: state, deltaTime: deltaTime)
         }
 
         if config.badge {
-            drawBadge(context: &context, layout: layout, palette: palette, value: layout.minValue + (layout.maxValue - layout.minValue) * Double((layout.bottomY - lastPoint.y) / layout.chartHeight), y: lastPoint.y, config: config, alpha: state.chartReveal)
+            drawBadge(context: &context, layout: layout, palette: palette, value: smoothValue, momentum: momentum, y: lastPoint.y, config: config, alpha: state.chartReveal)
         }
 
         if let hover {
@@ -648,29 +964,35 @@ private extension LivelineRenderer {
         timestamp: TimeInterval
     ) {
         let color: Color
-        let glow: Color
         switch momentum {
         case .up:
-            color = palette.dotUp
-            glow = palette.glowUp
+            color = palette.line
         case .down:
-            color = palette.dotDown
-            glow = palette.glowDown
+            color = palette.line
         case .flat:
             color = palette.dotFlat
-            glow = palette.glowFlat
         }
 
         var layer = context
         layer.opacity *= alpha * (1 - scrubAmount * 0.5)
+        let dim = scrubAmount * 0.7
 
-        if showPulse {
-            let pulse = 1 + CGFloat((sin(timestamp * 0.006) + 1) * 0.5)
-            let rect = CGRect(x: point.x - 10 - pulse * 2, y: point.y - 10 - pulse * 2, width: 20 + pulse * 4, height: 20 + pulse * 4)
-            layer.fill(Path(ellipseIn: rect), with: .color(glow.opacity(0.5)))
+        if showPulse, dim < 0.3 {
+            let t = (timestamp.truncatingRemainder(dividingBy: 1.5)) / 0.9
+            if t < 1 {
+                let radius = 9 + CGFloat(t) * 12
+                let pulseAlpha = 0.35 * (1 - t) * (1 - dim * 3)
+                layer.stroke(
+                    Path(ellipseIn: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)),
+                    with: .color(color.opacity(pulseAlpha)),
+                    style: StrokeStyle(lineWidth: 1.5)
+                )
+            }
         }
 
-        layer.fill(Path(ellipseIn: CGRect(x: point.x - 5.5, y: point.y - 5.5, width: 11, height: 11)), with: .color(color.opacity(0.22)))
+        var outer = layer
+        outer.addFilter(.shadow(color: palette.badgeOuterShadow, radius: 2.5 * (1 - dim), x: 0, y: 1))
+        outer.fill(Path(ellipseIn: CGRect(x: point.x - 6.5, y: point.y - 6.5, width: 13, height: 13)), with: .color(palette.badgeOuterBackground))
         layer.fill(Path(ellipseIn: CGRect(x: point.x - 3.5, y: point.y - 3.5, width: 7, height: 7)), with: .color(color))
     }
 
@@ -685,27 +1007,35 @@ private extension LivelineRenderer {
         timestamp: TimeInterval
     ) {
         guard alpha > 0.01, momentum != .flat else { return }
-        state.arrowUp = LivelineMath.lerp(state.arrowUp, momentum == .up ? 1 : 0, speed: 0.12, deltaTime: deltaTime)
-        state.arrowDown = LivelineMath.lerp(state.arrowDown, momentum == .down ? 1 : 0, speed: 0.12, deltaTime: deltaTime)
+        let upTarget = momentum == .up ? 1.0 : 0.0
+        let downTarget = momentum == .down ? 1.0 : 0.0
+        state.arrowUp = LivelineMath.lerp(state.arrowUp, (state.arrowDown < 0.02 ? upTarget : 0), speed: upTarget > state.arrowUp ? 0.08 : 0.04, deltaTime: deltaTime)
+        state.arrowDown = LivelineMath.lerp(state.arrowDown, (state.arrowUp < 0.02 ? downTarget : 0), speed: downTarget > state.arrowDown ? 0.08 : 0.04, deltaTime: deltaTime)
 
         let amount = momentum == .up ? state.arrowUp : state.arrowDown
         guard amount > 0.02 else { return }
 
         let direction: CGFloat = momentum == .up ? -1 : 1
-        let color = momentum == .up ? palette.dotUp : palette.dotDown
-        let baseY = point.y + direction * 18
-        let bob = CGFloat(sin(timestamp * 0.006)) * 2
+        let cycle = timestamp.truncatingRemainder(dividingBy: 1.4) / 1.4
         var layer = context
         layer.opacity *= alpha * amount
 
         for index in 0..<2 {
-            let offset = CGFloat(index) * direction * 8 + bob
+            let start = Double(index) * 0.2
+            let duration = 0.35
+            let local = cycle - start
+            let wave = local >= 0 && local < duration ? sin((local / duration) * .pi) : 0
+            let pulse = 0.3 + 0.7 * wave
+            var arrowLayer = layer
+            arrowLayer.opacity *= pulse
             var path = Path()
-            let y = baseY + offset
-            path.move(to: CGPoint(x: point.x - 5, y: y - direction * 2))
-            path.addLine(to: CGPoint(x: point.x, y: y + direction * -7))
-            path.addLine(to: CGPoint(x: point.x + 5, y: y - direction * 2))
-            layer.stroke(path, with: .color(color.opacity(index == 0 ? 0.75 : 0.40)), style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+            let centerX = point.x + 19
+            let nudge = momentum == .up ? CGFloat(-3) : CGFloat(3)
+            let centerY = point.y + direction * (CGFloat(index) * 8 - 4) + nudge
+            path.move(to: CGPoint(x: centerX - 5, y: centerY - direction * 3.5))
+            path.addLine(to: CGPoint(x: centerX, y: centerY))
+            path.addLine(to: CGPoint(x: centerX + 5, y: centerY - direction * 3.5))
+            arrowLayer.stroke(path, with: .color(palette.gridLabel), style: StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
         }
     }
 }
@@ -716,37 +1046,78 @@ private extension LivelineRenderer {
         layout: LivelineLayout,
         palette: LivelinePalette,
         value: Double,
+        momentum: LivelineMomentum,
         y: CGFloat,
         config: LivelineChartConfiguration,
         alpha: Double
     ) {
-        guard alpha > 0.01 else { return }
+        guard alpha > 0.25 else { return }
         let text = config.formatValue(value)
-        let font = Font.system(size: 11, weight: .semibold, design: .monospaced)
-        let size = measureText(text, context: context, font: font)
-        let width = max(44, size.width + 18)
-        let height: CGFloat = 24
-        let x = layout.size.width - width - 8
-        let badgeY = LivelineMath.clamp(y - height / 2, layout.padding.top, layout.bottomY - height)
-        let rect = CGRect(x: x, y: badgeY, width: width, height: height)
+        let template = text.map { $0.isNumber ? "8" : String($0) }.joined()
+        let font = Font.system(size: 11, weight: .regular, design: .monospaced)
+        let size = measureText(template, context: context, font: font)
+        let tailLength = config.badgeTail ? badgeTailLength : 0
+        let pillWidth = size.width + badgePaddingX * 2
+        let pillHeight = badgeLineHeight + badgePaddingY * 2
+        let totalWidth = tailLength + pillWidth
+        let x = layout.rightX + 8 - badgePaddingX - tailLength
+        let badgeY = LivelineMath.clamp(y - pillHeight / 2, layout.padding.top, layout.bottomY - pillHeight)
         var layer = context
-        layer.opacity *= alpha
+        layer.opacity *= alpha < 0.5 ? (alpha - 0.25) / 0.25 : 1
 
-        let background = config.badgeVariant == .minimal ? palette.badgeOuterBackground : palette.badgeBackground
-        let textColor = config.badgeVariant == .minimal ? palette.gridLabel : palette.badgeText
-        layer.fill(Path(roundedRect: rect, cornerRadius: 7), with: .color(background))
-
-        if config.badgeTail {
-            var tail = Path()
-            let midY = rect.midY
-            tail.move(to: CGPoint(x: rect.minX, y: midY - 5))
-            tail.addLine(to: CGPoint(x: rect.minX - 7, y: midY))
-            tail.addLine(to: CGPoint(x: rect.minX, y: midY + 5))
-            tail.closeSubpath()
-            layer.fill(tail, with: .color(background))
+        let background: Color
+        if config.badgeVariant == .minimal {
+            background = palette.badgeOuterBackground
+            layer.addFilter(.shadow(color: palette.badgeOuterShadow, radius: 4, x: 0, y: 1))
+        } else if config.autoDetectMomentum || config.momentum != nil {
+            switch momentum {
+            case .up:
+                background = palette.dotUp
+            case .down:
+                background = palette.dotDown
+            case .flat:
+                background = palette.line
+            }
+        } else {
+            background = palette.line
         }
+        let textColor = config.badgeVariant == .minimal ? palette.tooltipText : palette.badgeText
+        let path = config.badgeTail
+            ? badgePath(origin: CGPoint(x: x, y: badgeY), pillWidth: pillWidth, pillHeight: pillHeight, tailLength: badgeTailLength, tailSpread: badgeTailSpread)
+            : badgePillPath(origin: CGPoint(x: x, y: badgeY), pillWidth: pillWidth, pillHeight: pillHeight)
+        layer.fill(path, with: .color(background))
 
-        drawText(text, context: &layer, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center, color: textColor, font: font)
+        let textX = x + tailLength + pillWidth / 2
+        drawText(text, context: &layer, at: CGPoint(x: textX, y: badgeY + pillHeight / 2 - 1), anchor: .center, color: textColor, font: font)
+        _ = totalWidth
+    }
+
+    static func badgePath(origin: CGPoint, pillWidth: CGFloat, pillHeight: CGFloat, tailLength: CGFloat, tailSpread: CGFloat) -> Path {
+        let r = pillHeight / 2
+        let cx = origin.x + tailLength + pillWidth - r
+        let tl = origin.x + tailLength + r
+        let midY = origin.y + r
+        var path = Path()
+        path.move(to: CGPoint(x: tl, y: origin.y))
+        path.addLine(to: CGPoint(x: cx, y: origin.y))
+        path.addArc(center: CGPoint(x: cx, y: midY), radius: r, startAngle: .degrees(-90), endAngle: .degrees(90), clockwise: false)
+        path.addLine(to: CGPoint(x: tl, y: origin.y + pillHeight))
+        path.addCurve(
+            to: CGPoint(x: origin.x, y: midY),
+            control1: CGPoint(x: origin.x + tailLength + 2, y: origin.y + pillHeight),
+            control2: CGPoint(x: origin.x + 3, y: midY + tailSpread)
+        )
+        path.addCurve(
+            to: CGPoint(x: tl, y: origin.y),
+            control1: CGPoint(x: origin.x + 3, y: midY - tailSpread),
+            control2: CGPoint(x: origin.x + tailLength + 2, y: origin.y)
+        )
+        path.closeSubpath()
+        return path
+    }
+
+    static func badgePillPath(origin: CGPoint, pillWidth: CGFloat, pillHeight: CGFloat) -> Path {
+        Path(roundedRect: CGRect(x: origin.x, y: origin.y, width: pillWidth, height: pillHeight), cornerRadius: pillHeight / 2)
     }
 
     static func drawLineCrosshair(
@@ -826,7 +1197,7 @@ private extension LivelineRenderer {
             let isUp = candle.close >= candle.open
             let color = isUp ? Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255) : Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255)
 
-            var candleAlpha = isLive ? 0.9 + sin(timestamp * 0.004) * 0.1 : 1
+            var candleAlpha = 1.0
             if let scrubX, centerX > scrubX {
                 let distance = min((centerX - scrubX) / max(bodyWidth * 1.5, 1), 1)
                 candleAlpha *= 1 - scrubAmount * 0.5 * Double(distance)
@@ -842,16 +1213,28 @@ private extension LivelineRenderer {
             let top = min(openY, closeY)
             let height = max(1, abs(closeY - openY))
 
-            var wick = Path()
-            wick.move(to: CGPoint(x: centerX, y: highY))
-            wick.addLine(to: CGPoint(x: centerX, y: lowY))
-            candleLayer.stroke(wick, with: .color(color), style: StrokeStyle(lineWidth: wickWidth, lineCap: .round))
+            if top - highY > 0.5 {
+                var upperWick = Path()
+                upperWick.move(to: CGPoint(x: centerX, y: top))
+                upperWick.addLine(to: CGPoint(x: centerX, y: highY))
+                candleLayer.stroke(upperWick, with: .color(color), style: StrokeStyle(lineWidth: wickWidth, lineCap: .round))
+            }
+            if lowY - (top + height) > 0.5 {
+                var lowerWick = Path()
+                lowerWick.move(to: CGPoint(x: centerX, y: top + height))
+                lowerWick.addLine(to: CGPoint(x: centerX, y: lowY))
+                candleLayer.stroke(lowerWick, with: .color(color), style: StrokeStyle(lineWidth: wickWidth, lineCap: .round))
+            }
 
             let rect = CGRect(x: centerX - bodyWidth / 2, y: top, width: bodyWidth, height: height)
             candleLayer.fill(Path(roundedRect: rect, cornerRadius: radius), with: .color(color))
 
             if isLive {
-                candleLayer.fill(Path(roundedRect: rect.insetBy(dx: -2, dy: -2), cornerRadius: radius + 2), with: .color(color.opacity(0.10)))
+                let livePulse = 0.12 + sin(timestamp * 4) * 0.08
+                var glowLayer = layer
+                glowLayer.opacity *= candleAlpha * livePulse
+                glowLayer.addFilter(.shadow(color: color, radius: 8, x: 0, y: 0))
+                glowLayer.fill(Path(roundedRect: rect, cornerRadius: radius), with: .color(color))
             }
         }
 
@@ -872,7 +1255,7 @@ private extension LivelineRenderer {
         path.move(to: CGPoint(x: layout.padding.left, y: y))
         path.addLine(to: CGPoint(x: layout.rightX, y: y))
         var layer = context
-        layer.opacity *= alpha * 0.45
+        layer.opacity *= alpha * 0.4
         layer.stroke(path, with: .color(isUp ? Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255) : Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255)), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
         _ = palette
     }
@@ -920,13 +1303,17 @@ private extension LivelineRenderer {
         hiddenSeries: Set<String>,
         config: LivelineChartConfiguration,
         timestamp: TimeInterval,
+        now: TimeInterval,
         hover: LivelineHoverPoint?,
+        deltaTime: TimeInterval,
         alpha: Double
-    ) {
+    ) -> [(point: CGPoint, palette: LivelinePalette, label: String?, alpha: Double)] {
+        var endpointPoints: [(point: CGPoint, palette: LivelinePalette, label: String?, alpha: Double)] = []
+
         for entry in series {
             let target = hiddenSeries.contains(entry.id) ? 0.0 : 1.0
             let current = state.seriesAlpha[entry.id] ?? target
-            state.seriesAlpha[entry.id] = LivelineMath.lerp(current, target, speed: 0.10, deltaTime: 16.667)
+            state.seriesAlpha[entry.id] = LivelineMath.lerp(current, target, speed: 0.10, deltaTime: deltaTime)
             let entryAlpha = state.seriesAlpha[entry.id] ?? target
             guard entryAlpha > 0.01 else { continue }
 
@@ -934,15 +1321,85 @@ private extension LivelineRenderer {
             var layer = context
             layer.opacity *= entryAlpha * alpha
             let visible = entry.data.visible(in: (layout.leftEdge - 2)...layout.rightEdge)
-            let points = visible.map { CGPoint(x: layout.x(for: $0.time), y: LivelineMath.clamp(layout.y(for: $0.value), layout.padding.top, layout.bottomY)) }
-            guard points.count >= 2 else { continue }
-            let path = LivelineMath.monotoneSplinePath(points: points)
-            layer.stroke(path, with: .color(palette.line), style: StrokeStyle(lineWidth: palette.lineWidth, lineCap: .round, lineJoin: .round))
+            guard visible.count >= 2 else { continue }
+
+            let points = drawLine(
+                context: &layer,
+                layout: layout,
+                palette: palette,
+                points: visible,
+                smoothValue: entry.value,
+                now: now,
+                showFill: false,
+                hoverX: hover?.x,
+                scrubAmount: hover == nil ? 0 : 1,
+                reveal: alpha,
+                timestamp: timestamp
+            )
 
             if let last = points.last {
-                drawDot(context: &layer, at: last, palette: palette, momentum: .flat, showPulse: config.pulse, scrubAmount: hover == nil ? 0 : 0.5, alpha: 1, timestamp: timestamp)
+                endpointPoints.append((last, palette, entry.label, entryAlpha))
             }
         }
+
+        return endpointPoints
+    }
+
+    static func drawSeriesEndpoints(
+        context: inout GraphicsContext,
+        endpoints: [(point: CGPoint, palette: LivelinePalette, label: String?, alpha: Double)],
+        alpha: Double,
+        showPulse: Bool,
+        timestamp: TimeInterval
+    ) {
+        let dotAlpha = alpha < 0.3 ? 0 : (alpha - 0.3) / 0.7
+        guard dotAlpha > 0.01 else { return }
+
+        for endpoint in endpoints {
+            var layer = context
+            layer.opacity *= dotAlpha * endpoint.alpha
+            drawMultiEndpointDot(
+                context: &layer,
+                at: endpoint.point,
+                color: endpoint.palette.line,
+                showPulse: showPulse && endpoint.alpha > 0.5,
+                timestamp: timestamp
+            )
+
+            if let label = endpoint.label {
+                drawText(
+                    label,
+                    context: &layer,
+                    at: CGPoint(x: endpoint.point.x + 6, y: endpoint.point.y - 0.5),
+                    anchor: .leading,
+                    color: endpoint.palette.line,
+                    font: .system(size: 10, weight: .semibold)
+                )
+            }
+        }
+    }
+
+    static func drawMultiEndpointDot(
+        context: inout GraphicsContext,
+        at point: CGPoint,
+        color: Color,
+        showPulse: Bool,
+        timestamp: TimeInterval
+    ) {
+        if showPulse {
+            let t = timestamp.truncatingRemainder(dividingBy: 1.5) / 0.9
+            if t < 1 {
+                let radius = 9 + CGFloat(t) * 10
+                let pulseAlpha = 0.3 * (1 - t)
+                context.stroke(
+                    Path(ellipseIn: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2)),
+                    with: .color(color.opacity(pulseAlpha)),
+                    style: StrokeStyle(lineWidth: 1.5)
+                )
+            }
+        }
+
+        context.fill(Path(ellipseIn: CGRect(x: point.x - 3, y: point.y - 3, width: 6, height: 6)), with: .color(color))
     }
 
     static func drawMultiCrosshair(
@@ -992,6 +1449,7 @@ private extension LivelineRenderer {
         palette: LivelinePalette,
         state: LivelineRenderState,
         orderbook: LivelineOrderbookData,
+        randomSeed: UInt32?,
         deltaTime: TimeInterval,
         swingMagnitude: Double,
         alpha: Double
@@ -1000,7 +1458,6 @@ private extension LivelineRenderer {
 
         let bidTotal = orderbook.bids.reduce(0) { $0 + $1.size }
         let askTotal = orderbook.asks.reduce(0) { $0 + $1.size }
-        let total = bidTotal + askTotal
         let previousTotal = state.previousBidTotal + state.previousAskTotal
         var churn = 0.0
         if previousTotal > 0 {
@@ -1012,7 +1469,7 @@ private extension LivelineRenderer {
 
         let activity = max(min(swingMagnitude * 5, 1), state.churnRate)
         let targetSpeed = CGFloat(60 + activity * 100)
-        state.orderbookSpeed = LivelineMath.lerpCGFloat(state.orderbookSpeed, targetSpeed, speed: 0.12, deltaTime: deltaTime)
+        state.orderbookSpeed = LivelineMath.lerpCGFloat(state.orderbookSpeed, targetSpeed, speed: 0.05, deltaTime: deltaTime)
 
         let dtSeconds = deltaTime / 1000
         state.orderbookSpawnTimer += deltaTime
@@ -1020,10 +1477,21 @@ private extension LivelineRenderer {
         let topY = layout.padding.top
         let allLevels = orderbook.bids.map { ($0.size, true) } + orderbook.asks.map { ($0.size, false) }
         let maxSize = max(0.001, allLevels.map(\.0).max() ?? 1)
+        let totalWeight = allLevels.reduce(0) { $0 + max(0, $1.0) }
 
-        while state.orderbookSpawnTimer >= 40, state.orderbookLabels.count < 50, let picked = allLevels.randomElement() {
+        while state.orderbookSpawnTimer >= 40, state.orderbookLabels.count < 50, totalWeight > 0 {
             state.orderbookSpawnTimer -= 40
             if state.orderbookLabels.contains(where: { abs($0.y - bottomY) < 22 }) { break }
+            let randomUnit = randomSeed.map { state.nextOrderbookRandom(seed: $0) } ?? Double.random(in: 0..<1)
+            var remaining = randomUnit * totalWeight
+            var picked = allLevels[0]
+            for level in allLevels {
+                remaining -= max(0, level.0)
+                if remaining <= 0 {
+                    picked = level
+                    break
+                }
+            }
             state.orderbookLabels.append(
                 OrderbookLabel(
                     y: bottomY,
@@ -1051,14 +1519,18 @@ private extension LivelineRenderer {
             let yRatio = Double((label.y - topY) / layout.chartHeight)
             let fadeOut = yRatio < 0.45 ? yRatio / 0.45 : 1
             let strength = label.intensity * fadeIn * fadeOut
-            let color = label.isBid
-                ? Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255).opacity(strength)
-                : Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255).opacity(strength)
-            drawText(label.text, context: &layer, at: CGPoint(x: layout.padding.left + 8, y: label.y), anchor: .leading, color: color, font: .system(size: 13, weight: .semibold, design: .monospaced))
+            let baseColor = label.isBid
+                ? LivelineRGBA(red: 34 / 255, green: 197 / 255, blue: 94 / 255, alpha: 1)
+                : LivelineRGBA(red: 239 / 255, green: 68 / 255, blue: 68 / 255, alpha: 1)
+            let fill = baseColor.blended(to: palette.backgroundRGB, t: 1 - strength)
+            drawOrderbookText(
+                label.text,
+                context: &layer,
+                at: CGPoint(x: layout.padding.left + 8, y: label.y),
+                fill: fill,
+                outline: palette.backgroundRGB
+            )
         }
-
-        _ = palette
-        _ = total
     }
 
     static func updateParticles(
@@ -1109,6 +1581,99 @@ private extension LivelineRenderer {
         return String(format: "$%.2f", size)
     }
 
+    static func drawOrderbookText(
+        _ text: String,
+        context: inout GraphicsContext,
+        at point: CGPoint,
+        fill: LivelineRGBA,
+        outline: LivelineRGBA
+    ) {
+        #if canImport(UIKit)
+        let font = UIFont.monospacedSystemFont(ofSize: 13, weight: .semibold)
+        let fillColor = UIColor(red: fill.red, green: fill.green, blue: fill.blue, alpha: fill.alpha)
+        let outlineColor = UIColor(red: outline.red, green: outline.green, blue: outline.blue, alpha: outline.alpha)
+        let image = orderbookTextImage(text: text, font: font, fill: fillColor, outline: outlineColor, scale: UIScreen.main.scale)
+        let swiftUIImage = Image(uiImage: image)
+        let size = image.size
+        context.draw(swiftUIImage, in: CGRect(x: point.x + orderbookTextOffsetX, y: point.y - size.height / 2 + orderbookTextOffsetY, width: size.width, height: size.height))
+        #elseif canImport(AppKit)
+        let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .semibold)
+        let fillColor = NSColor(srgbRed: fill.red, green: fill.green, blue: fill.blue, alpha: fill.alpha)
+        let outlineColor = NSColor(srgbRed: outline.red, green: outline.green, blue: outline.blue, alpha: outline.alpha)
+        let image = orderbookTextImage(text: text, font: font, fill: fillColor, outline: outlineColor, scale: NSScreen.main?.backingScaleFactor ?? 2)
+        let swiftUIImage = Image(nsImage: image)
+        let size = image.size
+        context.draw(swiftUIImage, in: CGRect(x: point.x + orderbookTextOffsetX, y: point.y - size.height / 2 + orderbookTextOffsetY, width: size.width, height: size.height))
+        #else
+        drawOutlinedText(
+            text,
+            context: &context,
+            at: point,
+            anchor: .leading,
+            fill: fill.color,
+            outline: outline.color,
+            font: .system(size: 13, weight: .semibold, design: .monospaced)
+        )
+        #endif
+    }
+
+    #if canImport(UIKit)
+    static func orderbookTextImage(text: String, font: UIFont, fill: UIColor, outline: UIColor, scale: CGFloat) -> UIImage {
+        let padding: CGFloat = 4
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        let measured = (text as NSString).size(withAttributes: attributes)
+        let size = CGSize(width: ceil(measured.width + padding * 2), height: ceil(measured.height + padding * 2))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = scale
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: size, format: format).image { _ in
+            (text as NSString).draw(
+                at: CGPoint(x: padding, y: padding),
+                withAttributes: [
+                    .font: font,
+                    .foregroundColor: outline,
+                    .strokeColor: outline,
+                    .strokeWidth: abs(orderbookTextStrokePercent),
+                ]
+            )
+            (text as NSString).draw(
+                at: CGPoint(x: padding, y: padding),
+                withAttributes: [
+                    .font: font,
+                    .foregroundColor: fill,
+                ]
+            )
+        }
+    }
+    #elseif canImport(AppKit)
+    static func orderbookTextImage(text: String, font: NSFont, fill: NSColor, outline: NSColor, scale: CGFloat) -> NSImage {
+        let padding: CGFloat = 4
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+        let measured = (text as NSString).size(withAttributes: attributes)
+        let size = CGSize(width: ceil(measured.width + padding * 2), height: ceil(measured.height + padding * 2))
+        let image = NSImage(size: size)
+        image.lockFocus()
+        (text as NSString).draw(
+            at: CGPoint(x: padding, y: padding),
+            withAttributes: [
+                .font: font,
+                .foregroundColor: outline,
+                .strokeColor: outline,
+                .strokeWidth: abs(orderbookTextStrokePercent),
+            ]
+        )
+        (text as NSString).draw(
+            at: CGPoint(x: padding, y: padding),
+            withAttributes: [
+                .font: font,
+                .foregroundColor: fill,
+            ]
+        )
+        image.unlockFocus()
+        return image
+    }
+    #endif
+
     static func drawLeftFade(context: inout GraphicsContext, layout: LivelineLayout) {
         var rect = Path()
         rect.addRect(CGRect(x: 0, y: 0, width: layout.padding.left + fadeEdgeWidth, height: layout.size.height))
@@ -1140,10 +1705,40 @@ private extension LivelineRenderer {
         context.draw(Text(text).font(font).foregroundColor(color), at: point, anchor: anchor)
     }
 
+    static func drawOutlinedText(
+        _ text: String,
+        context: inout GraphicsContext,
+        at point: CGPoint,
+        anchor: UnitPoint,
+        fill: Color,
+        outline: Color,
+        font: Font
+    ) {
+        let radius: CGFloat = 2
+        for offset in [
+            CGPoint(x: -radius, y: 0),
+            CGPoint(x: radius, y: 0),
+            CGPoint(x: 0, y: -radius),
+            CGPoint(x: 0, y: radius),
+            CGPoint(x: -radius * 0.7, y: -radius * 0.7),
+            CGPoint(x: radius * 0.7, y: -radius * 0.7),
+            CGPoint(x: -radius * 0.7, y: radius * 0.7),
+            CGPoint(x: radius * 0.7, y: radius * 0.7),
+        ] {
+            context.draw(
+                Text(text).font(font).foregroundColor(outline),
+                at: CGPoint(x: point.x + offset.x, y: point.y + offset.y),
+                anchor: anchor
+            )
+        }
+        context.draw(Text(text).font(font).foregroundColor(fill), at: point, anchor: anchor)
+    }
+
     static func measureText(_ text: String, context: GraphicsContext, font: Font) -> CGSize {
         let resolved = context.resolve(Text(text).font(font))
         return resolved.measure(in: CGSize(width: 10_000, height: 10_000))
     }
+
 }
 
 private extension LivelineChartContent {
@@ -1152,17 +1747,27 @@ private extension LivelineChartContent {
         return false
     }
 
+    var isSingleLine: Bool {
+        if case .line = self { return true }
+        return false
+    }
+
+    var isCandle: Bool {
+        if case .candle = self { return true }
+        return false
+    }
+
     var latestTime: TimeInterval? {
         switch self {
         case let .line(data, _):
             return data.last?.time
         case let .candle(data, _, candles, candleWidth, liveCandle, lineData, _):
-            return [
+            let liveTickTime = [
                 data.last?.time,
                 lineData.last?.time,
-                candles.last.map { $0.time + candleWidth },
-                liveCandle.map { $0.time + candleWidth },
+                liveCandle?.time,
             ].compactMap { $0 }.max()
+            return liveTickTime ?? candles.last.map { $0.time + candleWidth }
         case let .series(series):
             return series.compactMap { $0.data.last?.time }.max()
         }

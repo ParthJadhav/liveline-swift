@@ -21,6 +21,16 @@ struct LivelineRGBA: Hashable {
     func withAlpha(_ alpha: Double) -> Color {
         Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
     }
+
+    func blended(to target: LivelineRGBA, t: Double) -> LivelineRGBA {
+        let progress = min(max(t, 0), 1)
+        return LivelineRGBA(
+            red: red + (target.red - red) * progress,
+            green: green + (target.green - green) * progress,
+            blue: blue + (target.blue - blue) * progress,
+            alpha: alpha + (target.alpha - alpha) * progress
+        )
+    }
 }
 
 struct LivelinePalette {
@@ -31,6 +41,7 @@ struct LivelinePalette {
     var fillBottom: Color
     var gridLine: Color
     var gridLabel: Color
+    var gridLabelRGB: LivelineRGBA
     var dotUp: Color
     var dotDown: Color
     var dotFlat: Color
@@ -65,6 +76,9 @@ extension LivelinePalette {
             fillBottom: accentRGB.withAlpha(0),
             gridLine: isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.06),
             gridLabel: isDark ? Color.white.opacity(0.40) : Color.black.opacity(0.35),
+            gridLabelRGB: isDark
+                ? LivelineRGBA(red: 1, green: 1, blue: 1, alpha: 0.40)
+                : LivelineRGBA(red: 0, green: 0, blue: 0, alpha: 0.35),
             dotUp: Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255),
             dotDown: Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255),
             dotFlat: accent,

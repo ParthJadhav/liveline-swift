@@ -1,0 +1,69 @@
+# Scenario Matrix
+
+The iOS demo includes a Storybook tab and a single-scenario launch mode for screenshot capture.
+
+```bash
+scripts/capture-storybook.sh
+```
+
+Screenshots are written to `Media/storybook`.
+
+For chart-only comparison screenshots without the scenario heading copy:
+
+```bash
+scripts/capture-storybook.sh --chart-only
+```
+
+Chart-only screenshots are written to `Media/storybook-chart-only`. The capture script supports `STORYBOOK_SCENARIOS` for partial runs, `STORYBOOK_CAPTURE_WAIT_SECONDS` for one global snapshot elapsed time, `STORYBOOK_SCENARIO_WAIT_OVERRIDES` for entries like `line-orderbook=3.40 line-loading=2.80`, and `STORYBOOK_ORDERBOOK_RANDOM_SEED` for local orderbook stream tuning. Native captures pass the elapsed time into `snapshotElapsedTime`, advance animations with a fixed 60fps snapshot cursor, then wait an extra 0.60 seconds before taking the simulator screenshot.
+
+To capture the matching upstream React/canvas references:
+
+```bash
+scripts/capture-web-references.sh
+```
+
+Reference screenshots are written to `Media/web-reference`. The script copies a tiny Vite/Playwright app from `scripts/web-reference` into `.build`, clones `benjitaylor/liveline` into `.build/liveline-upstream` when needed, and renders each scenario at the same iPhone-sized viewport used by the native capture.
+
+To compare native chart-only screenshots against the upstream references:
+
+```bash
+scripts/diff-storybook.sh
+```
+
+Diff panels are written to `Media/storybook-diff` as reference/native/heatmap triptychs, with numeric metrics in `Media/storybook-diff/summary.csv`.
+
+## Scenarios
+
+| ID | Area | Coverage |
+| --- | --- | --- |
+| `line-basic-dark` | Line | Default dark line with grid, fill, and badge. |
+| `line-basic-light` | Line | Default light theme. |
+| `line-no-grid-no-fill` | Line | Minimal chart with no grid and no fill. |
+| `line-minimal-badge` | Line | Minimal badge variant. |
+| `line-no-badge` | Line | Badge disabled and compact right padding. |
+| `line-momentum-up` | Line | Forced up momentum. |
+| `line-momentum-down` | Line | Forced down momentum. |
+| `line-exaggerated` | Line | Tight Y-axis. |
+| `line-show-value-windows` | Line | Live value display and window controls. |
+| `line-rounded-windows` | Line | Rounded window controls. |
+| `line-text-windows` | Line | Text-only window controls. |
+| `line-reference` | Line | Reference line and label. |
+| `line-orderbook` | Line | Orderbook stream labels with static pulse suppressed for diff stability. |
+| `line-degen` | Line | Particle/shake mode. |
+| `line-loading` | State | Loading line. |
+| `line-empty` | State | Empty state. |
+| `candle-basic` | Candles | OHLC bars with live candle. |
+| `candle-light` | Candles | Light theme candles. |
+| `candle-line-mode` | Candles | Candle data rendered as line. |
+| `candle-mode-controls` | Candles | Built-in line/candle icon mode controls. |
+| `candle-no-live` | Candles | Committed bars only. |
+| `candle-wide-window` | Candles | Wider time range and smaller candles. |
+| `candle-loading` | State | Candle loading setup. |
+| `multi-basic` | Multi-series | Three lines and series chips. |
+| `multi-light` | Multi-series | Light theme multi-series. |
+| `multi-compact` | Multi-series | Dot-only series chips. |
+| `multi-two-series` | Multi-series | Two series. |
+
+## Parity Notes
+
+The gallery is the audit surface for visual parity work. Each scenario must pass the web-reference diff before marking parity complete. Static parity scenarios suppress the live pulse unless pulse behavior is the thing being inspected. The current native renderer ports the web loading waveform, empty-state center gap, curved badge path, momentum badge colors, live dot structure, icon mode controls, centered reference labels, baseline-adjusted axis text, segmented candle wicks, live candle glow, deterministic snapshot timing, time-axis intervals, grid/time-axis label state, and coarse/fine grid interval selection.

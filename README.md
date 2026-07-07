@@ -134,18 +134,48 @@ open LivelineDemo.xcodeproj
 
 The generated project uses the local package path (`../..`). CI builds this demo target as an iOS simulator app.
 
+## Demo Recording
+
+A current simulator recording is available at [Media/liveline-demo.mp4](Media/liveline-demo.mp4).
+
+To regenerate it:
+
+```bash
+scripts/record-demo.sh
+```
+
 ## Verification
 
 ```bash
 swift test
 xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
+scripts/capture-storybook.sh
+scripts/capture-storybook.sh --chart-only
+scripts/capture-web-references.sh
+scripts/diff-storybook.sh --fail-changed-pct 5 --fail-rms 12
 ```
+
+Use the chart-only capture plus web-reference diff when comparing the native renderer against the upstream React/canvas implementation. Native Storybook captures use deterministic snapshot timing, and diff panels are written to `Media/storybook-diff`.
+
+The normal CI workflow runs package tests and the iOS demo build. The manual `Visual Parity` workflow captures upstream/native Storybook screenshots, runs the diff gate, and uploads the visual artifacts.
+
+## Publishing
+
+For private GitHub publishing:
+
+```bash
+scripts/publish-private.sh ParthJadhav liveline-swift
+```
+
+See [Docs/Publishing.md](Docs/Publishing.md) for release tags and private SwiftPM access notes.
 
 ## Documentation
 
 - [API overview](Docs/API.md)
 - [Animation model](Docs/Animations.md)
 - [Example recipes](Docs/Examples.md)
+- [Scenario matrix](Docs/ScenarioMatrix.md)
+- [Visual parity status](Docs/ParityStatus.md)
 - [Publishing checklist](Docs/Publishing.md)
 
 ## Attribution

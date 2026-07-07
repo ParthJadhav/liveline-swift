@@ -2,6 +2,29 @@ import Liveline
 import SwiftUI
 
 struct ContentView: View {
+    private let launchedScenario = StorybookLaunch.scenarioFromArguments()
+    private let chartOnly = StorybookLaunch.chartOnlyFromArguments()
+
+    var body: some View {
+        if let launchedScenario {
+            StorybookScenarioScreen(scenario: launchedScenario, chrome: false, chartOnly: chartOnly)
+        } else {
+            TabView {
+                LiveDemoView()
+                    .tabItem {
+                        Label("Live", systemImage: "chart.xyaxis.line")
+                    }
+
+                StorybookGalleryView()
+                    .tabItem {
+                        Label("Storybook", systemImage: "square.grid.2x2")
+                    }
+            }
+        }
+    }
+}
+
+struct LiveDemoView: View {
     @StateObject private var market = DemoMarket()
     @State private var lineWindow: TimeInterval = 60
     @State private var candleLineMode = false

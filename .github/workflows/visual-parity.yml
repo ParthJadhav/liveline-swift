@@ -1,0 +1,34 @@
+name: Visual Parity
+
+on:
+  workflow_dispatch:
+
+jobs:
+  storybook-diff:
+    name: Storybook Diff
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Capture upstream web references
+        run: scripts/capture-web-references.sh
+
+      - name: Capture native chart screenshots
+        run: scripts/capture-storybook.sh --chart-only
+
+      - name: Diff screenshots
+        run: scripts/diff-storybook.sh --fail-changed-pct 5 --fail-rms 12
+
+      - name: Upload parity artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: visual-parity
+          path: |
+            Media/web-reference
+            Media/storybook-chart-only
+            Media/storybook-diff

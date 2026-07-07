@@ -73,49 +73,59 @@ public struct LivelineChart: View {
     public var body: some View {
         let configuration = effectiveConfiguration
 
-        VStack(alignment: .leading, spacing: 6) {
-            if configuration.showValue {
-                Text(configuration.formatValue(currentValue))
-                    .font(.system(size: 20, weight: .medium, design: .monospaced))
-                    .foregroundColor(valueColor(configuration: configuration))
-                    .padding(.leading, resolvedLeftPadding(configuration))
-                    .padding(.top, 4)
-                    .animation(.easeOut(duration: 0.2), value: currentMomentum)
-            }
+        GeometryReader { proxy in
+            VStack(alignment: .leading, spacing: 6) {
+                if configuration.showValue {
+                    Text(configuration.formatValue(currentValue))
+                        .font(.system(size: 20, weight: .medium, design: .monospaced))
+                        .tracking(-0.2)
+                        .foregroundColor(valueColor(configuration: configuration))
+                        .padding(.leading, resolvedLeftPadding(configuration))
+                        .padding(.top, 4)
+                        .padding(.bottom, 2)
+                        .animation(.easeOut(duration: 0.2), value: currentMomentum)
+                }
 
-            if hasControls(configuration) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 6) {
-                        windowControls(configuration)
-                        modeControls(configuration)
-                        seriesControls(configuration)
+                if hasControls(configuration) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            windowControls(configuration)
+                            modeControls(configuration)
+                            seriesControls(configuration)
+                        }
+                        .padding(.leading, resolvedLeftPadding(configuration))
+                        .padding(.trailing, 8)
                     }
-                    .padding(.leading, resolvedLeftPadding(configuration))
-                    .padding(.trailing, 8)
+                    .frame(height: controlRowHeight(configuration))
                 }
-                .frame(height: 34)
-            }
 
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
-                Canvas { context, size in
-                    LivelineRenderer.draw(
-                        context: &context,
-                        state: renderState,
-                        input: LivelineRenderInput(
-                            content: content,
-                            accent: accent,
-                            configuration: configuration,
-                            activeWindow: activeWindow,
-                            hiddenSeries: hiddenSeries,
-                            hoverLocation: hoverLocation,
-                            timestamp: timeline.date.timeIntervalSince1970,
-                            size: size
+                TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+                    Canvas { context, size in
+                        let timestamp = renderState.timestamp(
+                            for: timeline.date.timeIntervalSince1970,
+                            snapshotElapsedTime: configuration.snapshotElapsedTime
                         )
-                    )
+                        LivelineRenderer.draw(
+                            context: &context,
+                            state: renderState,
+                            input: LivelineRenderInput(
+                                content: content,
+                                accent: accent,
+                                configuration: configuration,
+                                activeWindow: activeWindow,
+                                hiddenSeries: hiddenSeries,
+                                hoverLocation: hoverLocation,
+                                timestamp: timestamp,
+                                size: size
+                            )
+                        )
+                    }
+                    .frame(height: proxy.size.height)
+                    .contentShape(Rectangle())
+                    .gesture(scrubGesture(configuration))
                 }
-                .contentShape(Rectangle())
-                .gesture(scrubGesture(configuration))
             }
+            .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
         .onChange(of: baseConfiguration.window) { newValue in
             if baseConfiguration.windows.isEmpty {
@@ -124,6 +134,55 @@ public struct LivelineChart: View {
         }
         .onDisappear {
             baseConfiguration.onHover?(nil)
+        }
+    }
+}
+
+private struct LivelineModeIcon: View {
+    var mode: LivelineChartMode
+    var active: Bool
+    var color: Color
+
+    var body: some View {
+        Canvas { context, _ in
+            switch mode {
+            case .line:
+                var path = Path()
+                path.move(to: CGPoint(x: 1, y: 8.5))
+                path.addCurve(
+                    to: CGPoint(x: 5.5, y: 4),
+                    control1: CGPoint(x: 2.5, y: 8.5),
+                    control2: CGPoint(x: 3, y: 4)
+                )
+                path.addCurve(
+                    to: CGPoint(x: 8.5, y: 7),
+                    control1: CGPoint(x: 7.5, y: 4),
+                    control2: CGPoint(x: 7.5, y: 7)
+                )
+                path.addCurve(
+                    to: CGPoint(x: 11, y: 3.5),
+                    control1: CGPoint(x: 9.5, y: 7),
+                    control2: CGPoint(x: 10, y: 3.5)
+                )
+                context.stroke(
+                    path,
+                    with: .color(color),
+                    style: StrokeStyle(lineWidth: active ? 1.5 : 1.2, lineCap: .round, lineJoin: .round)
+                )
+
+            case .candle:
+                var leftWick = Path()
+                leftWick.move(to: CGPoint(x: 3.5, y: 1))
+                leftWick.addLine(to: CGPoint(x: 3.5, y: 11))
+                context.stroke(leftWick, with: .color(color), lineWidth: 1)
+                context.fill(Path(roundedRect: CGRect(x: 2, y: 3, width: 3, height: 5), cornerRadius: 0.5), with: .color(color))
+
+                var rightWick = Path()
+                rightWick.move(to: CGPoint(x: 8.5, y: 2))
+                rightWick.addLine(to: CGPoint(x: 8.5, y: 10))
+                context.stroke(rightWick, with: .color(color), lineWidth: 1)
+                context.fill(Path(roundedRect: CGRect(x: 7, y: 4, width: 3, height: 4), cornerRadius: 0.5), with: .color(color))
+            }
         }
     }
 }
@@ -197,86 +256,91 @@ private extension LivelineChart {
     @ViewBuilder
     func windowControls(_ configuration: LivelineChartConfiguration) -> some View {
         if !configuration.windows.isEmpty {
-            HStack(spacing: 2) {
+            HStack(spacing: configuration.windowStyle == .text ? 4 : 2) {
                 ForEach(configuration.windows) { option in
+                    let active = activeWindow == option.seconds
                     Button {
                         activeWindow = option.seconds
                         configuration.onWindowChange?(option.seconds)
                     } label: {
                         Text(option.label)
-                            .font(.system(size: 12, weight: .medium, design: .monospaced))
+                            .font(.system(size: 11, weight: active ? .semibold : .regular))
                             .lineLimit(1)
-                            .padding(.horizontal, configuration.windowStyle == .text ? 4 : 9)
-                            .frame(height: 26)
-                            .foregroundColor(activeWindow == option.seconds ? activeControlColor(configuration) : inactiveControlColor(configuration))
-                            .background(controlBackground(active: activeWindow == option.seconds, configuration: configuration))
+                            .offset(y: 1 / 3)
+                            .padding(.horizontal, configuration.windowStyle == .text ? 6 : 10)
+                            .frame(height: controlButtonHeight(configuration))
+                            .foregroundColor(active ? activeControlColor(configuration) : inactiveControlColor(configuration))
+                            .background(controlBackground(active: active, configuration: configuration))
                     }
                     .buttonStyle(.plain)
                 }
             }
-            .padding(configuration.windowStyle == .text ? 0 : 3)
+            .padding(controlGroupPadding(configuration))
             .background(groupBackground(configuration))
-            .clipShape(RoundedRectangle(cornerRadius: configuration.windowStyle == .rounded ? 14 : 7, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: controlGroupCornerRadius(configuration), style: .continuous))
         }
     }
 
     @ViewBuilder
     func modeControls(_ configuration: LivelineChartConfiguration) -> some View {
         if shouldShowModeControls(configuration) {
-            HStack(spacing: 2) {
-                modeButton(title: "Candle", mode: .candle, active: !lineMode, configuration: configuration)
-                modeButton(title: "Line", mode: .line, active: lineMode, configuration: configuration)
+            HStack(spacing: configuration.windowStyle == .text ? 4 : 2) {
+                modeButton(mode: .line, active: lineMode, configuration: configuration)
+                modeButton(mode: .candle, active: !lineMode, configuration: configuration)
             }
-            .padding(3)
+            .padding(controlGroupPadding(configuration))
             .background(groupBackground(configuration))
-            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: controlGroupCornerRadius(configuration), style: .continuous))
         }
     }
 
-    func modeButton(title: String, mode: LivelineChartMode, active: Bool, configuration: LivelineChartConfiguration) -> some View {
+    func modeButton(mode: LivelineChartMode, active: Bool, configuration: LivelineChartConfiguration) -> some View {
         Button {
             lineMode = mode == .line
             configuration.onModeChange?(mode)
         } label: {
-            Text(title)
-                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                .lineLimit(1)
-                .padding(.horizontal, 9)
-                .frame(height: 26)
-                .foregroundColor(active ? activeControlColor(configuration) : inactiveControlColor(configuration))
+            LivelineModeIcon(mode: mode, active: active, color: active ? activeControlColor(configuration) : inactiveControlColor(configuration))
+                .frame(width: 12, height: 12)
+                .padding(.horizontal, 7)
+                .frame(height: controlButtonHeight(configuration))
                 .background(controlBackground(active: active, configuration: configuration))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(mode == .line ? "Line" : "Candle")
     }
 
     @ViewBuilder
     func seriesControls(_ configuration: LivelineChartConfiguration) -> some View {
         if case let .series(series) = content, series.count > 1 {
-            HStack(spacing: 5) {
+            HStack(spacing: configuration.windowStyle == .text ? 4 : 2) {
                 ForEach(series) { entry in
                     let visible = !hiddenSeries.contains(entry.id)
                     Button {
                         toggleSeries(entry.id, series: series, configuration: configuration)
                     } label: {
-                        HStack(spacing: configuration.seriesToggleCompact ? 0 : 5) {
+                        HStack(spacing: configuration.seriesToggleCompact ? 0 : 4) {
                             Circle()
                                 .fill(entry.color)
-                                .frame(width: 8, height: 8)
+                                .frame(width: configuration.seriesToggleCompact ? 8 : 6, height: configuration.seriesToggleCompact ? 8 : 6)
                             if !configuration.seriesToggleCompact {
                                 Text(entry.label ?? entry.id)
-                                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                    .font(.system(size: 11, weight: .medium))
                                     .lineLimit(1)
                             }
                         }
-                        .padding(.horizontal, configuration.seriesToggleCompact ? 8 : 9)
-                        .frame(height: 26)
+                        .padding(.horizontal, seriesButtonHorizontalPadding(configuration))
+                        .offset(y: configuration.seriesToggleCompact ? 0 : 1 / 3)
+                        .frame(height: seriesButtonHeight(configuration))
                         .foregroundColor(visible ? activeControlColor(configuration) : inactiveControlColor(configuration))
                         .background(controlBackground(active: visible, configuration: configuration))
-                        .opacity(visible ? 1 : 0.55)
+                        .opacity(visible ? 1 : 0.4)
                     }
                     .buttonStyle(.plain)
                 }
             }
+            .padding(controlGroupPadding(configuration))
+            .background(groupBackground(configuration))
+            .clipShape(RoundedRectangle(cornerRadius: controlGroupCornerRadius(configuration), style: .continuous))
         }
     }
 
@@ -293,11 +357,11 @@ private extension LivelineChart {
     }
 
     func activeControlColor(_ configuration: LivelineChartConfiguration) -> Color {
-        configuration.theme == .dark ? Color.white.opacity(0.78) : Color.black.opacity(0.68)
+        configuration.theme == .dark ? Color.white.opacity(0.70) : Color.black.opacity(0.55)
     }
 
     func inactiveControlColor(_ configuration: LivelineChartConfiguration) -> Color {
-        configuration.theme == .dark ? Color.white.opacity(0.28) : Color.black.opacity(0.28)
+        configuration.theme == .dark ? Color.white.opacity(0.25) : Color.black.opacity(0.22)
     }
 
     func groupBackground(_ configuration: LivelineChartConfiguration) -> Color {
@@ -305,7 +369,7 @@ private extension LivelineChart {
         case .text:
             return .clear
         case .default, .rounded:
-            return configuration.theme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.045)
+            return configuration.theme == .dark ? Color.white.opacity(0.03) : Color.black.opacity(0.02)
         }
     }
 
@@ -314,10 +378,57 @@ private extension LivelineChart {
             if configuration.windowStyle == .text {
                 Color.clear
             } else {
-                (active ? (configuration.theme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.08)) : Color.clear)
+                (active ? (configuration.theme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.035)) : Color.clear)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: configuration.windowStyle == .rounded ? 13 : 5, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: configuration.windowStyle == .rounded ? 999 : 4, style: .continuous))
+    }
+
+    func controlGroupPadding(_ configuration: LivelineChartConfiguration) -> CGFloat {
+        switch configuration.windowStyle {
+        case .text:
+            return 0
+        case .rounded:
+            return 3
+        case .default:
+            return 2
+        }
+    }
+
+    func controlGroupCornerRadius(_ configuration: LivelineChartConfiguration) -> CGFloat {
+        configuration.windowStyle == .rounded ? 999 : 6
+    }
+
+    func controlRowHeight(_ configuration: LivelineChartConfiguration) -> CGFloat {
+        var buttonHeight: CGFloat = 0
+        if !configuration.windows.isEmpty {
+            buttonHeight = max(buttonHeight, controlButtonHeight(configuration))
+        }
+        if shouldShowModeControls(configuration) {
+            buttonHeight = max(buttonHeight, controlButtonHeight(configuration))
+        }
+        if shouldShowSeriesControls {
+            buttonHeight = max(buttonHeight, seriesButtonHeight(configuration))
+        }
+        return buttonHeight + controlGroupPadding(configuration) * 2
+    }
+
+    func controlButtonHeight(_ configuration: LivelineChartConfiguration) -> CGFloat {
+        configuration.windowStyle == .text ? 20 : 22
+    }
+
+    func seriesButtonHeight(_ configuration: LivelineChartConfiguration) -> CGFloat {
+        guard configuration.seriesToggleCompact else {
+            return controlButtonHeight(configuration)
+        }
+        return configuration.windowStyle == .text ? 12 : 18
+    }
+
+    func seriesButtonHorizontalPadding(_ configuration: LivelineChartConfiguration) -> CGFloat {
+        if configuration.windowStyle == .text {
+            return configuration.seriesToggleCompact ? 4 : 6
+        }
+        return configuration.seriesToggleCompact ? 7 : 8
     }
 
     func scrubGesture(_ configuration: LivelineChartConfiguration) -> some Gesture {

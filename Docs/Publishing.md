@@ -4,6 +4,14 @@
 
 The repository is intended to be published as a private GitHub repository and consumed through Swift Package Manager.
 
+The helper script creates or reuses the private repository, configures `origin`, and pushes `main`:
+
+```bash
+scripts/publish-private.sh ParthJadhav liveline-swift
+```
+
+Equivalent manual command:
+
 ```bash
 gh repo create ParthJadhav/liveline-swift --private --source . --push
 ```
@@ -36,6 +44,8 @@ Then depend on:
 swift test
 xcodegen generate --spec Examples/LivelineDemo/project.yml
 xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
+scripts/capture-storybook.sh --chart-only
+scripts/diff-storybook.sh --fail-changed-pct 5 --fail-rms 12
 ```
 
 ## Access

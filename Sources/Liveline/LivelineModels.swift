@@ -208,6 +208,8 @@ public struct LivelineChartConfiguration {
     public var formatValue: (Double) -> String
     public var formatTime: (TimeInterval) -> String
     public var lerpSpeed: Double
+    public var randomSeed: UInt32?
+    public var snapshotElapsedTime: TimeInterval?
     public var padding: LivelinePadding
     public var lineMode: Bool
     public var seriesToggleCompact: Bool
@@ -245,6 +247,8 @@ public struct LivelineChartConfiguration {
         formatValue: @escaping (Double) -> String = LivelineFormatters.value,
         formatTime: @escaping (TimeInterval) -> String = LivelineFormatters.time,
         lerpSpeed: Double = 0.08,
+        randomSeed: UInt32? = nil,
+        snapshotElapsedTime: TimeInterval? = nil,
         padding: LivelinePadding = LivelinePadding(),
         lineMode: Bool = false,
         seriesToggleCompact: Bool = false,
@@ -281,6 +285,8 @@ public struct LivelineChartConfiguration {
         self.formatValue = formatValue
         self.formatTime = formatTime
         self.lerpSpeed = lerpSpeed
+        self.randomSeed = randomSeed
+        self.snapshotElapsedTime = snapshotElapsedTime
         self.padding = padding
         self.lineMode = lineMode
         self.seriesToggleCompact = seriesToggleCompact

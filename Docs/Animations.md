@@ -18,6 +18,8 @@ The line uses Fritsch-Carlson monotone cubic interpolation. The curve stays with
 
 When `loading` is true, or when no data is present, the chart draws a breathing placeholder line. When data becomes available, the real chart morphs from that placeholder shape into the live chart while the grid, fill, badge, and dot fade in.
 
+During the reveal, the line color also blends from the placeholder/grid-label color into the accent color. This matches the upstream choreography and avoids a sudden color flash when data replaces the loading state.
+
 ## Scrubbing
 
 Drag scrubbing converts the pointer location to a chart time, interpolates a value at that time, and draws a crosshair tooltip. The live dot and the part of the line to the right of the scrub point dim so the inspected history reads clearly.

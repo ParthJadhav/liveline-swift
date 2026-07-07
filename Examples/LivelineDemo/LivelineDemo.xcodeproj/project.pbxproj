@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		1AC5CE3F0E2C47252A685C97 /* StorybookGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E651928AB3A68954224963 /* StorybookGalleryView.swift */; };
+		2A6C8E2849152B698065293F /* StorybookScenarios.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE6E7B321C063866AE32FE6E /* StorybookScenarios.swift */; };
 		550CD9098220F8C26D01D9F2 /* DemoMarket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AA3FB67FFD448A011D77A88 /* DemoMarket.swift */; };
 		68A08A355EFFCBDD35146C9D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DFE268FCCEBC5F770ED32D8 /* ContentView.swift */; };
 		94D6664348AAB53AECFF2A55 /* Liveline in Frameworks */ = {isa = PBXBuildFile; productRef = C8383F349455BB91EED4F17D /* Liveline */; };
@@ -21,7 +23,9 @@
 		8DFE268FCCEBC5F770ED32D8 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		96A0ED5BF8E02B2290577882 /* LivelineDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivelineDemoApp.swift; sourceTree = "<group>"; };
 		A843AD2626FDD50F119E1682 /* liveline-swift */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "liveline-swift"; path = ../..; sourceTree = SOURCE_ROOT; };
+		C4E651928AB3A68954224963 /* StorybookGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookGalleryView.swift; sourceTree = "<group>"; };
 		CA1E9C63A4EA1D37D3964204 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		CE6E7B321C063866AE32FE6E /* StorybookScenarios.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookScenarios.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -44,6 +48,8 @@
 				2AA3FB67FFD448A011D77A88 /* DemoMarket.swift */,
 				13316F5B9327791EC071BA54 /* Info.plist */,
 				96A0ED5BF8E02B2290577882 /* LivelineDemoApp.swift */,
+				C4E651928AB3A68954224963 /* StorybookGalleryView.swift */,
+				CE6E7B321C063866AE32FE6E /* StorybookScenarios.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -148,6 +154,8 @@
 				68A08A355EFFCBDD35146C9D /* ContentView.swift in Sources */,
 				550CD9098220F8C26D01D9F2 /* DemoMarket.swift in Sources */,
 				EB0A4860FCC5B0E1D910DA93 /* LivelineDemoApp.swift in Sources */,
+				1AC5CE3F0E2C47252A685C97 /* StorybookGalleryView.swift in Sources */,
+				2A6C8E2849152B698065293F /* StorybookScenarios.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
