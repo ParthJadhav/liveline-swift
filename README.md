@@ -12,13 +12,17 @@ This repository is a Swift Package. Any iOS app can add it with Swift Package Ma
 
 These screenshots are captured from the included deterministic iOS Storybook scenarios.
 
-| Line chart | Momentum | Orderbook labels |
-| --- | --- | --- |
-| <img src="Media/readme/line-basic-dark.png" alt="Dark line chart with live value badge" /> | <img src="Media/readme/line-momentum-up.png" alt="Line chart using momentum coloring" /> | <img src="Media/readme/line-orderbook.png" alt="Line chart with orderbook stream labels" /> |
+<p align="center">
+  <img src="Media/readme/line-basic-dark.png" width="32%" alt="Dark line chart with live value badge" />
+  <img src="Media/readme/line-momentum-up.png" width="32%" alt="Line chart using momentum coloring" />
+  <img src="Media/readme/line-orderbook.png" width="32%" alt="Line chart with orderbook stream labels" />
+</p>
 
-| Candlesticks | Mode controls | Multi-series |
-| --- | --- | --- |
-| <img src="Media/readme/candle-basic.png" alt="Candlestick chart with live candle styling" /> | <img src="Media/readme/candle-mode-controls.png" alt="Candlestick chart with mode controls" /> | <img src="Media/readme/multi-basic.png" alt="Multi-series line chart with labels" /> |
+<p align="center">
+  <img src="Media/readme/candle-basic.png" width="32%" alt="Candlestick chart with live candle styling" />
+  <img src="Media/readme/candle-mode-controls.png" width="32%" alt="Candlestick chart with mode controls" />
+  <img src="Media/readme/multi-basic.png" width="32%" alt="Multi-series line chart with labels" />
+</p>
 
 ## Requirements
 

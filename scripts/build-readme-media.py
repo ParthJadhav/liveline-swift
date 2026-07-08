@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections import deque
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
@@ -12,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIR = ROOT / "Media" / "storybook-chart-only"
 OUT_DIR = ROOT / "Media" / "readme"
 
-PANEL_CROP = (46, 226, 1160, 1100)
+PANEL_CROP = (46, 226, 1160, 1164)
 FONT_REGULAR = Path("/System/Library/Fonts/SFNS.ttf")
 FONT_MONO = Path("/System/Library/Fonts/SFNSMono.ttf")
 
@@ -55,7 +56,50 @@ def add_shadow(
 
 def crop_panel(slug: str) -> Image.Image:
     source = Image.open(SOURCE_DIR / f"{slug}.png").convert("RGBA")
-    return source.crop(PANEL_CROP)
+    panel = source.crop(PANEL_CROP)
+    remove_edge_background(panel)
+    bbox = panel.getbbox()
+    if bbox is None:
+        return panel
+    return panel.crop(bbox)
+
+
+def remove_edge_background(image: Image.Image) -> None:
+    width, height = image.size
+    pixels = image.load()
+    visited: set[tuple[int, int]] = set()
+    queue: deque[tuple[int, int]] = deque()
+
+    def is_background(x: int, y: int) -> bool:
+        r, g, b, a = pixels[x, y]
+        return a > 0 and r >= 242 and g >= 242 and b >= 242
+
+    for x in range(width):
+        if is_background(x, 0):
+            queue.append((x, 0))
+        if is_background(x, height - 1):
+            queue.append((x, height - 1))
+
+    for y in range(height):
+        if is_background(0, y):
+            queue.append((0, y))
+        if is_background(width - 1, y):
+            queue.append((width - 1, y))
+
+    while queue:
+        x, y = queue.popleft()
+        if (x, y) in visited or not is_background(x, y):
+            continue
+        visited.add((x, y))
+        pixels[x, y] = (255, 255, 255, 0)
+        if x > 0:
+            queue.append((x - 1, y))
+        if x + 1 < width:
+            queue.append((x + 1, y))
+        if y > 0:
+            queue.append((x, y - 1))
+        if y + 1 < height:
+            queue.append((x, y + 1))
 
 
 def save_example_panels() -> dict[str, Path]:
