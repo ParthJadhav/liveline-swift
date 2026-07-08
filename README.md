@@ -2,7 +2,23 @@
 
 Native SwiftUI real-time charts for iOS apps. Liveline renders animated line, candlestick, and multi-series charts with smooth value interpolation, scrubbing, live badges, time windows, loading/empty states, and optional market-style effects.
 
+<p align="center">
+  <img src="Media/readme/cover.png" alt="Liveline Swift cover showing line, candlestick, and multi-series charts" />
+</p>
+
 This repository is a Swift Package. Any iOS app can add it with Swift Package Manager and import `Liveline`.
+
+## Gallery
+
+These screenshots are captured from the included deterministic iOS Storybook scenarios.
+
+| Line chart | Momentum | Orderbook labels |
+| --- | --- | --- |
+| <img src="Media/readme/line-basic-dark.png" alt="Dark line chart with live value badge" /> | <img src="Media/readme/line-momentum-up.png" alt="Line chart using momentum coloring" /> | <img src="Media/readme/line-orderbook.png" alt="Line chart with orderbook stream labels" /> |
+
+| Candlesticks | Mode controls | Multi-series |
+| --- | --- | --- |
+| <img src="Media/readme/candle-basic.png" alt="Candlestick chart with live candle styling" /> | <img src="Media/readme/candle-mode-controls.png" alt="Candlestick chart with mode controls" /> | <img src="Media/readme/multi-basic.png" alt="Multi-series line chart with labels" /> |
 
 ## Requirements
 
@@ -153,11 +169,12 @@ xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
 xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
 scripts/capture-storybook.sh
 scripts/capture-storybook.sh --chart-only
+python3 scripts/build-readme-media.py
 scripts/capture-web-references.sh
 scripts/diff-storybook.sh --fail-changed-pct 5 --fail-rms 12
 ```
 
-Use the chart-only capture plus web-reference diff when comparing the native renderer against the upstream React/canvas implementation. Native Storybook captures use deterministic snapshot timing, and diff panels are written to `Media/storybook-diff`.
+Use the chart-only capture plus web-reference diff when comparing the native renderer against the upstream React/canvas implementation. Native Storybook captures use deterministic snapshot timing, README media is built from `Media/storybook-chart-only`, and diff panels are written to `Media/storybook-diff`.
 
 The normal CI workflow runs package tests and the iOS demo build. The manual `Visual Parity` workflow captures upstream/native Storybook screenshots, runs the diff gate, and uploads the visual artifacts.
 
