@@ -1,0 +1,7 @@
+version: 1
+builder:
+  configs:
+    - platform: ios
+      documentation_targets: [Liveline]
+metadata:
+  authors: "Parth Jadhav"

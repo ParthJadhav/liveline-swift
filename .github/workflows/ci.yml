@@ -13,6 +13,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Show toolchain
         run: |
@@ -25,8 +27,29 @@ jobs:
       - name: Build package for release
         run: swift build -c release
 
-      - name: Build package for macOS
-        run: xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
+      - name: Check public API compatibility
+        run: |
+          BASELINE_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*')
+          swift package diagnose-api-breaking-changes "$BASELINE_TAG" --products Liveline
+
+  apple-platforms:
+    name: Apple Platform (${{ matrix.platform }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - iOS
+          - macOS
+          - tvOS
+          - watchOS
+          - visionOS
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build package for ${{ matrix.platform }}
+        run: xcodebuild -scheme Liveline -destination "generic/platform=${{ matrix.platform }}" build
 
   ios-demo:
     name: iOS Demo

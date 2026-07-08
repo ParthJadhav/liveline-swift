@@ -20,7 +20,10 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "Liveline"
+            name: "Liveline",
+            resources: [
+                .process("PrivacyInfo.xcprivacy"),
+            ]
         ),
         .testTarget(
             name: "LivelineTests",

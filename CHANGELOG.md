@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Adds Swift Package Index metadata for public DocC hosting.
+- Bundles an empty privacy manifest with the Swift package target.
+- Preserves the previous public `LivelineChartConfiguration` initializer for source compatibility.
+- Adds CI checks for public API compatibility and declared Apple platform builds.
+
 ## 0.1.2 - 2026-07-07
 
 - Adds candle line-mode morphing with staged OHLC collapse, line density ramping, close-price dash crossfade, and smoother live-candle transitions.

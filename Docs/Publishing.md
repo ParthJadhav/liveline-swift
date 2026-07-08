@@ -19,6 +19,8 @@ Confirm local build evidence:
 ```bash
 swift test
 swift build -c release
+BASELINE_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*')
+swift package diagnose-api-breaking-changes "$BASELINE_TAG" --products Liveline
 xcodegen generate --spec Examples/LivelineDemo/project.yml
 xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
 xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
@@ -73,3 +75,5 @@ gh release create "$VERSION" --repo ParthJadhav/liveline-swift --title "$VERSION
 ## Access
 
 For private package installs, grant repository read access to each developer, CI bot, or deploy key that needs to resolve the package.
+
+For public package installs, keep the repository public and confirm Swift Package Index can build the configured `Liveline` documentation target from `.spi.yml`.
