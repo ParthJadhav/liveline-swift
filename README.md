@@ -13,15 +13,7 @@ This repository is a Swift Package. Any iOS app can add it with Swift Package Ma
 These screenshots are captured from the included deterministic iOS Storybook scenarios.
 
 <p align="center">
-  <img src="Media/readme/line-basic-dark.png" width="32%" alt="Dark line chart with live value badge" />
-  <img src="Media/readme/line-momentum-up.png" width="32%" alt="Line chart using momentum coloring" />
-  <img src="Media/readme/line-orderbook.png" width="32%" alt="Line chart with orderbook stream labels" />
-</p>
-
-<p align="center">
-  <img src="Media/readme/candle-basic.png" width="32%" alt="Candlestick chart with live candle styling" />
-  <img src="Media/readme/candle-mode-controls.png" width="32%" alt="Candlestick chart with mode controls" />
-  <img src="Media/readme/multi-basic.png" width="32%" alt="Multi-series line chart with labels" />
+  <img src="Media/readme/examples.png" alt="Liveline Swift Storybook screenshots showing line, momentum, orderbook, candlestick, mode control, and multi-series charts" />
 </p>
 
 ## Requirements
