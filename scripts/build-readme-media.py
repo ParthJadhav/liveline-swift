@@ -1,90 +1,31 @@
 #!/usr/bin/env python3
-"""Build polished README media from deterministic Storybook screenshots."""
+"""Build README media with browser-rendered HTML/CSS layouts."""
 
 from __future__ import annotations
 
+import subprocess
 from collections import deque
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIR = ROOT / "Media" / "storybook-chart-only"
 OUT_DIR = ROOT / "Media" / "readme"
+BUILD_DIR = ROOT / ".build" / "readme-media"
+RENDER_SCRIPT = ROOT / "scripts" / "render-readme-media.mjs"
 
 PANEL_CROP = (46, 226, 1160, 1164)
-FONT_REGULAR = Path("/System/Library/Fonts/SFNS.ttf")
-FONT_MONO = Path("/System/Library/Fonts/SFNSMono.ttf")
-
-INK = "#111827"
-MUTED = "#657282"
-SURFACE = "#f4f7fb"
-PAPER = "#ffffff"
 
 EXAMPLES = [
-    ("line-basic-dark", "Line", "Live badge, scrub dot, eased range"),
-    ("line-momentum-up", "Momentum", "Value-aware color and arrows"),
-    ("line-orderbook", "Orderbook", "Streaming labels beside the plot"),
-    ("candle-basic", "Candles", "OHLC bodies with live-candle glow"),
-    ("candle-mode-controls", "Modes", "Line/candle control states"),
-    ("multi-basic", "Multi-series", "Labeled comparison series"),
+    "line-basic-dark",
+    "line-momentum-up",
+    "line-orderbook",
+    "candle-basic",
+    "candle-mode-controls",
+    "multi-basic",
 ]
-
-
-def font(size: int, weight: str = "regular", mono: bool = False) -> ImageFont.FreeTypeFont:
-    # SFNS.ttc exposes regular/bold faces inconsistently through Pillow, so use
-    # the same family with size/contrast doing the hierarchy work.
-    del weight
-    return ImageFont.truetype(str(FONT_MONO if mono else FONT_REGULAR), size)
-
-
-def draw_text(
-    draw: ImageDraw.ImageDraw,
-    xy: tuple[int, int],
-    text: str,
-    size: int,
-    fill: str | tuple[int, int, int, int] = INK,
-    mono: bool = False,
-) -> None:
-    draw.text(xy, text, fill=fill, font=font(size, mono=mono))
-
-
-def draw_wrapped_text(
-    draw: ImageDraw.ImageDraw,
-    xy: tuple[int, int],
-    text: str,
-    size: int,
-    max_width: int,
-    fill: str | tuple[int, int, int, int] = MUTED,
-    line_gap: int = 8,
-) -> int:
-    words = text.split()
-    lines: list[str] = []
-    current = ""
-    typeface = font(size)
-    for word in words:
-        candidate = f"{current} {word}".strip()
-        if draw.textlength(candidate, font=typeface) <= max_width or not current:
-            current = candidate
-        else:
-            lines.append(current)
-            current = word
-    if current:
-        lines.append(current)
-
-    x, y = xy
-    for line in lines:
-        draw.text((x, y), line, fill=fill, font=typeface)
-        y += size + line_gap
-    return y
-
-
-def rounded_mask(size: tuple[int, int], radius: int) -> Image.Image:
-    mask = Image.new("L", size, 0)
-    draw = ImageDraw.Draw(mask)
-    draw.rounded_rectangle((0, 0, size[0] - 1, size[1] - 1), radius=radius, fill=255)
-    return mask
 
 
 def remove_edge_background(image: Image.Image) -> None:
@@ -130,131 +71,273 @@ def crop_panel(slug: str) -> Image.Image:
     panel = source.crop(PANEL_CROP)
     remove_edge_background(panel)
     bbox = panel.getbbox()
-    if bbox is None:
-        return panel
-    return panel.crop(bbox)
+    return panel if bbox is None else panel.crop(bbox)
 
 
-def resize_to_width(image: Image.Image, width: int) -> Image.Image:
-    scale = width / image.width
-    return image.resize((width, round(image.height * scale)), Image.Resampling.LANCZOS)
+def save_panel(slug: str) -> None:
+    panel = crop_panel(slug)
+    scale = 900 / panel.width
+    resized = panel.resize((900, round(panel.height * scale)), Image.Resampling.LANCZOS)
+    resized.save(OUT_DIR / f"{slug}.png")
 
 
-def soft_shadow(size: tuple[int, int], radius: int, opacity: int = 26, blur: int = 18) -> Image.Image:
-    shadow = Image.new("RGBA", size, (17, 24, 39, opacity))
-    shadow.putalpha(rounded_mask(size, radius))
-    return shadow.filter(ImageFilter.GaussianBlur(blur))
+def image_src(name: str) -> str:
+    return (OUT_DIR / name).resolve().as_uri()
 
 
-def paste_panel(canvas: Image.Image, panel: Image.Image, xy: tuple[int, int], width: int) -> tuple[int, int]:
-    image = resize_to_width(panel, width)
-    x, y = xy
-    canvas.alpha_composite(soft_shadow(image.size, 18), (x, y + 12))
-    canvas.alpha_composite(image, xy)
-    return image.size
+def write_html(filename: str, body: str) -> Path:
+    html = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {{
+      --ink: #101725;
+      --muted: #5f6d7e;
+      --paper: #ffffff;
+      --canvas: #f3f6fb;
+      --rail: #e7edf5;
+      --rule: #d6dee9;
+    }}
+
+    * {{ box-sizing: border-box; }}
+
+    body {{
+      margin: 0;
+      background: transparent;
+      color: var(--ink);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+    }}
+
+    .cover {{
+      width: 1600px;
+      height: 900px;
+      display: grid;
+      grid-template-columns: 600px 1fr;
+      gap: 58px;
+      padding: 72px 92px;
+      background: var(--canvas);
+    }}
+
+    .cover-copy {{
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      justify-content: flex-start;
+      padding: 24px 0 0;
+    }}
+
+    h1 {{
+      margin: 0 0 22px;
+      font-size: 74px;
+      line-height: 0.98;
+      font-weight: 650;
+      letter-spacing: -0.032em;
+    }}
+
+    .dek {{
+      max-width: 540px;
+      margin: 0;
+      color: #2d3746;
+      font-size: 32px;
+      line-height: 1.24;
+      letter-spacing: -0.018em;
+    }}
+
+    .summary {{
+      max-width: 550px;
+      margin: 20px 0 0;
+      color: var(--muted);
+      font-size: 23px;
+      line-height: 1.4;
+    }}
+
+    .facts {{
+      display: grid;
+      gap: 0;
+      margin: 52px 0 0;
+      border-top: 1px solid var(--rule);
+    }}
+
+    .fact {{
+      display: grid;
+      grid-template-columns: 142px 1fr;
+      align-items: baseline;
+      min-height: 72px;
+      border-bottom: 1px solid var(--rule);
+    }}
+
+    .fact span {{
+      color: #7a8798;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 18px;
+      letter-spacing: 0.02em;
+    }}
+
+    .fact strong {{
+      font-size: 27px;
+      font-weight: 500;
+      letter-spacing: -0.018em;
+    }}
+
+    .runtime {{
+      display: grid;
+      gap: 16px;
+      margin-top: 50px;
+      color: var(--muted);
+      font-size: 23px;
+    }}
+
+    .runtime code {{
+      display: inline-flex;
+      align-items: center;
+      width: max-content;
+      height: 50px;
+      padding: 0 20px;
+      border-radius: 12px;
+      background: var(--ink);
+      color: #fff;
+      font-family: ui-monospace, "SF Mono", Menlo, monospace;
+      font-size: 19px;
+      white-space: nowrap;
+    }}
+
+    .cover-visual {{
+      min-width: 0;
+      padding: 28px;
+      border-radius: 30px;
+      background: var(--rail);
+    }}
+
+    .cover-stage {{
+      height: 100%;
+      display: grid;
+      grid-template-rows: 1fr 210px;
+      gap: 24px;
+      padding: 30px;
+      border-radius: 24px;
+      background: #fbfcfe;
+    }}
+
+    .hero-shot,
+    .thumb {{
+      overflow: hidden;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      background: #070707;
+      box-shadow: 0 14px 28px rgba(16, 23, 37, 0.12);
+    }}
+
+    .hero-shot img,
+    .thumb img {{
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }}
+
+    .thumb-grid {{
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      min-height: 0;
+    }}
+
+    .examples {{
+      width: 1600px;
+      height: 980px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 30px;
+      padding: 72px;
+      background: var(--canvas);
+    }}
+
+    .example-card {{
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      border-radius: 18px;
+      background: var(--paper);
+    }}
+
+    .example-card img {{
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }}
+  </style>
+</head>
+<body>
+{body}
+</body>
+</html>
+"""
+    path = BUILD_DIR / filename
+    path.write_text(html)
+    return path
 
 
-def save_example_panels() -> None:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    for slug, _, _ in EXAMPLES:
-        panel = resize_to_width(crop_panel(slug), 900)
-        panel.save(OUT_DIR / f"{slug}.png")
-
-
-def build_cover() -> Path:
-    canvas = Image.new("RGBA", (1600, 900), SURFACE)
-    draw = ImageDraw.Draw(canvas)
-
-    # Large quiet backdrop gives the screenshots a native-docs feel without a
-    # decorative pattern.
-    draw.rounded_rectangle((760, 54, 1526, 846), radius=28, fill="#e8eef6")
-    draw.rounded_rectangle((792, 86, 1494, 814), radius=22, fill="#f9fbfd")
-
-    draw_text(draw, (104, 96), "Liveline Swift", 82)
-    draw_text(draw, (108, 206), "Native SwiftUI charts for live data.", 36, fill="#2b3442")
-    draw_wrapped_text(
-        draw,
-        (108, 262),
-        "Line, candlestick, and multi-series rendering captured from deterministic iOS Storybook scenarios.",
-        25,
-        max_width=560,
+def render(html_path: Path, output: Path, selector: str) -> None:
+    subprocess.run(
+        ["node", str(RENDER_SCRIPT), str(html_path), str(output), selector],
+        cwd=ROOT,
+        check=True,
     )
 
-    facts = [
-        ("Renderer", "SwiftUI Canvas"),
-        ("Modes", "Line / Candle / Multi-series"),
-        ("States", "Scrub, live badge, loading, empty"),
-    ]
-    y = 388
-    for label, value in facts:
-        draw.line((108, y - 22, 620, y - 22), fill="#d7dee8", width=1)
-        draw_text(draw, (108, y), label, 20, fill="#7b8796", mono=True)
-        draw_text(draw, (264, y - 3), value, 28, fill=INK)
-        y += 86
 
-    draw.rounded_rectangle((108, 730, 482, 784), radius=12, fill=INK)
-    draw_text(draw, (132, 758), "iOS 16+ / Swift 5.9+", 22, fill="#ffffff", mono=True)
-    draw_text(draw, (108, 814), "No WebView. No JavaScript bridge.", 24, fill=MUTED)
-
-    paste_panel(canvas, crop_panel("line-basic-dark"), (834, 126), 600)
-    paste_panel(canvas, crop_panel("candle-basic"), (844, 598), 292)
-    paste_panel(canvas, crop_panel("multi-basic"), (1172, 598), 292)
-
-    output = OUT_DIR / "cover.png"
-    canvas.convert("RGB").save(output, quality=95)
-    return output
-
-
-def draw_example_card(
-    canvas: Image.Image,
-    slug: str,
-    title: str,
-    caption: str,
-    box: tuple[int, int, int, int],
-) -> None:
-    draw = ImageDraw.Draw(canvas)
-    x, y, width, height = box
-    draw.rounded_rectangle((x, y, x + width, y + height), radius=18, fill=PAPER)
-    draw_text(draw, (x + 28, y + 24), title, 32, fill=INK)
-    draw_text(draw, (x + 28, y + 66), caption, 20, fill=MUTED)
-    panel = crop_panel(slug)
-    target_width = width - 56
-    image = resize_to_width(panel, target_width)
-    max_height = height - 126
-    if image.height > max_height:
-        scale = max_height / image.height
-        image = image.resize((round(image.width * scale), max_height), Image.Resampling.LANCZOS)
-    canvas.alpha_composite(image, (x + 28, y + height - image.height - 28))
+def build_cover() -> None:
+    body = f"""
+<main class="cover capture">
+  <section class="cover-copy">
+    <div>
+      <h1>Liveline Swift</h1>
+      <p class="dek">Native SwiftUI charts for live data.</p>
+      <p class="summary">Line, candlestick, and multi-series rendering captured from deterministic iOS Storybook scenarios.</p>
+      <div class="facts" aria-label="Liveline capabilities">
+        <div class="fact"><span>Renderer</span><strong>SwiftUI Canvas</strong></div>
+        <div class="fact"><span>Modes</span><strong>Line / Candle / Multi-series</strong></div>
+        <div class="fact"><span>States</span><strong>Scrub · live badge · loading · empty</strong></div>
+      </div>
+    </div>
+    <div class="runtime"><code>iOS 16+ / Swift 5.9+</code><span>No WebView. No JavaScript bridge.</span></div>
+  </section>
+  <section class="cover-visual" aria-label="Liveline chart examples">
+    <div class="cover-stage">
+      <div class="hero-shot"><img src="{image_src('line-basic-dark.png')}" alt="" /></div>
+      <div class="thumb-grid">
+        <div class="thumb"><img src="{image_src('candle-basic.png')}" alt="" /></div>
+        <div class="thumb"><img src="{image_src('multi-basic.png')}" alt="" /></div>
+      </div>
+    </div>
+  </section>
+</main>
+"""
+    html = write_html("cover.html", body)
+    render(html, OUT_DIR / "cover.png", ".capture")
 
 
-def build_examples_sheet() -> Path:
-    canvas = Image.new("RGBA", (1600, 1180), SURFACE)
-    draw = ImageDraw.Draw(canvas)
-
-    draw_text(draw, (80, 68), "Storybook captures", 58)
-    draw_text(draw, (84, 142), "Deterministic iOS screenshots showing the renderer's main chart modes and UI states.", 27, fill=MUTED)
-
-    card_width = 460
-    card_height = 454
-    gap = 30
-    start_x = 80
-    start_y = 238
-    for index, (slug, title, caption) in enumerate(EXAMPLES):
-        col = index % 3
-        row = index // 3
-        x = start_x + col * (card_width + gap)
-        y = start_y + row * (card_height + gap)
-        draw_example_card(canvas, slug, title, caption, (x, y, card_width, card_height))
-
-    output = OUT_DIR / "examples.png"
-    canvas.convert("RGB").save(output, quality=95)
-    return output
+def build_examples() -> None:
+    cards = "\n".join(
+        f'<figure class="example-card"><img src="{image_src(slug + ".png")}" alt="" /></figure>'
+        for slug in EXAMPLES
+    )
+    html = write_html("examples.html", f'<main class="examples capture">{cards}</main>')
+    render(html, OUT_DIR / "examples.png", ".capture")
 
 
 def main() -> None:
-    save_example_panels()
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    BUILD_DIR.mkdir(parents=True, exist_ok=True)
+    for slug in EXAMPLES:
+        save_panel(slug)
     build_cover()
-    build_examples_sheet()
+    build_examples()
 
 
 if __name__ == "__main__":
