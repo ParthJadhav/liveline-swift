@@ -19,12 +19,12 @@ RENDER_SCRIPT = ROOT / "scripts" / "render-readme-media.mjs"
 PANEL_CROP = (46, 226, 1160, 1164)
 
 EXAMPLES = [
-    "line-basic-dark",
-    "line-momentum-up",
-    "line-orderbook",
-    "candle-basic",
-    "candle-mode-controls",
-    "multi-basic",
+    ("line-basic-dark", "Line chart", "Live value badge and scrub marker"),
+    ("line-momentum-up", "Momentum", "Value-aware color and direction arrows"),
+    ("line-orderbook", "Orderbook labels", "Streaming side labels beside the plot"),
+    ("candle-basic", "Candlesticks", "OHLC bodies with live-candle glow"),
+    ("candle-mode-controls", "Mode controls", "Line/candle toggle states"),
+    ("multi-basic", "Multi-series", "Labeled comparison lines"),
 ]
 
 
@@ -247,7 +247,7 @@ def write_html(filename: str, body: str) -> Path:
 
     .examples {{
       width: 1600px;
-      height: 980px;
+      height: 1060px;
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 30px;
@@ -259,10 +259,41 @@ def write_html(filename: str, body: str) -> Path:
       min-width: 0;
       min-height: 0;
       display: grid;
-      place-items: center;
-      padding: 28px;
+      grid-template-rows: auto 1fr;
+      gap: 22px;
+      padding: 30px;
       border-radius: 18px;
       background: var(--paper);
+    }}
+
+    .example-label {{
+      min-width: 0;
+    }}
+
+    .example-label h2 {{
+      margin: 0;
+      color: var(--ink);
+      font-size: 28px;
+      line-height: 1.05;
+      font-weight: 620;
+      letter-spacing: -0.02em;
+    }}
+
+    .example-label p {{
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.3;
+    }}
+
+    .example-image {{
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-radius: 10px;
+      background: #070707;
     }}
 
     .example-card img {{
@@ -324,8 +355,16 @@ def build_cover() -> None:
 
 def build_examples() -> None:
     cards = "\n".join(
-        f'<figure class="example-card"><img src="{image_src(slug + ".png")}" alt="" /></figure>'
-        for slug in EXAMPLES
+        f"""
+        <figure class="example-card">
+          <figcaption class="example-label">
+            <h2>{title}</h2>
+            <p>{caption}</p>
+          </figcaption>
+          <div class="example-image"><img src="{image_src(slug + ".png")}" alt="" /></div>
+        </figure>
+        """
+        for slug, title, caption in EXAMPLES
     )
     html = write_html("examples.html", f'<main class="examples capture">{cards}</main>')
     render(html, OUT_DIR / "examples.png", ".capture")
@@ -334,7 +373,7 @@ def build_examples() -> None:
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    for slug in EXAMPLES:
+    for slug, _, _ in EXAMPLES:
         save_panel(slug)
     build_cover()
     build_examples()
