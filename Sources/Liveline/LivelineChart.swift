@@ -432,6 +432,9 @@ private extension LivelineChart {
     }
 
     func scrubGesture(_ configuration: LivelineChartConfiguration) -> some Gesture {
+        #if os(tvOS)
+        TapGesture()
+        #else
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 guard configuration.scrub else { return }
@@ -441,5 +444,6 @@ private extension LivelineChart {
                 hoverLocation = nil
                 configuration.onHover?(nil)
             }
+        #endif
     }
 }

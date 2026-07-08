@@ -6,6 +6,7 @@
 - Bundles an empty privacy manifest with the Swift package target.
 - Preserves the previous public `LivelineChartConfiguration` initializer for source compatibility.
 - Adds CI checks for public API compatibility and declared Apple platform builds.
+- Fixes platform-specific compile issues across the declared Apple targets.
 
 ## 0.1.2 - 2026-07-07
 

@@ -2088,7 +2088,7 @@ private extension LivelineRenderer {
         if shouldSpawn, state.previousMomentum != momentum {
             let count = Int((8 + swingMagnitude * 14) * options.scale)
             for _ in 0..<count {
-                let angle = Double.random(in: 0...(Double.pi * 2))
+                let angle = CGFloat.random(in: 0...(CGFloat.pi * 2))
                 let speed = CGFloat.random(in: 35...120) * CGFloat(options.scale)
                 let velocity = CGVector(dx: cos(angle) * speed, dy: sin(angle) * speed)
                 let color = momentum == .up ? palette.dotUp : palette.dotDown
@@ -2130,7 +2130,7 @@ private extension LivelineRenderer {
         fill: LivelineRGBA,
         outline: LivelineRGBA
     ) {
-        #if canImport(UIKit)
+        #if canImport(UIKit) && !os(watchOS) && !os(visionOS)
         let font = UIFont.monospacedSystemFont(ofSize: 13, weight: .semibold)
         let fillColor = UIColor(red: fill.red, green: fill.green, blue: fill.blue, alpha: fill.alpha)
         let outlineColor = UIColor(red: outline.red, green: outline.green, blue: outline.blue, alpha: outline.alpha)
@@ -2159,7 +2159,7 @@ private extension LivelineRenderer {
         #endif
     }
 
-    #if canImport(UIKit)
+    #if canImport(UIKit) && !os(watchOS) && !os(visionOS)
     static func orderbookTextImage(text: String, font: UIFont, fill: UIColor, outline: UIColor, scale: CGFloat) -> UIImage {
         let padding: CGFloat = 4
         let attributes: [NSAttributedString.Key: Any] = [.font: font]
