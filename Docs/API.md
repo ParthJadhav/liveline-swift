@@ -53,9 +53,12 @@ LivelineChartConfiguration(
     badge: true,
     fill: true,
     pulse: true,
+    fadeEffects: false,
     showValue: true,
     valueMomentumColor: true,
     referenceLine: LivelineReferenceLine(value: 42, label: "Open"),
+    activePoint: LivelineActivePoint(time: Date().timeIntervalSince1970),
+    seriesLegendSide: .trailing,
     formatValue: { $0.formatted(.number.precision(.fractionLength(2))) }
 )
 ```
@@ -72,6 +75,8 @@ Important options:
 | `grid` | `true` | Draws horizontal grid lines and value labels. |
 | `badge` | `true` | Draws the live value pill for line charts. |
 | `fill` | `true` | Draws a gradient under line charts. |
+| `endpointDecorations` | `true` | Draws the endpoint dot and momentum arrows. Disable this for forecast or historical charts where the final point is not a live value. |
+| `fadeEffects` | `false` | Enables chart reveal, edge masks, scrub dimming, axis label, series, and tooltip fade transitions. Disabled by default so charts render at full opacity immediately. |
 | `momentum` | `nil` | Use `.up`, `.down`, or `.flat` to override auto detection. |
 | `autoDetectMomentum` | `true` | Uses recent velocity to color momentum affordances. |
 | `scrub` | `true` | Enables drag scrubbing and tooltips. |
@@ -82,6 +87,8 @@ Important options:
 | `paused` | `false` | Freezes animation progress visually. |
 | `orderbook` | `nil` | Draws streaming bid/ask size labels behind the line. |
 | `referenceLine` | `nil` | Keeps a horizontal reference value visible. |
+| `activePoint` | `nil` | Draws a pulsing dot at an arbitrary active time/value. If `value` is nil, Liveline interpolates the value from the visible data. |
+| `seriesLegendSide` | `.trailing` | Places multi-series endpoint labels to the trailing or leading side of their points. |
 | `snapshotElapsedTime` | `nil` | Runs animations on a fixed 60fps cursor until this elapsed time, then freezes for deterministic screenshots and tests. |
 | `lineMode` | `false` | Renders candle input as a line. |
 

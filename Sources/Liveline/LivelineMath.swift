@@ -216,17 +216,19 @@ struct LivelineLayout {
     var maxValue: Double
     var leftEdge: TimeInterval
     var rightEdge: TimeInterval
+    var dataLeftReserve: CGFloat = 0
     var dataRightReserve: CGFloat = 0
 
-    var chartWidth: CGFloat { max(1, size.width - padding.left - padding.right - dataRightReserve) }
+    var plotLeftX: CGFloat { padding.left + dataLeftReserve }
+    var chartWidth: CGFloat { max(1, size.width - padding.left - padding.right - dataLeftReserve - dataRightReserve) }
     var chartHeight: CGFloat { max(1, size.height - padding.top - padding.bottom) }
     var bottomY: CGFloat { size.height - padding.bottom }
-    var rightX: CGFloat { size.width - padding.right }
+    var rightX: CGFloat { size.width - padding.right - dataRightReserve }
 
     func x(for time: TimeInterval) -> CGFloat {
         let denominator = max(0.001, rightEdge - leftEdge)
         let t = (time - leftEdge) / denominator
-        return padding.left + CGFloat(t) * chartWidth
+        return plotLeftX + CGFloat(t) * chartWidth
     }
 
     func y(for value: Double) -> CGFloat {
@@ -236,7 +238,7 @@ struct LivelineLayout {
     }
 
     func time(for x: CGFloat) -> TimeInterval {
-        let t = Double((x - padding.left) / chartWidth)
+        let t = Double((x - plotLeftX) / chartWidth)
         return leftEdge + (rightEdge - leftEdge) * t
     }
 }

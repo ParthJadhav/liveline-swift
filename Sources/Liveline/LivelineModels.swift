@@ -83,6 +83,11 @@ public enum LivelineWindowStyle: String, CaseIterable, Sendable {
     case text
 }
 
+public enum LivelineLegendSide: String, CaseIterable, Sendable {
+    case leading
+    case trailing
+}
+
 /// A time horizon option shown above the chart.
 public struct LivelineWindowOption: Identifiable, Hashable, Sendable {
     public var label: String
@@ -117,6 +122,18 @@ public struct LivelineHoverPoint: Hashable, Sendable {
         self.value = value
         self.x = x
         self.y = y
+    }
+}
+
+public struct LivelineActivePoint: Hashable, Sendable {
+    public var time: TimeInterval
+    public var value: Double?
+    public var pulse: Bool
+
+    public init(time: TimeInterval, value: Double? = nil, pulse: Bool = true) {
+        self.time = time
+        self.value = value
+        self.pulse = pulse
     }
 }
 
@@ -189,6 +206,8 @@ public struct LivelineChartConfiguration {
     public var badgeTail: Bool
     public var fill: Bool
     public var pulse: Bool
+    public var endpointDecorations: Bool
+    public var fadeEffects: Bool
     public var lineWidth: CGFloat
     public var momentum: LivelineMomentum?
     public var autoDetectMomentum: Bool
@@ -205,6 +224,7 @@ public struct LivelineChartConfiguration {
     public var tooltipOutline: Bool
     public var orderbook: LivelineOrderbookData?
     public var referenceLine: LivelineReferenceLine?
+    public var activePoint: LivelineActivePoint?
     public var formatValue: (Double) -> String
     public var formatTime: (TimeInterval) -> String
     public var lerpSpeed: Double
@@ -213,6 +233,7 @@ public struct LivelineChartConfiguration {
     public var padding: LivelinePadding
     public var lineMode: Bool
     public var seriesToggleCompact: Bool
+    public var seriesLegendSide: LivelineLegendSide
     public var onHover: ((LivelineHoverPoint?) -> Void)?
     public var onWindowChange: ((TimeInterval) -> Void)?
     public var onModeChange: ((LivelineChartMode) -> Void)?
@@ -228,6 +249,8 @@ public struct LivelineChartConfiguration {
         badgeTail: Bool = true,
         fill: Bool = true,
         pulse: Bool = true,
+        endpointDecorations: Bool = true,
+        fadeEffects: Bool = false,
         lineWidth: CGFloat = 2,
         momentum: LivelineMomentum? = nil,
         autoDetectMomentum: Bool = true,
@@ -244,6 +267,7 @@ public struct LivelineChartConfiguration {
         tooltipOutline: Bool = true,
         orderbook: LivelineOrderbookData? = nil,
         referenceLine: LivelineReferenceLine? = nil,
+        activePoint: LivelineActivePoint? = nil,
         formatValue: @escaping (Double) -> String = LivelineFormatters.value,
         formatTime: @escaping (TimeInterval) -> String = LivelineFormatters.time,
         lerpSpeed: Double = 0.08,
@@ -252,6 +276,7 @@ public struct LivelineChartConfiguration {
         padding: LivelinePadding = LivelinePadding(),
         lineMode: Bool = false,
         seriesToggleCompact: Bool = false,
+        seriesLegendSide: LivelineLegendSide = .trailing,
         onHover: ((LivelineHoverPoint?) -> Void)? = nil,
         onWindowChange: ((TimeInterval) -> Void)? = nil,
         onModeChange: ((LivelineChartMode) -> Void)? = nil,
@@ -266,6 +291,8 @@ public struct LivelineChartConfiguration {
         self.badgeTail = badgeTail
         self.fill = fill
         self.pulse = pulse
+        self.endpointDecorations = endpointDecorations
+        self.fadeEffects = fadeEffects
         self.lineWidth = lineWidth
         self.momentum = momentum
         self.autoDetectMomentum = autoDetectMomentum
@@ -282,6 +309,7 @@ public struct LivelineChartConfiguration {
         self.tooltipOutline = tooltipOutline
         self.orderbook = orderbook
         self.referenceLine = referenceLine
+        self.activePoint = activePoint
         self.formatValue = formatValue
         self.formatTime = formatTime
         self.lerpSpeed = lerpSpeed
@@ -290,6 +318,7 @@ public struct LivelineChartConfiguration {
         self.padding = padding
         self.lineMode = lineMode
         self.seriesToggleCompact = seriesToggleCompact
+        self.seriesLegendSide = seriesLegendSide
         self.onHover = onHover
         self.onWindowChange = onWindowChange
         self.onModeChange = onModeChange
