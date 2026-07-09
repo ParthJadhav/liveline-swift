@@ -2,6 +2,13 @@ import CoreGraphics
 import Foundation
 import SwiftUI
 
+struct LivelineWaterfallSegment: Equatable {
+    var time: TimeInterval
+    var start: Double
+    var end: Double
+    var delta: Double
+}
+
 enum LivelineMath {
     static func barRangePoints(points: [LivelinePoint], baseline: Double) -> [LivelinePoint] {
         guard let last = points.last else { return [] }
@@ -49,6 +56,79 @@ enum LivelineMath {
         }
 
         return Set(selections.values.map(\.key))
+    }
+
+    static func stepScreenPoints(
+        points: [CGPoint],
+        position: LivelineStepPosition
+    ) -> [CGPoint] {
+        guard let first = points.first else { return [] }
+        guard points.count > 1 else { return [first] }
+
+        var result = [first]
+        result.reserveCapacity(points.count * 3)
+
+        for (left, right) in zip(points, points.dropFirst()) {
+            switch position {
+            case .leading:
+                result.append(CGPoint(x: left.x, y: right.y))
+                result.append(right)
+            case .center:
+                let midpointX = (left.x + right.x) / 2
+                result.append(CGPoint(x: midpointX, y: left.y))
+                result.append(CGPoint(x: midpointX, y: right.y))
+                result.append(right)
+            case .trailing:
+                result.append(CGPoint(x: right.x, y: left.y))
+                result.append(right)
+            }
+        }
+
+        return result
+    }
+
+    static func bubbleDiameter(
+        magnitude: Double,
+        minimumMagnitude: Double,
+        maximumMagnitude: Double,
+        minimumSize: CGFloat,
+        maximumSize: CGFloat,
+        scale: LivelineBubbleScale
+    ) -> CGFloat {
+        guard maximumMagnitude > minimumMagnitude else {
+            return (minimumSize + maximumSize) / 2
+        }
+
+        let progress = clamp(
+            (magnitude - minimumMagnitude) / (maximumMagnitude - minimumMagnitude),
+            0,
+            1
+        )
+        switch scale {
+        case .area:
+            let minimumSquared = Double(minimumSize * minimumSize)
+            let maximumSquared = Double(maximumSize * maximumSize)
+            return CGFloat(sqrt(minimumSquared + progress * (maximumSquared - minimumSquared)))
+        case .diameter:
+            return minimumSize + CGFloat(progress) * (maximumSize - minimumSize)
+        }
+    }
+
+    static func waterfallSegments(
+        points: [LivelinePoint],
+        initialValue: Double
+    ) -> [LivelineWaterfallSegment] {
+        var running = initialValue
+        return points.map { point in
+            let start = running
+            running += point.value
+            return LivelineWaterfallSegment(
+                time: point.time,
+                start: start,
+                end: running,
+                delta: point.value
+            )
+        }
     }
 
     static func lerp(_ current: Double, _ target: Double, speed: Double, deltaTime: TimeInterval) -> Double {

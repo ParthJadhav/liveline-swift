@@ -23,6 +23,11 @@ enum LivelineChartContent {
     case bars(data: [LivelinePoint], style: LivelineBarStyle)
     case range(data: [LivelineRangePoint], style: LivelineRangeStyle)
     case scatter(data: [LivelinePoint], value: Double, style: LivelineScatterStyle)
+    case steps(data: [LivelinePoint], value: Double, style: LivelineStepStyle)
+    case lollipops(data: [LivelinePoint], style: LivelineLollipopStyle)
+    case bubbles(data: [LivelineBubblePoint], style: LivelineBubbleStyle)
+    case boxPlots(data: [LivelineBoxPlotPoint], style: LivelineBoxPlotStyle)
+    case waterfall(data: [LivelinePoint], style: LivelineWaterfallStyle)
     case candle(
         data: [LivelinePoint],
         value: Double,
@@ -268,6 +273,73 @@ enum LivelineRenderer {
                 layout: layout,
                 palette: palette,
                 points: data.visible(in: layout.leftEdge...layout.rightEdge),
+                style: style,
+                alpha: state.chartReveal
+            )
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+            drawDiscreteCrosshair(context: &layer, layout: layout, palette: palette, hover: hover, points: renderData.primaryVisible, config: config, alpha: scrubAmount)
+            drawActivePoint(context: &layer, layout: layout, palette: palette, points: renderData.primaryVisible, activePoint: config.activePoint, alpha: state.chartReveal, timestamp: animationTimestamp)
+
+        case let .steps(data, _, style):
+            drawSteps(
+                context: &layer,
+                layout: layout,
+                palette: palette,
+                points: data.visible(in: layout.leftEdge...layout.rightEdge),
+                style: style,
+                alpha: state.chartReveal
+            )
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+            drawDiscreteCrosshair(context: &layer, layout: layout, palette: palette, hover: hover, points: renderData.primaryVisible, config: config, alpha: scrubAmount)
+            drawActivePoint(context: &layer, layout: layout, palette: palette, points: renderData.primaryVisible, activePoint: config.activePoint, alpha: state.chartReveal, timestamp: animationTimestamp)
+
+        case let .lollipops(data, style):
+            drawLollipops(
+                context: &layer,
+                layout: layout,
+                palette: palette,
+                points: data.visible(in: layout.leftEdge...layout.rightEdge),
+                style: style,
+                alpha: state.chartReveal
+            )
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+            drawDiscreteCrosshair(context: &layer, layout: layout, palette: palette, hover: hover, points: renderData.primaryVisible, config: config, alpha: scrubAmount)
+            drawActivePoint(context: &layer, layout: layout, palette: palette, points: renderData.primaryVisible, activePoint: config.activePoint, alpha: state.chartReveal, timestamp: animationTimestamp)
+
+        case let .bubbles(data, style):
+            drawBubbles(
+                context: &layer,
+                layout: layout,
+                palette: palette,
+                points: data.visible(in: layout.leftEdge...layout.rightEdge),
+                style: style,
+                alpha: state.chartReveal
+            )
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+            drawDiscreteCrosshair(context: &layer, layout: layout, palette: palette, hover: hover, points: renderData.primaryVisible, config: config, alpha: scrubAmount)
+            drawActivePoint(context: &layer, layout: layout, palette: palette, points: renderData.primaryVisible, activePoint: config.activePoint, alpha: state.chartReveal, timestamp: animationTimestamp)
+
+        case let .boxPlots(data, style):
+            drawBoxPlots(
+                context: &layer,
+                layout: layout,
+                palette: palette,
+                points: data.visible(in: layout.leftEdge...layout.rightEdge),
+                style: style,
+                alpha: state.chartReveal
+            )
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+            drawDiscreteCrosshair(context: &layer, layout: layout, palette: palette, hover: hover, points: renderData.primaryVisible, config: config, alpha: scrubAmount)
+            drawActivePoint(context: &layer, layout: layout, palette: palette, points: renderData.primaryVisible, activePoint: config.activePoint, alpha: state.chartReveal, timestamp: animationTimestamp)
+
+        case let .waterfall(data, style):
+            let segments = LivelineMath.waterfallSegments(points: data, initialValue: style.initialValue)
+                .filter { layout.leftEdge...layout.rightEdge ~= $0.time }
+            drawWaterfall(
+                context: &layer,
+                layout: layout,
+                palette: palette,
+                segments: segments,
                 style: style,
                 alpha: state.chartReveal
             )
@@ -530,6 +602,91 @@ private extension LivelineRenderer {
                 rangePoints: visible.isEmpty ? data.suffixArray(8) : visible,
                 rangeOverride: nil,
                 primaryValue: value
+            )
+
+        case let .steps(data, value, _):
+            let visible = data.visible(in: (leftEdge - 2)...rightEdge)
+            return RenderData(
+                primaryVisible: visible,
+                rangePoints: visible.isEmpty ? data.suffixArray(8) : visible,
+                rangeOverride: nil,
+                primaryValue: value
+            )
+
+        case let .lollipops(data, style):
+            let visible = data.visible(in: (leftEdge - 2)...rightEdge)
+            let source = visible.isEmpty ? data.suffixArray(8) : visible
+            let primaryValue = data.last?.value ?? style.baseline
+            let bounds = LivelineMath.barRangePoints(points: source, baseline: style.baseline)
+            return RenderData(
+                primaryVisible: visible,
+                rangePoints: source,
+                rangeOverride: bounds.isEmpty ? nil : LivelineMath.computeRange(
+                    points: bounds,
+                    currentValue: primaryValue,
+                    referenceValue: config.referenceLine?.value,
+                    exaggerate: config.exaggerate
+                ),
+                primaryValue: primaryValue
+            )
+
+        case let .bubbles(data, _):
+            let visible = data.visible(in: (leftEdge - 2)...rightEdge)
+            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let visiblePoints = visible.map { LivelinePoint(time: $0.time, value: $0.value) }
+            let rangePoints = source.map { LivelinePoint(time: $0.time, value: $0.value) }
+            return RenderData(
+                primaryVisible: visiblePoints,
+                rangePoints: rangePoints,
+                rangeOverride: nil,
+                primaryValue: data.last?.value ?? 0
+            )
+
+        case let .boxPlots(data, _):
+            let visible = data.visible(in: (leftEdge - 2)...rightEdge)
+            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let medians = source.map { LivelinePoint(time: $0.time, value: $0.median) }
+            let bounds = source.flatMap { point in
+                [
+                    LivelinePoint(time: point.time, value: point.minimum),
+                    LivelinePoint(time: point.time, value: point.maximum),
+                ]
+            }
+            let primaryValue = data.last?.median ?? 0
+            return RenderData(
+                primaryVisible: visible.map { LivelinePoint(time: $0.time, value: $0.median) },
+                rangePoints: medians,
+                rangeOverride: bounds.isEmpty ? nil : LivelineMath.computeRange(
+                    points: bounds,
+                    currentValue: primaryValue,
+                    referenceValue: config.referenceLine?.value,
+                    exaggerate: config.exaggerate
+                ),
+                primaryValue: primaryValue
+            )
+
+        case let .waterfall(data, style):
+            let segments = LivelineMath.waterfallSegments(points: data, initialValue: style.initialValue)
+            let visible = segments.filter { (leftEdge - 2)...rightEdge ~= $0.time }
+            let source = visible.isEmpty ? Array(segments.suffix(8)) : visible
+            let endpointPoints = source.map { LivelinePoint(time: $0.time, value: $0.end) }
+            let bounds = source.flatMap { segment in
+                [
+                    LivelinePoint(time: segment.time, value: segment.start),
+                    LivelinePoint(time: segment.time, value: segment.end),
+                ]
+            }
+            let primaryValue = segments.last?.end ?? style.initialValue
+            return RenderData(
+                primaryVisible: visible.map { LivelinePoint(time: $0.time, value: $0.end) },
+                rangePoints: endpointPoints,
+                rangeOverride: bounds.isEmpty ? nil : LivelineMath.computeRange(
+                    points: bounds,
+                    currentValue: primaryValue,
+                    referenceValue: config.referenceLine?.value,
+                    exaggerate: config.exaggerate
+                ),
+                primaryValue: primaryValue
             )
 
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
@@ -1541,6 +1698,244 @@ private extension LivelineRenderer {
             if style.resolvedOutlineWidth > 0 {
                 layer.stroke(path, with: .color(palette.backgroundRGB.color), lineWidth: style.resolvedOutlineWidth)
             }
+        }
+    }
+
+    static func drawSteps(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        points: [LivelinePoint],
+        style: LivelineStepStyle,
+        alpha: Double
+    ) {
+        guard !points.isEmpty, alpha > 0.01 else { return }
+        let samples = points.map { CGPoint(x: layout.x(for: $0.time), y: layout.y(for: $0.value)) }
+        let stepped = LivelineMath.stepScreenPoints(points: samples, position: style.position)
+        var layer = context
+        layer.opacity *= alpha
+        layer.clip(to: Path(CGRect(x: layout.plotLeftX, y: layout.padding.top, width: layout.chartWidth, height: layout.chartHeight)))
+
+        if style.resolvedFillOpacity > 0, let first = stepped.first, let last = stepped.last {
+            var fill = Path()
+            fill.move(to: CGPoint(x: first.x, y: layout.bottomY))
+            for point in stepped { fill.addLine(to: point) }
+            fill.addLine(to: CGPoint(x: last.x, y: layout.bottomY))
+            fill.closeSubpath()
+            layer.fill(fill, with: .color(palette.line.opacity(style.resolvedFillOpacity)))
+        }
+
+        if style.resolvedLineWidth > 0 {
+            layer.stroke(
+                linePath(points: stepped),
+                with: .color(palette.line),
+                style: StrokeStyle(lineWidth: style.resolvedLineWidth, lineCap: .round, lineJoin: .round)
+            )
+        }
+
+        if stepped.count == 1, let point = stepped.first {
+            let size = max(style.resolvedLineWidth * 2, 4)
+            layer.fill(Path(ellipseIn: CGRect(x: point.x - size / 2, y: point.y - size / 2, width: size, height: size)), with: .color(palette.line))
+        }
+    }
+
+    static func drawLollipops(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        points: [LivelinePoint],
+        style: LivelineLollipopStyle,
+        alpha: Double
+    ) {
+        guard !points.isEmpty, alpha > 0.01 else { return }
+        var layer = context
+        layer.opacity *= alpha
+        layer.clip(to: Path(CGRect(x: layout.plotLeftX, y: layout.padding.top, width: layout.chartWidth, height: layout.chartHeight)))
+        let baselineY = LivelineMath.clamp(layout.y(for: style.baseline), layout.padding.top, layout.bottomY)
+
+        if style.showsBaseline {
+            var baseline = Path()
+            baseline.move(to: CGPoint(x: layout.plotLeftX, y: baselineY))
+            baseline.addLine(to: CGPoint(x: layout.rightX, y: baselineY))
+            layer.stroke(baseline, with: .color(palette.referenceLine), style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
+        }
+
+        for point in points {
+            let center = CGPoint(
+                x: layout.x(for: point.time),
+                y: LivelineMath.clamp(layout.y(for: point.value), layout.padding.top, layout.bottomY)
+            )
+            let color = point.value >= style.baseline ? (style.positiveColor ?? palette.line) : style.negativeColor
+
+            if style.resolvedStemWidth > 0 {
+                var stem = Path()
+                stem.move(to: CGPoint(x: center.x, y: baselineY))
+                stem.addLine(to: center)
+                layer.stroke(stem, with: .color(color.opacity(0.72)), style: StrokeStyle(lineWidth: style.resolvedStemWidth, lineCap: .round))
+            }
+
+            let head = scatterSymbolPath(symbol: style.headSymbol, center: center, size: style.resolvedHeadSize)
+            layer.fill(head, with: .color(color))
+            if style.resolvedOutlineWidth > 0 {
+                layer.stroke(head, with: .color(palette.backgroundRGB.color), lineWidth: style.resolvedOutlineWidth)
+            }
+        }
+    }
+
+    static func drawBubbles(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        points: [LivelineBubblePoint],
+        style: LivelineBubbleStyle,
+        alpha: Double
+    ) {
+        guard !points.isEmpty, alpha > 0.01 else { return }
+        let minimumMagnitude = points.map(\.magnitude).min() ?? 0
+        let maximumMagnitude = points.map(\.magnitude).max() ?? minimumMagnitude
+        let marks = points.map { point in
+            (
+                point: point,
+                size: LivelineMath.bubbleDiameter(
+                    magnitude: point.magnitude,
+                    minimumMagnitude: minimumMagnitude,
+                    maximumMagnitude: maximumMagnitude,
+                    minimumSize: style.resolvedMinimumSize,
+                    maximumSize: style.resolvedMaximumSize,
+                    scale: style.scale
+                )
+            )
+        }.sorted { $0.size > $1.size }
+
+        var layer = context
+        layer.opacity *= alpha
+        layer.clip(to: Path(CGRect(x: layout.plotLeftX, y: layout.padding.top, width: layout.chartWidth, height: layout.chartHeight)))
+
+        for mark in marks {
+            let inset = mark.size / 2 + style.resolvedOutlineWidth / 2
+            let center = CGPoint(
+                x: LivelineMath.clamp(layout.x(for: mark.point.time), layout.plotLeftX + inset, layout.rightX - inset),
+                y: LivelineMath.clamp(layout.y(for: mark.point.value), layout.padding.top + inset, layout.bottomY - inset)
+            )
+            let bubble = Path(ellipseIn: CGRect(
+                x: center.x - mark.size / 2,
+                y: center.y - mark.size / 2,
+                width: mark.size,
+                height: mark.size
+            ))
+            layer.fill(bubble, with: .color(palette.line.opacity(style.resolvedFillOpacity)))
+            if style.resolvedOutlineWidth > 0 {
+                layer.stroke(bubble, with: .color(palette.line), lineWidth: style.resolvedOutlineWidth)
+            }
+        }
+    }
+
+    static func drawBoxPlots(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        points: [LivelineBoxPlotPoint],
+        style: LivelineBoxPlotStyle,
+        alpha: Double
+    ) {
+        guard !points.isEmpty, alpha > 0.01 else { return }
+        let deltas = zip(points, points.dropFirst()).map { $1.time - $0.time }.filter { $0 > 0 }
+        let bucket = deltas.min() ?? (layout.rightEdge - layout.leftEdge) / Double(max(points.count, 8))
+        let bucketWidth = CGFloat(bucket / max(layout.rightEdge - layout.leftEdge, 0.001)) * layout.chartWidth
+        let width = min(max(bucketWidth * style.resolvedWidthRatio, 3), 40)
+        let whiskerWidth = width * style.resolvedWhiskerWidthRatio
+
+        var layer = context
+        layer.opacity *= alpha
+        layer.clip(to: Path(CGRect(x: layout.plotLeftX, y: layout.padding.top, width: layout.chartWidth, height: layout.chartHeight)))
+
+        for point in points {
+            let x = layout.x(for: point.time)
+            let minimumY = layout.y(for: point.minimum)
+            let lowerQuartileY = layout.y(for: point.lowerQuartile)
+            let medianY = layout.y(for: point.median)
+            let upperQuartileY = layout.y(for: point.upperQuartile)
+            let maximumY = layout.y(for: point.maximum)
+
+            if style.resolvedOutlineWidth > 0 {
+                var whiskers = Path()
+                whiskers.move(to: CGPoint(x: x, y: minimumY))
+                whiskers.addLine(to: CGPoint(x: x, y: maximumY))
+                whiskers.move(to: CGPoint(x: x - whiskerWidth / 2, y: minimumY))
+                whiskers.addLine(to: CGPoint(x: x + whiskerWidth / 2, y: minimumY))
+                whiskers.move(to: CGPoint(x: x - whiskerWidth / 2, y: maximumY))
+                whiskers.addLine(to: CGPoint(x: x + whiskerWidth / 2, y: maximumY))
+                layer.stroke(whiskers, with: .color(palette.line.opacity(0.72)), lineWidth: style.resolvedOutlineWidth)
+            }
+
+            let box = CGRect(
+                x: x - width / 2,
+                y: min(upperQuartileY, lowerQuartileY),
+                width: width,
+                height: max(abs(lowerQuartileY - upperQuartileY), 1)
+            )
+            let boxPath = Path(roundedRect: box, cornerRadius: min(2, width / 4))
+            if style.resolvedFillOpacity > 0 {
+                layer.fill(boxPath, with: .color(palette.line.opacity(style.resolvedFillOpacity)))
+            }
+            if style.resolvedOutlineWidth > 0 {
+                layer.stroke(boxPath, with: .color(palette.line), lineWidth: style.resolvedOutlineWidth)
+            }
+            if style.resolvedMedianLineWidth > 0 {
+                var median = Path()
+                median.move(to: CGPoint(x: box.minX, y: medianY))
+                median.addLine(to: CGPoint(x: box.maxX, y: medianY))
+                layer.stroke(median, with: .color(palette.line), lineWidth: style.resolvedMedianLineWidth)
+            }
+        }
+    }
+
+    static func drawWaterfall(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        segments: [LivelineWaterfallSegment],
+        style: LivelineWaterfallStyle,
+        alpha: Double
+    ) {
+        guard !segments.isEmpty, alpha > 0.01 else { return }
+        let deltas = zip(segments, segments.dropFirst()).map { $1.time - $0.time }.filter { $0 > 0 }
+        let bucket = deltas.min() ?? (layout.rightEdge - layout.leftEdge) / Double(max(segments.count, 8))
+        let bucketWidth = CGFloat(bucket / max(layout.rightEdge - layout.leftEdge, 0.001)) * layout.chartWidth
+        let width = min(max(bucketWidth * style.resolvedWidthRatio, 2), 48)
+
+        var layer = context
+        layer.opacity *= alpha
+        layer.clip(to: Path(CGRect(x: layout.plotLeftX, y: layout.padding.top, width: layout.chartWidth, height: layout.chartHeight)))
+
+        if style.showsBaseline {
+            let baselineY = LivelineMath.clamp(layout.y(for: style.initialValue), layout.padding.top, layout.bottomY)
+            var baseline = Path()
+            baseline.move(to: CGPoint(x: layout.plotLeftX, y: baselineY))
+            baseline.addLine(to: CGPoint(x: layout.rightX, y: baselineY))
+            layer.stroke(baseline, with: .color(palette.referenceLine), style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
+        }
+
+        if style.showsConnectors, style.resolvedConnectorLineWidth > 0 {
+            for (current, next) in zip(segments, segments.dropFirst()) {
+                let y = layout.y(for: current.end)
+                var connector = Path()
+                connector.move(to: CGPoint(x: layout.x(for: current.time) + width / 2, y: y))
+                connector.addLine(to: CGPoint(x: layout.x(for: next.time) - width / 2, y: y))
+                layer.stroke(connector, with: .color(palette.gridLabel.opacity(0.55)), style: StrokeStyle(lineWidth: style.resolvedConnectorLineWidth, dash: [2, 3]))
+            }
+        }
+
+        for segment in segments {
+            let x = layout.x(for: segment.time)
+            let startY = LivelineMath.clamp(layout.y(for: segment.start), layout.padding.top, layout.bottomY)
+            let endY = LivelineMath.clamp(layout.y(for: segment.end), layout.padding.top, layout.bottomY)
+            let top = min(startY, endY)
+            let height = max(abs(endY - startY), 1)
+            let rect = CGRect(x: x - width / 2, y: top, width: width, height: height)
+            let radius = min(style.resolvedCornerRadius, width / 2, height / 2)
+            let color = segment.delta >= 0 ? (style.positiveColor ?? palette.line) : style.negativeColor
+            layer.fill(Path(roundedRect: rect, cornerRadius: radius), with: .color(color))
         }
     }
 
@@ -2641,7 +3036,7 @@ private extension LivelineChartContent {
         switch self {
         case .line, .candle:
             return true
-        case .bars, .range, .scatter, .series:
+        case .bars, .range, .scatter, .steps, .lollipops, .bubbles, .boxPlots, .waterfall, .series:
             return false
         }
     }
@@ -2651,14 +3046,14 @@ private extension LivelineChartContent {
         switch self {
         case .line, .candle, .series:
             return true
-        case .bars, .range, .scatter:
+        case .bars, .range, .scatter, .steps, .lollipops, .bubbles, .boxPlots, .waterfall:
             return false
         }
     }
 
     var usesDiscreteHover: Bool {
         switch self {
-        case .bars, .scatter:
+        case .bars, .scatter, .steps, .lollipops, .bubbles, .boxPlots, .waterfall:
             return true
         case .line, .range, .candle, .series:
             return false
@@ -2674,6 +3069,16 @@ private extension LivelineChartContent {
         case let .range(data, _):
             return data.last?.time
         case let .scatter(data, _, _):
+            return data.last?.time
+        case let .steps(data, _, _):
+            return data.last?.time
+        case let .lollipops(data, _):
+            return data.last?.time
+        case let .bubbles(data, _):
+            return data.last?.time
+        case let .boxPlots(data, _):
+            return data.last?.time
+        case let .waterfall(data, _):
             return data.last?.time
         case let .candle(data, _, candles, candleWidth, liveCandle, lineData, _):
             let liveTickTime = [
@@ -2705,6 +3110,18 @@ private extension Array where Element == LivelineRangePoint {
 
     func suffixArray(_ maxLength: Int) -> [LivelineRangePoint] {
         Array(suffix(maxLength))
+    }
+}
+
+private extension Array where Element == LivelineBubblePoint {
+    func visible(in range: ClosedRange<TimeInterval>) -> [LivelineBubblePoint] {
+        filter { range.contains($0.time) }
+    }
+}
+
+private extension Array where Element == LivelineBoxPlotPoint {
+    func visible(in range: ClosedRange<TimeInterval>) -> [LivelineBoxPlotPoint] {
+        filter { range.contains($0.time) }
     }
 }
 

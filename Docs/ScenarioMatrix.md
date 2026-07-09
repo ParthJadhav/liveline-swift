@@ -69,7 +69,17 @@ Diff panels are written to `Media/storybook-diff` as reference/native/heatmap tr
 | `range-center-line` | Range bands | Light interval with a dashed center estimate. |
 | `scatter-basic` | Scatter | Independent circular observations. |
 | `scatter-connected` | Scatter | Diamond observations with a curved connection. |
+| `step-basic` | Step | Trailing transitions with a subtle fill. |
+| `step-centered` | Step | Centered transitions with an unfilled heavy line. |
+| `lollipop-basic` | Lollipop | Signed circular heads around zero. |
+| `lollipop-diamond` | Lollipop | Diamond heads around a custom target. |
+| `bubble-basic` | Bubble | Request volume mapped to visible area. |
+| `bubble-diameter` | Bubble | Linear diameter scaling with bold outlines. |
+| `boxplot-basic` | Box plot | Filled rolling five-number summaries. |
+| `boxplot-minimal` | Box plot | Narrow outlined summaries with heavy medians. |
+| `waterfall-basic` | Waterfall | Connected cumulative gains and losses. |
+| `waterfall-no-connectors` | Waterfall | Wide square changes without connectors. |
 
 ## Parity Notes
 
-The gallery is the audit surface for visual parity work. Each scenario must pass the web-reference diff before marking parity complete. Static parity scenarios suppress the live pulse unless pulse behavior is the thing being inspected. The current native renderer ports the web loading waveform, empty-state center gap, curved badge path, momentum badge colors, live dot structure, icon mode controls, centered reference labels, baseline-adjusted axis text, segmented candle wicks, live candle glow, deterministic snapshot timing, time-axis intervals, grid/time-axis label state, and coarse/fine grid interval selection.
+The gallery is the audit surface for visual work. Scenarios inherited from the upstream chart must pass the web-reference diff before marking parity complete; native-only chart types are reviewed through their deterministic captures. Static parity scenarios suppress the live pulse unless pulse behavior is the thing being inspected. The current native renderer ports the web loading waveform, empty-state center gap, curved badge path, momentum badge colors, live dot structure, icon mode controls, centered reference labels, baseline-adjusted axis text, segmented candle wicks, live candle glow, deterministic snapshot timing, time-axis intervals, grid/time-axis label state, and coarse/fine grid interval selection.

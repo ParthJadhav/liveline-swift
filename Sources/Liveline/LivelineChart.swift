@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// A SwiftUI chart view for real-time line, candlestick, multi-series, bar,
-/// range-band, and scatter data.
+/// A SwiftUI chart view for real-time line, candlestick, multi-series, and
+/// discrete time-series data.
 ///
 /// The view fills the size given by its parent. In most apps you will use it with
 /// an explicit height:
@@ -63,6 +63,61 @@ public struct LivelineChart: View {
             accent: color,
             configuration: configuration
         )
+    }
+
+    /// Creates a step chart whose transitions can align within each interval.
+    public init(
+        steps: [LivelinePoint],
+        value: Double? = nil,
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineStepStyle = LivelineStepStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(
+            content: .steps(data: steps, value: value ?? steps.last?.value ?? 0, style: style),
+            accent: color,
+            configuration: configuration
+        )
+    }
+
+    /// Creates a lollipop chart with stems extending from a configurable baseline.
+    public init(
+        lollipops: [LivelinePoint],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineLollipopStyle = LivelineLollipopStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .lollipops(data: lollipops, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a bubble chart whose marker area or diameter represents magnitude.
+    public init(
+        bubbles: [LivelineBubblePoint],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineBubbleStyle = LivelineBubbleStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .bubbles(data: bubbles, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a time-based box plot from five-number summaries.
+    public init(
+        boxPlots: [LivelineBoxPlotPoint],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineBoxPlotStyle = LivelineBoxPlotStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .boxPlots(data: boxPlots, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a cumulative waterfall chart from time-based deltas.
+    public init(
+        waterfall: [LivelinePoint],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineWaterfallStyle = LivelineWaterfallStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .waterfall(data: waterfall, style: style), accent: color, configuration: configuration)
     }
 
     public init(
@@ -252,6 +307,16 @@ private extension LivelineChart {
             return data.last?.midpoint ?? 0
         case let .scatter(_, value, _):
             return value
+        case let .steps(_, value, _):
+            return value
+        case let .lollipops(data, _):
+            return data.last?.value ?? 0
+        case let .bubbles(data, _):
+            return data.last?.value ?? 0
+        case let .boxPlots(data, _):
+            return data.last?.median ?? 0
+        case let .waterfall(data, style):
+            return LivelineMath.waterfallSegments(points: data, initialValue: style.initialValue).last?.end ?? style.initialValue
         }
     }
 
@@ -269,6 +334,18 @@ private extension LivelineChart {
             return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.midpoint) })
         case let .scatter(data, _, _):
             return LivelineMath.detectMomentum(points: data)
+        case let .steps(data, _, _):
+            return LivelineMath.detectMomentum(points: data)
+        case let .lollipops(data, _):
+            return LivelineMath.detectMomentum(points: data)
+        case let .bubbles(data, _):
+            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.value) })
+        case let .boxPlots(data, _):
+            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.median) })
+        case let .waterfall(data, style):
+            let points = LivelineMath.waterfallSegments(points: data, initialValue: style.initialValue)
+                .map { LivelinePoint(time: $0.time, value: $0.end) }
+            return LivelineMath.detectMomentum(points: points)
         }
     }
 

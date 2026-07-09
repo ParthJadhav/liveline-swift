@@ -1,6 +1,6 @@
 # Liveline Swift
 
-Native SwiftUI real-time charts for iOS apps. Liveline renders animated line, candlestick, multi-series, bar, range-band, and scatter charts with smooth value interpolation, scrubbing, time windows, loading/empty states, and optional market-style effects.
+Native SwiftUI real-time charts for iOS apps. Liveline renders animated line, candlestick, multi-series, bar, range-band, scatter, step, lollipop, bubble, box-plot, and waterfall charts with smooth value interpolation, scrubbing, time windows, loading/empty states, and optional market-style effects.
 
 <p align="center">
   <img src="Media/readme/cover.png" alt="Liveline Swift cover showing line, candlestick, and multi-series charts" />
@@ -149,6 +149,21 @@ LivelineChart(
 .frame(height: 260)
 ```
 
+Step and lollipop:
+
+```swift
+LivelineChart(steps: levels, style: LivelineStepStyle(position: .center))
+LivelineChart(lollipops: changes, style: LivelineLollipopStyle(baseline: 0))
+```
+
+Bubble, box plot, and waterfall:
+
+```swift
+LivelineChart(bubbles: observations, style: LivelineBubbleStyle(scale: .area))
+LivelineChart(boxPlots: summaries, style: LivelineBoxPlotStyle(fillOpacity: 0.2))
+LivelineChart(waterfall: deltas, style: LivelineWaterfallStyle(initialValue: 100))
+```
+
 ## Features
 
 - SwiftUI `Canvas` rendering, no WebView and no JavaScript bridge
@@ -165,6 +180,11 @@ LivelineChart(
 - Signed bar charts with configurable baseline, width, rounding, and colors
 - Range bands with configurable fill, boundaries, and center line
 - Scatter plots with circle, square, or diamond symbols and optional connections
+- Step charts with leading, centered, or trailing transitions and optional fill
+- Lollipop charts with configurable baselines, stems, head symbols, and signed colors
+- Bubble charts with area or diameter magnitude scaling
+- Time-based box plots with normalized five-number summaries
+- Cumulative waterfall charts with signed colors, connectors, and configurable initial value
 - Reference line and orderbook stream labels
 
 ## Example App

@@ -123,6 +123,212 @@ public struct LivelineScatterStyle {
     var resolvedConnectionLineWidth: CGFloat { max(connectionLineWidth, 0) }
 }
 
+/// Where a step transition occurs between two adjacent samples.
+public enum LivelineStepPosition: String, CaseIterable, Sendable {
+    case leading
+    case center
+    case trailing
+}
+
+/// Visual options for a step chart.
+public struct LivelineStepStyle {
+    public var position: LivelineStepPosition
+    public var lineWidth: CGFloat
+    public var fillOpacity: Double
+
+    public init(
+        position: LivelineStepPosition = .trailing,
+        lineWidth: CGFloat = 2,
+        fillOpacity: Double = 0.10
+    ) {
+        self.position = position
+        self.lineWidth = lineWidth
+        self.fillOpacity = fillOpacity
+    }
+
+    var resolvedLineWidth: CGFloat { max(lineWidth, 0) }
+    var resolvedFillOpacity: Double { min(max(fillOpacity, 0), 1) }
+}
+
+/// Visual options for a lollipop chart.
+public struct LivelineLollipopStyle {
+    public var baseline: Double
+    public var stemWidth: CGFloat
+    public var headSize: CGFloat
+    public var headSymbol: LivelineScatterSymbol
+    public var outlineWidth: CGFloat
+    public var positiveColor: Color?
+    public var negativeColor: Color
+    public var showsBaseline: Bool
+
+    public init(
+        baseline: Double = 0,
+        stemWidth: CGFloat = 1.5,
+        headSize: CGFloat = 8,
+        headSymbol: LivelineScatterSymbol = .circle,
+        outlineWidth: CGFloat = 1,
+        positiveColor: Color? = nil,
+        negativeColor: Color = Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255),
+        showsBaseline: Bool = true
+    ) {
+        self.baseline = baseline
+        self.stemWidth = stemWidth
+        self.headSize = headSize
+        self.headSymbol = headSymbol
+        self.outlineWidth = outlineWidth
+        self.positiveColor = positiveColor
+        self.negativeColor = negativeColor
+        self.showsBaseline = showsBaseline
+    }
+
+    var resolvedStemWidth: CGFloat { max(stemWidth, 0) }
+    var resolvedHeadSize: CGFloat { max(headSize, 2) }
+    var resolvedOutlineWidth: CGFloat { max(outlineWidth, 0) }
+}
+
+/// A time/value observation with a third magnitude dimension.
+public struct LivelineBubblePoint: Identifiable, Hashable, Sendable {
+    public var time: TimeInterval
+    public var value: Double
+    public var magnitude: Double
+
+    public var id: TimeInterval { time }
+
+    public init(time: TimeInterval, value: Double, magnitude: Double) {
+        self.time = time
+        self.value = value
+        self.magnitude = max(magnitude, 0)
+    }
+}
+
+/// Controls whether bubble magnitude maps to visible area or diameter.
+public enum LivelineBubbleScale: String, CaseIterable, Sendable {
+    case area
+    case diameter
+}
+
+/// Visual options for a bubble chart.
+public struct LivelineBubbleStyle {
+    public var minimumSize: CGFloat
+    public var maximumSize: CGFloat
+    public var fillOpacity: Double
+    public var outlineWidth: CGFloat
+    public var scale: LivelineBubbleScale
+
+    public init(
+        minimumSize: CGFloat = 5,
+        maximumSize: CGFloat = 24,
+        fillOpacity: Double = 0.30,
+        outlineWidth: CGFloat = 1.5,
+        scale: LivelineBubbleScale = .area
+    ) {
+        self.minimumSize = minimumSize
+        self.maximumSize = maximumSize
+        self.fillOpacity = fillOpacity
+        self.outlineWidth = outlineWidth
+        self.scale = scale
+    }
+
+    var resolvedMinimumSize: CGFloat { max(min(minimumSize, maximumSize), 2) }
+    var resolvedMaximumSize: CGFloat { max(max(minimumSize, maximumSize), resolvedMinimumSize) }
+    var resolvedFillOpacity: Double { min(max(fillOpacity, 0), 1) }
+    var resolvedOutlineWidth: CGFloat { max(outlineWidth, 0) }
+}
+
+/// A five-number statistical summary observed at one point in time.
+public struct LivelineBoxPlotPoint: Identifiable, Hashable, Sendable {
+    public var time: TimeInterval
+    public var minimum: Double
+    public var lowerQuartile: Double
+    public var median: Double
+    public var upperQuartile: Double
+    public var maximum: Double
+
+    public var id: TimeInterval { time }
+
+    public init(
+        time: TimeInterval,
+        minimum: Double,
+        lowerQuartile: Double,
+        median: Double,
+        upperQuartile: Double,
+        maximum: Double
+    ) {
+        let values = [minimum, lowerQuartile, median, upperQuartile, maximum].sorted()
+        self.time = time
+        self.minimum = values[0]
+        self.lowerQuartile = values[1]
+        self.median = values[2]
+        self.upperQuartile = values[3]
+        self.maximum = values[4]
+    }
+}
+
+/// Visual options for a time-based box plot.
+public struct LivelineBoxPlotStyle {
+    public var widthRatio: CGFloat
+    public var fillOpacity: Double
+    public var outlineWidth: CGFloat
+    public var medianLineWidth: CGFloat
+    public var whiskerWidthRatio: CGFloat
+
+    public init(
+        widthRatio: CGFloat = 0.55,
+        fillOpacity: Double = 0.16,
+        outlineWidth: CGFloat = 1.25,
+        medianLineWidth: CGFloat = 2,
+        whiskerWidthRatio: CGFloat = 0.55
+    ) {
+        self.widthRatio = widthRatio
+        self.fillOpacity = fillOpacity
+        self.outlineWidth = outlineWidth
+        self.medianLineWidth = medianLineWidth
+        self.whiskerWidthRatio = whiskerWidthRatio
+    }
+
+    var resolvedWidthRatio: CGFloat { min(max(widthRatio, 0.05), 1) }
+    var resolvedFillOpacity: Double { min(max(fillOpacity, 0), 1) }
+    var resolvedOutlineWidth: CGFloat { max(outlineWidth, 0) }
+    var resolvedMedianLineWidth: CGFloat { max(medianLineWidth, 0) }
+    var resolvedWhiskerWidthRatio: CGFloat { min(max(whiskerWidthRatio, 0.05), 1) }
+}
+
+/// Visual options for a cumulative waterfall chart.
+public struct LivelineWaterfallStyle {
+    public var initialValue: Double
+    public var widthRatio: CGFloat
+    public var cornerRadius: CGFloat
+    public var connectorLineWidth: CGFloat
+    public var positiveColor: Color?
+    public var negativeColor: Color
+    public var showsConnectors: Bool
+    public var showsBaseline: Bool
+
+    public init(
+        initialValue: Double = 0,
+        widthRatio: CGFloat = 0.62,
+        cornerRadius: CGFloat = 2,
+        connectorLineWidth: CGFloat = 1,
+        positiveColor: Color? = nil,
+        negativeColor: Color = Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255),
+        showsConnectors: Bool = true,
+        showsBaseline: Bool = true
+    ) {
+        self.initialValue = initialValue
+        self.widthRatio = widthRatio
+        self.cornerRadius = cornerRadius
+        self.connectorLineWidth = connectorLineWidth
+        self.positiveColor = positiveColor
+        self.negativeColor = negativeColor
+        self.showsConnectors = showsConnectors
+        self.showsBaseline = showsBaseline
+    }
+
+    var resolvedWidthRatio: CGFloat { min(max(widthRatio, 0.05), 1) }
+    var resolvedCornerRadius: CGFloat { max(cornerRadius, 0) }
+    var resolvedConnectorLineWidth: CGFloat { max(connectorLineWidth, 0) }
+}
+
 /// One OHLC candle. `time` is the candle open time in Unix seconds.
 public struct LivelineCandle: Identifiable, Hashable, Sendable {
     public var time: TimeInterval

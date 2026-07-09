@@ -88,6 +88,16 @@ enum StorybookCatalog {
         rangeCenterLine,
         scatterBasic,
         scatterConnected,
+        stepBasic,
+        stepCentered,
+        lollipopBasic,
+        lollipopDiamond,
+        bubbleBasic,
+        bubbleDiameter,
+        boxPlotBasic,
+        boxPlotMinimal,
+        waterfallBasic,
+        waterfallNoConnectors,
     ]
 
     static func scenario(id: String) -> StorybookScenario? {
@@ -645,6 +655,181 @@ private extension StorybookCatalog {
         )
     }
 
+    static let stepBasic = chart(
+        id: "step-basic",
+        group: "Step",
+        title: "Deployment Levels",
+        detail: "Trailing transitions with a subtle area fill.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            steps: StorybookData.steps,
+            color: StorybookData.cyan,
+            style: LivelineStepStyle(position: .trailing, lineWidth: 2, fillOpacity: 0.12),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "%")
+        )
+    }
+
+    static let stepCentered = chart(
+        id: "step-centered",
+        group: "Step",
+        title: "Centered State Changes",
+        detail: "Centered transitions with a heavier unfilled line.",
+        background: .white
+    ) {
+        LivelineChart(
+            steps: StorybookData.steps,
+            color: StorybookData.blue,
+            style: LivelineStepStyle(position: .center, lineWidth: 3, fillOpacity: 0),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: "%")
+        )
+    }
+
+    static let lollipopBasic = chart(
+        id: "lollipop-basic",
+        group: "Lollipop",
+        title: "Signed Events",
+        detail: "Circular heads and stems diverging from zero.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            lollipops: StorybookData.lollipops,
+            color: StorybookData.green,
+            style: LivelineLollipopStyle(baseline: 0, stemWidth: 1.5, headSize: 9),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "%")
+        )
+    }
+
+    static let lollipopDiamond = chart(
+        id: "lollipop-diamond",
+        group: "Lollipop",
+        title: "Target Deviations",
+        detail: "Diamond heads around a custom target baseline.",
+        background: .white
+    ) {
+        LivelineChart(
+            lollipops: StorybookData.lollipops.map { LivelinePoint(time: $0.time, value: $0.value + 4) },
+            color: StorybookData.orange,
+            style: LivelineLollipopStyle(
+                baseline: 4,
+                stemWidth: 2,
+                headSize: 11,
+                headSymbol: .diamond,
+                outlineWidth: 0,
+                showsBaseline: false
+            ),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: "%")
+        )
+    }
+
+    static let bubbleBasic = chart(
+        id: "bubble-basic",
+        group: "Bubble",
+        title: "Request Cost",
+        detail: "Bubble area represents request volume.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            bubbles: StorybookData.bubbles,
+            color: StorybookData.violet,
+            style: LivelineBubbleStyle(minimumSize: 5, maximumSize: 24, fillOpacity: 0.28, scale: .area),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: " ms")
+        )
+    }
+
+    static let bubbleDiameter = chart(
+        id: "bubble-diameter",
+        group: "Bubble",
+        title: "Linear Bubble Scale",
+        detail: "Diameter scaling with bold outlines and translucent fills.",
+        background: .white
+    ) {
+        LivelineChart(
+            bubbles: StorybookData.bubbles,
+            color: StorybookData.cyan,
+            style: LivelineBubbleStyle(
+                minimumSize: 8,
+                maximumSize: 30,
+                fillOpacity: 0.14,
+                outlineWidth: 2,
+                scale: .diameter
+            ),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: " ms")
+        )
+    }
+
+    static let boxPlotBasic = chart(
+        id: "boxplot-basic",
+        group: "Box plot",
+        title: "Latency Distribution",
+        detail: "Five-number summaries for rolling latency windows.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            boxPlots: StorybookData.boxPlots,
+            color: StorybookData.indigo,
+            style: LivelineBoxPlotStyle(widthRatio: 0.58, fillOpacity: 0.2),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: " ms")
+        )
+    }
+
+    static let boxPlotMinimal = chart(
+        id: "boxplot-minimal",
+        group: "Box plot",
+        title: "Outlined Distribution",
+        detail: "Unfilled narrow boxes with emphasized medians.",
+        background: .white
+    ) {
+        LivelineChart(
+            boxPlots: StorybookData.boxPlots,
+            color: StorybookData.orange,
+            style: LivelineBoxPlotStyle(
+                widthRatio: 0.38,
+                fillOpacity: 0,
+                outlineWidth: 2,
+                medianLineWidth: 3,
+                whiskerWidthRatio: 0.8
+            ),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: " ms")
+        )
+    }
+
+    static let waterfallBasic = chart(
+        id: "waterfall-basic",
+        group: "Waterfall",
+        title: "Balance Contributions",
+        detail: "Cumulative gains and losses connected across time.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            waterfall: StorybookData.waterfall,
+            color: StorybookData.green,
+            style: LivelineWaterfallStyle(initialValue: 100, widthRatio: 0.62, cornerRadius: 3),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: " k")
+        )
+    }
+
+    static let waterfallNoConnectors = chart(
+        id: "waterfall-no-connectors",
+        group: "Waterfall",
+        title: "Compact Changes",
+        detail: "Wide square steps without connectors or a baseline.",
+        background: .white
+    ) {
+        LivelineChart(
+            waterfall: StorybookData.waterfall,
+            color: StorybookData.blue,
+            style: LivelineWaterfallStyle(
+                initialValue: 50,
+                widthRatio: 0.86,
+                cornerRadius: 0,
+                showsConnectors: false,
+                showsBaseline: false
+            ),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: " k")
+        )
+    }
+
     static func chart<V: View>(
         id: String,
         group: String,
@@ -769,6 +954,55 @@ enum StorybookData {
             let t = Double(index)
             let value = 82 + sin(t * 0.91) * 20 + cos(t * 0.27) * 11 + (index % 7 == 0 ? 16 : 0)
             return LivelinePoint(time: baseTime - Double(22 - index) * 8, value: value)
+        }
+    }
+
+    static var steps: [LivelinePoint] {
+        let values = [42.0, 48, 48, 56, 51, 63, 63, 70, 66, 74, 79, 73]
+        return values.enumerated().map { index, value in
+            LivelinePoint(time: baseTime - Double(values.count - index - 1) * 15, value: value)
+        }
+    }
+
+    static var lollipops: [LivelinePoint] {
+        let values = [8.0, -5, 11, 4, -8, 6, 13, -3, 9, -6, 5, 12]
+        return values.enumerated().map { index, value in
+            LivelinePoint(time: baseTime - Double(values.count - index - 1) * 15, value: value)
+        }
+    }
+
+    static var bubbles: [LivelineBubblePoint] {
+        (0..<16).map { index in
+            let t = Double(index)
+            return LivelineBubblePoint(
+                time: baseTime - Double(15 - index) * 11,
+                value: 76 + sin(t * 0.72) * 18 + cos(t * 0.21) * 8,
+                magnitude: 12 + Double((index * 17) % 43)
+            )
+        }
+    }
+
+    static var boxPlots: [LivelineBoxPlotPoint] {
+        (0..<12).map { index in
+            let t = Double(index)
+            let center = 72 + sin(t * 0.61) * 9
+            let innerSpread = 4 + Double(index % 3)
+            let outerSpread = innerSpread + 5 + cos(t * 0.32) * 2
+            return LivelineBoxPlotPoint(
+                time: baseTime - Double(11 - index) * 15,
+                minimum: center - outerSpread,
+                lowerQuartile: center - innerSpread,
+                median: center + sin(t * 0.47),
+                upperQuartile: center + innerSpread,
+                maximum: center + outerSpread
+            )
+        }
+    }
+
+    static var waterfall: [LivelinePoint] {
+        let deltas = [8.0, -3, 6, -7, 11, 4, -5, 9, -2, 7, -6, 10]
+        return deltas.enumerated().map { index, delta in
+            LivelinePoint(time: baseTime - Double(deltas.count - index - 1) * 15, value: delta)
         }
     }
 

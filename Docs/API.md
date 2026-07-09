@@ -18,6 +18,11 @@ LivelineChart(data:value:candles:candleWidth:liveCandle:lineData:lineValue:color
 LivelineChart(bars:color:style:configuration:)
 LivelineChart(range:color:style:configuration:)
 LivelineChart(scatter:value:color:style:configuration:)
+LivelineChart(steps:value:color:style:configuration:)
+LivelineChart(lollipops:color:style:configuration:)
+LivelineChart(bubbles:color:style:configuration:)
+LivelineChart(boxPlots:color:style:configuration:)
+LivelineChart(waterfall:color:style:configuration:)
 ```
 
 ## Data Types
@@ -48,6 +53,29 @@ LivelineRangePoint(time: unixSeconds, lower: 38, upper: 46)
 
 Range points normalize reversed bounds during initialization and expose their midpoint.
 
+`LivelineBubblePoint`
+
+```swift
+LivelineBubblePoint(time: unixSeconds, value: 82, magnitude: 240)
+```
+
+Negative magnitudes normalize to zero. `LivelineBubbleStyle.scale` controls whether magnitude maps to visible area or diameter.
+
+`LivelineBoxPlotPoint`
+
+```swift
+LivelineBoxPlotPoint(
+    time: unixSeconds,
+    minimum: 32,
+    lowerQuartile: 38,
+    median: 41,
+    upperQuartile: 46,
+    maximum: 55
+)
+```
+
+Five-number summaries normalize into ascending order during initialization.
+
 ## Chart Styles
 
 The additional chart types keep their geometry-specific options in dedicated style values:
@@ -76,9 +104,41 @@ LivelineScatterStyle(
     connection: .curved,
     connectionLineWidth: 1.5
 )
+
+LivelineStepStyle(position: .center, lineWidth: 2, fillOpacity: 0.1)
+
+LivelineLollipopStyle(
+    baseline: 0,
+    stemWidth: 1.5,
+    headSize: 9,
+    headSymbol: .diamond
+)
+
+LivelineBubbleStyle(
+    minimumSize: 5,
+    maximumSize: 24,
+    fillOpacity: 0.3,
+    outlineWidth: 1.5,
+    scale: .area
+)
+
+LivelineBoxPlotStyle(
+    widthRatio: 0.55,
+    fillOpacity: 0.16,
+    outlineWidth: 1.25,
+    medianLineWidth: 2
+)
+
+LivelineWaterfallStyle(
+    initialValue: 100,
+    widthRatio: 0.62,
+    connectorLineWidth: 1,
+    showsConnectors: true
+)
 ```
 
 Scatter symbols are `.circle`, `.square`, and `.diamond`. Connections are `.none`, `.straight`, and `.curved`.
+Step positions are `.leading`, `.center`, and `.trailing`. Bubble scales are `.area` and `.diameter`. Invalid sizes, widths, opacities, magnitudes, and reversed statistical summaries are normalized before drawing.
 
 ## Configuration
 

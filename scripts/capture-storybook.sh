@@ -46,6 +46,16 @@ SCENARIOS=(
   range-center-line
   scatter-basic
   scatter-connected
+  step-basic
+  step-centered
+  lollipop-basic
+  lollipop-diamond
+  bubble-basic
+  bubble-diameter
+  boxplot-basic
+  boxplot-minimal
+  waterfall-basic
+  waterfall-no-connectors
 )
 
 if [[ -n "${STORYBOOK_SCENARIOS:-}" ]]; then
@@ -90,7 +100,10 @@ xcodebuild \
   -derivedDataPath "$DERIVED_DATA" \
   build
 
-DEVICE_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && /Booted/ { print $2; exit }')"
+DEVICE_ID="${STORYBOOK_DEVICE_ID:-}"
+if [[ -z "${DEVICE_ID:-}" ]]; then
+  DEVICE_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && /Booted/ { print $2; exit }')"
+fi
 if [[ -z "${DEVICE_ID:-}" ]]; then
   DEVICE_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && /Shutdown/ { print $2; exit }')"
   if [[ -z "${DEVICE_ID:-}" ]]; then

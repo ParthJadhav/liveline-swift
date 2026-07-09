@@ -77,6 +77,137 @@ final class LivelineMathTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(light.emptyText.livelineRGBA().alpha, 0.55)
     }
 
+    func testStepStylesClampAndGenerateEachTransitionPosition() {
+        let style = LivelineStepStyle(lineWidth: -2, fillOpacity: 4)
+        XCTAssertEqual(style.resolvedLineWidth, 0)
+        XCTAssertEqual(style.resolvedFillOpacity, 1)
+
+        let input = [CGPoint(x: 0, y: 10), CGPoint(x: 20, y: 30)]
+        XCTAssertEqual(
+            LivelineMath.stepScreenPoints(points: input, position: .leading),
+            [CGPoint(x: 0, y: 10), CGPoint(x: 0, y: 30), CGPoint(x: 20, y: 30)]
+        )
+        XCTAssertEqual(
+            LivelineMath.stepScreenPoints(points: input, position: .center),
+            [CGPoint(x: 0, y: 10), CGPoint(x: 10, y: 10), CGPoint(x: 10, y: 30), CGPoint(x: 20, y: 30)]
+        )
+        XCTAssertEqual(
+            LivelineMath.stepScreenPoints(points: input, position: .trailing),
+            [CGPoint(x: 0, y: 10), CGPoint(x: 20, y: 10), CGPoint(x: 20, y: 30)]
+        )
+        XCTAssertEqual(
+            LivelineMath.stepScreenPoints(points: [CGPoint(x: 8, y: 12)], position: .center),
+            [CGPoint(x: 8, y: 12)]
+        )
+    }
+
+    func testLollipopStyleClampsDrawingValues() {
+        let style = LivelineLollipopStyle(stemWidth: -2, headSize: 0, outlineWidth: -3)
+
+        XCTAssertEqual(style.resolvedStemWidth, 0)
+        XCTAssertEqual(style.resolvedHeadSize, 2)
+        XCTAssertEqual(style.resolvedOutlineWidth, 0)
+    }
+
+    func testBubblePointAndStyleNormalizeInvalidInput() {
+        let point = LivelineBubblePoint(time: 10, value: 20, magnitude: -4)
+        let style = LivelineBubbleStyle(minimumSize: 30, maximumSize: 4, fillOpacity: -2, outlineWidth: -1)
+
+        XCTAssertEqual(point.magnitude, 0)
+        XCTAssertEqual(style.resolvedMinimumSize, 4)
+        XCTAssertEqual(style.resolvedMaximumSize, 30)
+        XCTAssertEqual(style.resolvedFillOpacity, 0)
+        XCTAssertEqual(style.resolvedOutlineWidth, 0)
+    }
+
+    func testBubbleDiameterSupportsAreaAndDiameterScaling() {
+        let diameter = LivelineMath.bubbleDiameter(
+            magnitude: 25,
+            minimumMagnitude: 0,
+            maximumMagnitude: 100,
+            minimumSize: 4,
+            maximumSize: 20,
+            scale: .diameter
+        )
+        let area = LivelineMath.bubbleDiameter(
+            magnitude: 25,
+            minimumMagnitude: 0,
+            maximumMagnitude: 100,
+            minimumSize: 4,
+            maximumSize: 20,
+            scale: .area
+        )
+
+        XCTAssertEqual(diameter, 8, accuracy: 0.0001)
+        XCTAssertEqual(area, sqrt(112), accuracy: 0.0001)
+        XCTAssertEqual(
+            LivelineMath.bubbleDiameter(
+                magnitude: 5,
+                minimumMagnitude: 5,
+                maximumMagnitude: 5,
+                minimumSize: 4,
+                maximumSize: 20,
+                scale: .area
+            ),
+            12,
+            accuracy: 0.0001
+        )
+    }
+
+    func testBoxPlotPointNormalizesFiveNumberSummary() {
+        let point = LivelineBoxPlotPoint(
+            time: 10,
+            minimum: 9,
+            lowerQuartile: 3,
+            median: 7,
+            upperQuartile: 1,
+            maximum: 5
+        )
+
+        XCTAssertEqual(point.minimum, 1)
+        XCTAssertEqual(point.lowerQuartile, 3)
+        XCTAssertEqual(point.median, 5)
+        XCTAssertEqual(point.upperQuartile, 7)
+        XCTAssertEqual(point.maximum, 9)
+    }
+
+    func testBoxPlotAndWaterfallStylesClampDrawingValues() {
+        let box = LivelineBoxPlotStyle(
+            widthRatio: 4,
+            fillOpacity: -1,
+            outlineWidth: -2,
+            medianLineWidth: -3,
+            whiskerWidthRatio: 0
+        )
+        XCTAssertEqual(box.resolvedWidthRatio, 1)
+        XCTAssertEqual(box.resolvedFillOpacity, 0)
+        XCTAssertEqual(box.resolvedOutlineWidth, 0)
+        XCTAssertEqual(box.resolvedMedianLineWidth, 0)
+        XCTAssertEqual(box.resolvedWhiskerWidthRatio, 0.05)
+
+        let waterfall = LivelineWaterfallStyle(widthRatio: 0, cornerRadius: -2, connectorLineWidth: -3)
+        XCTAssertEqual(waterfall.resolvedWidthRatio, 0.05)
+        XCTAssertEqual(waterfall.resolvedCornerRadius, 0)
+        XCTAssertEqual(waterfall.resolvedConnectorLineWidth, 0)
+    }
+
+    func testWaterfallSegmentsPreserveCumulativeStartAndEnd() {
+        let segments = LivelineMath.waterfallSegments(
+            points: [
+                LivelinePoint(time: 10, value: 5),
+                LivelinePoint(time: 20, value: -2),
+                LivelinePoint(time: 30, value: 4),
+            ],
+            initialValue: 100
+        )
+
+        XCTAssertEqual(segments, [
+            LivelineWaterfallSegment(time: 10, start: 100, end: 105, delta: 5),
+            LivelineWaterfallSegment(time: 20, start: 105, end: 103, delta: -2),
+            LivelineWaterfallSegment(time: 30, start: 103, end: 107, delta: 4),
+        ])
+    }
+
     func testAdditionalChartInitializersConstructViews() {
         let points = [
             LivelinePoint(time: 10, value: 4),
@@ -94,9 +225,20 @@ final class LivelineMathTests: XCTestCase {
                 scatter: points,
                 style: LivelineScatterStyle(symbol: .diamond, connection: .curved)
             ),
+            LivelineChart(steps: points, style: LivelineStepStyle(position: .center)),
+            LivelineChart(lollipops: points, style: LivelineLollipopStyle(headSymbol: .diamond)),
+            LivelineChart(
+                bubbles: points.map { LivelineBubblePoint(time: $0.time, value: $0.value, magnitude: $0.value) }
+            ),
+            LivelineChart(
+                boxPlots: [
+                    LivelineBoxPlotPoint(time: 10, minimum: 1, lowerQuartile: 2, median: 3, upperQuartile: 4, maximum: 5),
+                ]
+            ),
+            LivelineChart(waterfall: points, style: LivelineWaterfallStyle(initialValue: 20)),
         ]
 
-        XCTAssertEqual(charts.count, 3)
+        XCTAssertEqual(charts.count, 8)
     }
 
     func testInterpolateFindsValueInsideSeries() {
