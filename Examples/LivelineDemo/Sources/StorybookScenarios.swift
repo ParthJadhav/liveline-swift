@@ -82,6 +82,12 @@ enum StorybookCatalog {
         multiLight,
         multiCompact,
         multiTwoSeries,
+        barBasic,
+        barSigned,
+        rangeBasic,
+        rangeCenterLine,
+        scatterBasic,
+        scatterConnected,
     ]
 
     static func scenario(id: String) -> StorybookScenario? {
@@ -533,6 +539,112 @@ private extension StorybookCatalog {
         )
     }
 
+    static let barBasic = chart(
+        id: "bar-basic",
+        group: "Bars",
+        title: "Bucketed Volume",
+        detail: "Rounded bars for regular time buckets.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            bars: StorybookData.bars(signed: false),
+            color: StorybookData.teal,
+            style: LivelineBarStyle(widthRatio: 0.72, cornerRadius: 3),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: " req")
+        )
+    }
+
+    static let barSigned = chart(
+        id: "bar-signed",
+        group: "Bars",
+        title: "Target Variance",
+        detail: "Square bars diverging from a custom 4% target baseline.",
+        background: .white
+    ) {
+        LivelineChart(
+            bars: StorybookData.bars(signed: true),
+            color: StorybookData.green,
+            style: LivelineBarStyle(
+                widthRatio: 0.46,
+                cornerRadius: 0,
+                baseline: 4,
+                negativeColor: StorybookData.red
+            ),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: "%")
+        )
+    }
+
+    static let rangeBasic = chart(
+        id: "range-basic",
+        group: "Range bands",
+        title: "Forecast Band",
+        detail: "Filled lower/upper interval with emphasized boundaries.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            range: StorybookData.ranges,
+            color: StorybookData.indigo,
+            style: LivelineRangeStyle(fillOpacity: 0.22, boundaryLineWidth: 1.5),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "%")
+        )
+    }
+
+    static let rangeCenterLine = chart(
+        id: "range-center-line",
+        group: "Range bands",
+        title: "Expected Range",
+        detail: "Light band with a dashed center estimate.",
+        background: .white
+    ) {
+        LivelineChart(
+            range: StorybookData.ranges,
+            color: StorybookData.orange,
+            style: LivelineRangeStyle(
+                fillOpacity: 0.1,
+                boundaryLineWidth: 0.75,
+                showsCenterLine: true,
+                centerLineWidth: 1.5
+            ),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: "%")
+        )
+    }
+
+    static let scatterBasic = chart(
+        id: "scatter-basic",
+        group: "Scatter",
+        title: "Sparse Observations",
+        detail: "Independent circular points with background outlines.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            scatter: StorybookData.scatter,
+            color: StorybookData.violet,
+            style: LivelineScatterStyle(pointSize: 8, outlineWidth: 1.5),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: " ms")
+        )
+    }
+
+    static let scatterConnected = chart(
+        id: "scatter-connected",
+        group: "Scatter",
+        title: "Connected Samples",
+        detail: "Diamond symbols joined by a curved trend line.",
+        background: .white
+    ) {
+        LivelineChart(
+            scatter: StorybookData.scatter,
+            color: StorybookData.cyan,
+            style: LivelineScatterStyle(
+                symbol: .diamond,
+                pointSize: 9,
+                outlineWidth: 1,
+                connection: .curved,
+                connectionLineWidth: 1.5
+            ),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: " ms")
+        )
+    }
+
     static func chart<V: View>(
         id: String,
         group: String,
@@ -630,6 +742,36 @@ enum StorybookData {
         ]
     }
 
+    static func bars(signed: Bool) -> [LivelinePoint] {
+        (0..<18).map { index in
+            let t = Double(index)
+            let base = 46 + sin(t * 0.82) * 18 + cos(t * 0.31) * 9
+            let value = signed ? sin(t * 0.74) * 13 + cos(t * 0.27) * 5 : max(4, base)
+            return LivelinePoint(time: baseTime - Double(17 - index) * 10, value: value)
+        }
+    }
+
+    static var ranges: [LivelineRangePoint] {
+        (0..<37).map { index in
+            let t = Double(index)
+            let center = 68 + sin(t * 0.28) * 7 + cos(t * 0.11) * 3
+            let spread = 5 + (sin(t * 0.19 + 0.8) + 1) * 2.5
+            return LivelineRangePoint(
+                time: baseTime - Double(36 - index) * 5,
+                lower: center - spread,
+                upper: center + spread
+            )
+        }
+    }
+
+    static var scatter: [LivelinePoint] {
+        (0..<23).map { index in
+            let t = Double(index)
+            let value = 82 + sin(t * 0.91) * 20 + cos(t * 0.27) * 11 + (index % 7 == 0 ? 16 : 0)
+            return LivelinePoint(time: baseTime - Double(22 - index) * 8, value: value)
+        }
+    }
+
     static func candles(width: TimeInterval) -> (committed: [LivelineCandle], live: LivelineCandle?) {
         let source = points(.normal, count: 360)
         var candles: [LivelineCandle] = []
@@ -706,6 +848,25 @@ enum StorybookData {
             lineMode: lineMode,
             seriesToggleCompact: seriesToggleCompact,
             onModeChange: onModeChange
+        )
+    }
+
+    static func staticSnapshotConfig(
+        theme: LivelineThemeMode,
+        window: TimeInterval,
+        suffix: String
+    ) -> LivelineChartConfiguration {
+        LivelineChartConfiguration(
+            theme: theme,
+            window: window,
+            badge: false,
+            fill: false,
+            pulse: false,
+            endpointDecorations: false,
+            formatValue: { value in
+                value.formatted(.number.precision(.fractionLength(0))) + suffix
+            },
+            snapshotElapsedTime: StorybookLaunch.snapshotElapsedTimeFromArguments()
         )
     }
 

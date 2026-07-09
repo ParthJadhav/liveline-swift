@@ -91,3 +91,65 @@ LivelineChart(
     configuration: LivelineChartConfiguration(orderbook: orderbook)
 )
 ```
+
+## Signed Bar Chart
+
+```swift
+LivelineChart(
+    bars: changes,
+    color: .green,
+    style: LivelineBarStyle(
+        widthRatio: 0.5,
+        cornerRadius: 0,
+        baseline: 4,
+        negativeColor: .red
+    ),
+    configuration: LivelineChartConfiguration(
+        theme: .light,
+        window: 180,
+        formatValue: { $0.formatted() + "%" }
+    )
+)
+.frame(height: 260)
+```
+
+## Forecast Range
+
+```swift
+let forecast = samples.map {
+    LivelineRangePoint(time: $0.time, lower: $0.p10, upper: $0.p90)
+}
+
+LivelineChart(
+    range: forecast,
+    color: .indigo,
+    style: LivelineRangeStyle(
+        fillOpacity: 0.2,
+        boundaryLineWidth: 1.5,
+        showsCenterLine: true
+    ),
+    configuration: LivelineChartConfiguration(window: 300)
+)
+.frame(height: 260)
+```
+
+## Connected Scatter Plot
+
+```swift
+LivelineChart(
+    scatter: latencySamples,
+    color: .cyan,
+    style: LivelineScatterStyle(
+        symbol: .diamond,
+        pointSize: 9,
+        outlineWidth: 1,
+        connection: .curved
+    ),
+    configuration: LivelineChartConfiguration(
+        theme: .light,
+        window: 180,
+        formatValue: { $0.formatted() + " ms" }
+    )
+)
+.frame(height: 260)
+```

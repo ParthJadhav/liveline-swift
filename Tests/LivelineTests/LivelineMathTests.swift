@@ -2,6 +2,60 @@ import XCTest
 @testable import Liveline
 
 final class LivelineMathTests: XCTestCase {
+    func testRangePointNormalizesBoundsAndExposesMidpoint() {
+        let point = LivelineRangePoint(time: 10, lower: 14, upper: 6)
+
+        XCTAssertEqual(point.lower, 6)
+        XCTAssertEqual(point.upper, 14)
+        XCTAssertEqual(point.midpoint, 10)
+    }
+
+    func testBarStyleClampsDrawingValues() {
+        let style = LivelineBarStyle(widthRatio: 4, cornerRadius: -3, baseline: 5)
+
+        XCTAssertEqual(style.resolvedWidthRatio, 1)
+        XCTAssertEqual(style.resolvedCornerRadius, 0)
+        XCTAssertEqual(style.baseline, 5)
+    }
+
+    func testRangeStyleClampsOpacityAndLineWidths() {
+        let style = LivelineRangeStyle(fillOpacity: 2, boundaryLineWidth: -1, centerLineWidth: -4)
+
+        XCTAssertEqual(style.resolvedFillOpacity, 1)
+        XCTAssertEqual(style.resolvedBoundaryLineWidth, 0)
+        XCTAssertEqual(style.resolvedCenterLineWidth, 0)
+    }
+
+    func testScatterStyleClampsPointAndStrokeSizes() {
+        let style = LivelineScatterStyle(pointSize: 0, outlineWidth: -2, connectionLineWidth: -1)
+
+        XCTAssertEqual(style.resolvedPointSize, 2)
+        XCTAssertEqual(style.resolvedOutlineWidth, 0)
+        XCTAssertEqual(style.resolvedConnectionLineWidth, 0)
+    }
+
+    func testAdditionalChartInitializersConstructViews() {
+        let points = [
+            LivelinePoint(time: 10, value: 4),
+            LivelinePoint(time: 20, value: 8),
+        ]
+        let ranges = [
+            LivelineRangePoint(time: 10, lower: 2, upper: 6),
+            LivelineRangePoint(time: 20, lower: 5, upper: 9),
+        ]
+
+        let charts = [
+            LivelineChart(bars: points, style: LivelineBarStyle(baseline: 5)),
+            LivelineChart(range: ranges, style: LivelineRangeStyle(showsCenterLine: true)),
+            LivelineChart(
+                scatter: points,
+                style: LivelineScatterStyle(symbol: .diamond, connection: .curved)
+            ),
+        ]
+
+        XCTAssertEqual(charts.count, 3)
+    }
+
     func testInterpolateFindsValueInsideSeries() {
         let points = [
             LivelinePoint(time: 10, value: 100),

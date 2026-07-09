@@ -15,6 +15,9 @@ Initializers:
 LivelineChart(data:value:color:configuration:)
 LivelineChart(series:configuration:)
 LivelineChart(data:value:candles:candleWidth:liveCandle:lineData:lineValue:color:configuration:)
+LivelineChart(bars:color:style:configuration:)
+LivelineChart(range:color:style:configuration:)
+LivelineChart(scatter:value:color:style:configuration:)
 ```
 
 ## Data Types
@@ -36,6 +39,46 @@ LivelineCandle(time: openTime, open: 40, high: 44, low: 39, close: 43)
 ```swift
 LivelineSeries(id: "alpha", data: points, value: latest, color: .blue, label: "Alpha")
 ```
+
+`LivelineRangePoint`
+
+```swift
+LivelineRangePoint(time: unixSeconds, lower: 38, upper: 46)
+```
+
+Range points normalize reversed bounds during initialization and expose their midpoint.
+
+## Chart Styles
+
+The additional chart types keep their geometry-specific options in dedicated style values:
+
+```swift
+LivelineBarStyle(
+    widthRatio: 0.7,
+    cornerRadius: 3,
+    baseline: 0,
+    positiveColor: .green,
+    negativeColor: .red,
+    showsBaseline: true
+)
+
+LivelineRangeStyle(
+    fillOpacity: 0.2,
+    boundaryLineWidth: 1.5,
+    showsCenterLine: true,
+    centerLineWidth: 1
+)
+
+LivelineScatterStyle(
+    symbol: .diamond,
+    pointSize: 9,
+    outlineWidth: 1,
+    connection: .curved,
+    connectionLineWidth: 1.5
+)
+```
+
+Scatter symbols are `.circle`, `.square`, and `.diamond`. Connections are `.none`, `.straight`, and `.curved`.
 
 ## Configuration
 

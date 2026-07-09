@@ -40,6 +40,12 @@ SCENARIOS=(
   multi-light
   multi-compact
   multi-two-series
+  bar-basic
+  bar-signed
+  range-basic
+  range-center-line
+  scatter-basic
+  scatter-connected
 )
 
 if [[ -n "${STORYBOOK_SCENARIOS:-}" ]]; then

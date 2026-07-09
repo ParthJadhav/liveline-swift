@@ -14,6 +14,115 @@ public struct LivelinePoint: Identifiable, Hashable, Sendable {
     }
 }
 
+/// A lower and upper value observed at one point in time.
+public struct LivelineRangePoint: Identifiable, Hashable, Sendable {
+    public var time: TimeInterval
+    public var lower: Double
+    public var upper: Double
+
+    public var id: TimeInterval { time }
+    public var midpoint: Double { (lower + upper) / 2 }
+
+    public init(time: TimeInterval, lower: Double, upper: Double) {
+        self.time = time
+        self.lower = min(lower, upper)
+        self.upper = max(lower, upper)
+    }
+}
+
+/// Visual options for a time-based bar chart.
+public struct LivelineBarStyle {
+    /// The fraction of the available time bucket occupied by each bar.
+    public var widthRatio: CGFloat
+    public var cornerRadius: CGFloat
+    public var baseline: Double
+    public var positiveColor: Color?
+    public var negativeColor: Color
+    public var showsBaseline: Bool
+
+    public init(
+        widthRatio: CGFloat = 0.72,
+        cornerRadius: CGFloat = 2,
+        baseline: Double = 0,
+        positiveColor: Color? = nil,
+        negativeColor: Color = Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255),
+        showsBaseline: Bool = true
+    ) {
+        self.widthRatio = widthRatio
+        self.cornerRadius = cornerRadius
+        self.baseline = baseline
+        self.positiveColor = positiveColor
+        self.negativeColor = negativeColor
+        self.showsBaseline = showsBaseline
+    }
+
+    var resolvedWidthRatio: CGFloat { min(max(widthRatio, 0.05), 1) }
+    var resolvedCornerRadius: CGFloat { max(cornerRadius, 0) }
+}
+
+/// Visual options for a range-band chart.
+public struct LivelineRangeStyle {
+    public var fillOpacity: Double
+    public var boundaryLineWidth: CGFloat
+    public var showsCenterLine: Bool
+    public var centerLineWidth: CGFloat
+
+    public init(
+        fillOpacity: Double = 0.18,
+        boundaryLineWidth: CGFloat = 1.5,
+        showsCenterLine: Bool = false,
+        centerLineWidth: CGFloat = 1
+    ) {
+        self.fillOpacity = fillOpacity
+        self.boundaryLineWidth = boundaryLineWidth
+        self.showsCenterLine = showsCenterLine
+        self.centerLineWidth = centerLineWidth
+    }
+
+    var resolvedFillOpacity: Double { min(max(fillOpacity, 0), 1) }
+    var resolvedBoundaryLineWidth: CGFloat { max(boundaryLineWidth, 0) }
+    var resolvedCenterLineWidth: CGFloat { max(centerLineWidth, 0) }
+}
+
+public enum LivelineScatterSymbol: String, CaseIterable, Sendable {
+    case circle
+    case square
+    case diamond
+}
+
+public enum LivelineScatterConnection: String, CaseIterable, Sendable {
+    case none
+    case straight
+    case curved
+}
+
+/// Visual options for a scatter chart.
+public struct LivelineScatterStyle {
+    public var symbol: LivelineScatterSymbol
+    public var pointSize: CGFloat
+    public var outlineWidth: CGFloat
+    public var connection: LivelineScatterConnection
+    public var connectionLineWidth: CGFloat
+
+    public init(
+        symbol: LivelineScatterSymbol = .circle,
+        pointSize: CGFloat = 7,
+        outlineWidth: CGFloat = 1.5,
+        connection: LivelineScatterConnection = .none,
+        connectionLineWidth: CGFloat = 1.25
+    ) {
+        self.symbol = symbol
+        self.pointSize = pointSize
+        self.outlineWidth = outlineWidth
+        self.connection = connection
+        self.connectionLineWidth = connectionLineWidth
+    }
+
+    var resolvedPointSize: CGFloat { max(pointSize, 2) }
+    var resolvedOutlineWidth: CGFloat { max(outlineWidth, 0) }
+    var resolvedConnectionLineWidth: CGFloat { max(connectionLineWidth, 0) }
+}
+
 /// One OHLC candle. `time` is the candle open time in Unix seconds.
 public struct LivelineCandle: Identifiable, Hashable, Sendable {
     public var time: TimeInterval

@@ -1,6 +1,6 @@
 # Liveline Swift
 
-Native SwiftUI real-time charts for iOS apps. Liveline renders animated line, candlestick, and multi-series charts with smooth value interpolation, scrubbing, live badges, time windows, loading/empty states, and optional market-style effects.
+Native SwiftUI real-time charts for iOS apps. Liveline renders animated line, candlestick, multi-series, bar, range-band, and scatter charts with smooth value interpolation, scrubbing, time windows, loading/empty states, and optional market-style effects.
 
 <p align="center">
   <img src="Media/readme/cover.png" alt="Liveline Swift cover showing line, candlestick, and multi-series charts" />
@@ -119,6 +119,36 @@ LivelineChart(series: [
 .frame(height: 260)
 ```
 
+Bars:
+
+```swift
+LivelineChart(
+    bars: buckets,
+    style: LivelineBarStyle(widthRatio: 0.7, cornerRadius: 3, baseline: 0)
+)
+.frame(height: 260)
+```
+
+Range band:
+
+```swift
+LivelineChart(
+    range: intervals,
+    style: LivelineRangeStyle(fillOpacity: 0.2, showsCenterLine: true)
+)
+.frame(height: 260)
+```
+
+Scatter:
+
+```swift
+LivelineChart(
+    scatter: observations,
+    style: LivelineScatterStyle(symbol: .diamond, connection: .curved)
+)
+.frame(height: 260)
+```
+
 ## Features
 
 - SwiftUI `Canvas` rendering, no WebView and no JavaScript bridge
@@ -132,6 +162,9 @@ LivelineChart(series: [
 - Loading/empty morph states
 - Candlestick drawing with live candle glow
 - Multi-series toggles
+- Signed bar charts with configurable baseline, width, rounding, and colors
+- Range bands with configurable fill, boundaries, and center line
+- Scatter plots with circle, square, or diamond symbols and optional connections
 - Reference line and orderbook stream labels
 
 ## Example App

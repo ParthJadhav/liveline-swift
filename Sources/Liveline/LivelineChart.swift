@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// A SwiftUI chart view for real-time line, candlestick, and multi-series data.
+/// A SwiftUI chart view for real-time line, candlestick, multi-series, bar,
+/// range-band, and scatter data.
 ///
 /// The view fills the size given by its parent. In most apps you will use it with
 /// an explicit height:
@@ -26,22 +27,53 @@ public struct LivelineChart: View {
         color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
         configuration: LivelineChartConfiguration = LivelineChartConfiguration()
     ) {
-        self.content = .line(data: data, value: value)
-        self.accent = color
-        self.baseConfiguration = configuration
-        _activeWindow = State(initialValue: configuration.windows.first?.seconds ?? configuration.window)
-        _lineMode = State(initialValue: configuration.lineMode)
+        self.init(content: .line(data: data, value: value), accent: color, configuration: configuration)
+    }
+
+    /// Creates a time-based bar chart.
+    public init(
+        bars: [LivelinePoint],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineBarStyle = LivelineBarStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .bars(data: bars, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a lower/upper range-band chart.
+    public init(
+        range: [LivelineRangePoint],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineRangeStyle = LivelineRangeStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .range(data: range, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a scatter chart from discrete observations.
+    public init(
+        scatter: [LivelinePoint],
+        value: Double? = nil,
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineScatterStyle = LivelineScatterStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(
+            content: .scatter(data: scatter, value: value ?? scatter.last?.value ?? 0, style: style),
+            accent: color,
+            configuration: configuration
+        )
     }
 
     public init(
         series: [LivelineSeries],
         configuration: LivelineChartConfiguration = LivelineChartConfiguration()
     ) {
-        self.content = .series(series)
-        self.accent = series.first?.color ?? Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255)
-        self.baseConfiguration = configuration
-        _activeWindow = State(initialValue: configuration.windows.first?.seconds ?? configuration.window)
-        _lineMode = State(initialValue: configuration.lineMode)
+        self.init(
+            content: .series(series),
+            accent: series.first?.color ?? Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+            configuration: configuration
+        )
     }
 
     public init(
@@ -55,16 +87,28 @@ public struct LivelineChart: View {
         color: Color = Color(red: 247 / 255, green: 147 / 255, blue: 26 / 255),
         configuration: LivelineChartConfiguration = LivelineChartConfiguration()
     ) {
-        self.content = .candle(
-            data: data,
-            value: value,
-            candles: candles,
-            candleWidth: candleWidth,
-            liveCandle: liveCandle,
-            lineData: lineData,
-            lineValue: lineValue
+        self.init(
+            content: .candle(
+                data: data,
+                value: value,
+                candles: candles,
+                candleWidth: candleWidth,
+                liveCandle: liveCandle,
+                lineData: lineData,
+                lineValue: lineValue
+            ),
+            accent: color,
+            configuration: configuration
         )
-        self.accent = color
+    }
+
+    private init(
+        content: LivelineChartContent,
+        accent: Color,
+        configuration: LivelineChartConfiguration
+    ) {
+        self.content = content
+        self.accent = accent
         self.baseConfiguration = configuration
         _activeWindow = State(initialValue: configuration.windows.first?.seconds ?? configuration.window)
         _lineMode = State(initialValue: configuration.lineMode)
@@ -202,6 +246,12 @@ private extension LivelineChart {
             return lineValue ?? liveCandle?.close ?? value
         case let .series(series):
             return series.first(where: { !hiddenSeries.contains($0.id) })?.value ?? series.first?.value ?? 0
+        case let .bars(data, _):
+            return data.last?.value ?? 0
+        case let .range(data, _):
+            return data.last?.midpoint ?? 0
+        case let .scatter(_, value, _):
+            return value
         }
     }
 
@@ -213,6 +263,12 @@ private extension LivelineChart {
             return LivelineMath.detectMomentum(points: lineData.isEmpty ? data : lineData)
         case let .series(series):
             return LivelineMath.detectMomentum(points: series.first(where: { !hiddenSeries.contains($0.id) })?.data ?? [])
+        case let .bars(data, _):
+            return LivelineMath.detectMomentum(points: data)
+        case let .range(data, _):
+            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.midpoint) })
+        case let .scatter(data, _, _):
+            return LivelineMath.detectMomentum(points: data)
         }
     }
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Adds customizable time-based bar, range-band, and scatter charts with six deterministic Storybook variants.
 - Adds Swift Package Index metadata for public DocC hosting.
 - Bundles an empty privacy manifest with the Swift package target.
 - Preserves the previous public `LivelineChartConfiguration` initializer for source compatibility.

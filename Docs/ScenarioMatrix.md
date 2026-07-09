@@ -63,6 +63,12 @@ Diff panels are written to `Media/storybook-diff` as reference/native/heatmap tr
 | `multi-light` | Multi-series | Light theme multi-series. |
 | `multi-compact` | Multi-series | Dot-only series chips. |
 | `multi-two-series` | Multi-series | Two series. |
+| `bar-basic` | Bars | Rounded positive time buckets. |
+| `bar-signed` | Bars | Narrow square bars diverging from a custom target baseline. |
+| `range-basic` | Range bands | Filled forecast interval with emphasized boundaries. |
+| `range-center-line` | Range bands | Light interval with a dashed center estimate. |
+| `scatter-basic` | Scatter | Independent circular observations. |
+| `scatter-connected` | Scatter | Diamond observations with a curved connection. |
 
 ## Parity Notes
 
