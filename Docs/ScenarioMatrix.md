@@ -79,6 +79,26 @@ Diff panels are written to `Media/storybook-diff` as reference/native/heatmap tr
 | `boxplot-minimal` | Box plot | Narrow outlined summaries with heavy medians. |
 | `waterfall-basic` | Waterfall | Connected cumulative gains and losses. |
 | `waterfall-no-connectors` | Waterfall | Wide square changes without connectors. |
+| `errorbar-basic` | Error bar | Circular estimates with capped uncertainty intervals. |
+| `errorbar-diamond` | Error bar | Diamond estimates with wider caps and translucent centers. |
+| `dumbbell-basic` | Dumbbell | Paired before/after values with gradient connectors. |
+| `dumbbell-directional` | Dumbbell | Square endpoints with direction chevrons. |
+| `stackedbar-basic` | Stacked bar | Absolute multi-segment time buckets. |
+| `stackedbar-normalized` | Stacked bar | Segment shares normalized to 100 percent. |
+| `stackedarea-basic` | Stacked area | Layered absolute volumes with boundaries. |
+| `stackedarea-normalized` | Stacked area | Layered composition normalized to 100 percent. |
+| `timeline-basic` | Timeline | Labeled overlapping intervals across three lanes. |
+| `timeline-compact` | Timeline | Slim square intervals without guides or labels. |
+| `heatmap-basic` | Heatmap | Regional load intensity across four labeled rows. |
+| `heatmap-values` | Heatmap | Wide rounded cells with embedded values. |
+| `radar-basic` | Radar | Six labeled axes, five grid levels, fill, and markers. |
+| `radar-minimal` | Radar | Unlabeled three-level outline with no markers. |
+| `donut-basic` | Donut | Composition ring with outside labels and center total. |
+| `donut-thin` | Donut | Thin ring with value-bearing labels. |
+| `gauge-basic` | Gauge | Tick-marked 240-degree capacity gauge. |
+| `gauge-target` | Gauge | Half-circle SLA gauge with target marker. |
+| `funnel-basic` | Funnel | Labeled conversion stages with values. |
+| `funnel-compact` | Funnel | Tight square stages with labels only. |
 
 ## Parity Notes
 

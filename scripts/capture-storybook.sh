@@ -56,6 +56,26 @@ SCENARIOS=(
   boxplot-minimal
   waterfall-basic
   waterfall-no-connectors
+  errorbar-basic
+  errorbar-diamond
+  dumbbell-basic
+  dumbbell-directional
+  stackedbar-basic
+  stackedbar-normalized
+  stackedarea-basic
+  stackedarea-normalized
+  timeline-basic
+  timeline-compact
+  heatmap-basic
+  heatmap-values
+  radar-basic
+  radar-minimal
+  donut-basic
+  donut-thin
+  gauge-basic
+  gauge-target
+  funnel-basic
+  funnel-compact
 )
 
 if [[ -n "${STORYBOOK_SCENARIOS:-}" ]]; then

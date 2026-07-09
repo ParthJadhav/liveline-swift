@@ -120,6 +120,111 @@ public struct LivelineChart: View {
         self.init(content: .waterfall(data: waterfall, style: style), accent: color, configuration: configuration)
     }
 
+    /// Creates an error-bar chart with central estimates and uncertainty bounds.
+    public init(
+        errorBars: [LivelineErrorBarPoint],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineErrorBarStyle = LivelineErrorBarStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .errorBars(data: errorBars, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a dumbbell chart for paired comparisons over time.
+    public init(
+        dumbbells: [LivelineDumbbellPoint],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineDumbbellStyle = LivelineDumbbellStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .dumbbells(data: dumbbells, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a time-based stacked-bar chart.
+    public init(
+        stackedBars: [LivelineStackedPoint],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineStackedBarStyle = LivelineStackedBarStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .stackedBars(data: stackedBars, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a time-based stacked-area chart.
+    public init(
+        stackedAreas: [LivelineStackedPoint],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineStackedAreaStyle = LivelineStackedAreaStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .stackedAreas(data: stackedAreas, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a multi-lane interval timeline.
+    public init(
+        timeline: [LivelineTimelineItem],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineTimelineStyle = LivelineTimelineStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .timeline(data: timeline, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a time-row heatmap.
+    public init(
+        heatmap: [LivelineHeatmapCell],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineHeatmapStyle = LivelineHeatmapStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .heatmap(data: heatmap, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a radial multi-axis radar chart.
+    public init(
+        radar: [LivelineRadarPoint],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineRadarStyle = LivelineRadarStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .radar(data: radar, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a donut chart for categorical composition.
+    public init(
+        donut: [LivelineCategoryValue],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineDonutStyle = LivelineDonutStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .donut(data: donut, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a radial gauge for a value within a closed range.
+    public init(
+        gauge value: Double,
+        range: ClosedRange<Double> = 0...1,
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineGaugeStyle = LivelineGaugeStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(
+            content: .gauge(value: value.isFinite ? value : range.lowerBound, range: range, style: style),
+            accent: color,
+            configuration: configuration
+        )
+    }
+
+    /// Creates a funnel chart for categorical stage progression.
+    public init(
+        funnel: [LivelineCategoryValue],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineFunnelStyle = LivelineFunnelStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .funnel(data: funnel, style: style), accent: color, configuration: configuration)
+    }
+
     public init(
         series: [LivelineSeries],
         configuration: LivelineChartConfiguration = LivelineChartConfiguration()
@@ -317,6 +422,26 @@ private extension LivelineChart {
             return data.last?.median ?? 0
         case let .waterfall(data, style):
             return LivelineMath.waterfallSegments(points: data, initialValue: style.initialValue).last?.end ?? style.initialValue
+        case let .errorBars(data, _):
+            return data.last?.value ?? 0
+        case let .dumbbells(data, _):
+            return data.last?.end ?? 0
+        case let .stackedBars(data, _), let .stackedAreas(data, _):
+            return data.last?.total ?? 0
+        case let .timeline(data, _):
+            guard let last = data.last else { return 0 }
+            return last.end - last.start
+        case let .heatmap(data, _):
+            return data.last?.value ?? 0
+        case let .radar(data, _):
+            guard !data.isEmpty else { return 0 }
+            return data.map(\.value).reduce(0, +) / Double(data.count)
+        case let .donut(data, _):
+            return data.map(\.value).reduce(0, +)
+        case let .gauge(value, _, _):
+            return value
+        case let .funnel(data, _):
+            return data.last?.value ?? 0
         }
     }
 
@@ -346,6 +471,20 @@ private extension LivelineChart {
             let points = LivelineMath.waterfallSegments(points: data, initialValue: style.initialValue)
                 .map { LivelinePoint(time: $0.time, value: $0.end) }
             return LivelineMath.detectMomentum(points: points)
+        case let .errorBars(data, _):
+            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.value) })
+        case let .dumbbells(data, _):
+            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.end) })
+        case let .stackedBars(data, _), let .stackedAreas(data, _):
+            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.total) })
+        case let .timeline(data, _):
+            return LivelineMath.detectMomentum(points: data.enumerated().map {
+                LivelinePoint(time: Double($0.offset), value: $0.element.end - $0.element.start)
+            })
+        case let .heatmap(data, _):
+            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.value) })
+        case .radar, .donut, .gauge, .funnel:
+            return .flat
         }
     }
 

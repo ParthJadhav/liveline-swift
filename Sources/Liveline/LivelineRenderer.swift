@@ -28,6 +28,16 @@ enum LivelineChartContent {
     case bubbles(data: [LivelineBubblePoint], style: LivelineBubbleStyle)
     case boxPlots(data: [LivelineBoxPlotPoint], style: LivelineBoxPlotStyle)
     case waterfall(data: [LivelinePoint], style: LivelineWaterfallStyle)
+    case errorBars(data: [LivelineErrorBarPoint], style: LivelineErrorBarStyle)
+    case dumbbells(data: [LivelineDumbbellPoint], style: LivelineDumbbellStyle)
+    case stackedBars(data: [LivelineStackedPoint], style: LivelineStackedBarStyle)
+    case stackedAreas(data: [LivelineStackedPoint], style: LivelineStackedAreaStyle)
+    case timeline(data: [LivelineTimelineItem], style: LivelineTimelineStyle)
+    case heatmap(data: [LivelineHeatmapCell], style: LivelineHeatmapStyle)
+    case radar(data: [LivelineRadarPoint], style: LivelineRadarStyle)
+    case donut(data: [LivelineCategoryValue], style: LivelineDonutStyle)
+    case gauge(value: Double, range: ClosedRange<Double>, style: LivelineGaugeStyle)
+    case funnel(data: [LivelineCategoryValue], style: LivelineFunnelStyle)
     case candle(
         data: [LivelinePoint],
         value: Double,
@@ -179,7 +189,7 @@ enum LivelineRenderer {
             drawReferenceLine(context: &layer, layout: layout, palette: palette, referenceLine: config.referenceLine!, formatValue: config.formatValue, alpha: state.chartReveal)
         }
 
-        if config.grid, !input.content.isCandle {
+        if config.grid, input.content.usesCartesianGrid {
             drawGrid(context: &layer, layout: layout, palette: palette, state: state, formatValue: config.formatValue, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
         }
 
@@ -347,6 +357,89 @@ enum LivelineRenderer {
             drawDiscreteCrosshair(context: &layer, layout: layout, palette: palette, hover: hover, points: renderData.primaryVisible, config: config, alpha: scrubAmount)
             drawActivePoint(context: &layer, layout: layout, palette: palette, points: renderData.primaryVisible, activePoint: config.activePoint, alpha: state.chartReveal, timestamp: animationTimestamp)
 
+        case let .errorBars(data, style):
+            drawErrorBars(
+                context: &layer,
+                layout: layout,
+                palette: palette,
+                points: data.filter { layout.leftEdge...layout.rightEdge ~= $0.time },
+                style: style,
+                alpha: state.chartReveal
+            )
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+            drawDiscreteCrosshair(context: &layer, layout: layout, palette: palette, hover: hover, points: renderData.primaryVisible, config: config, alpha: scrubAmount)
+
+        case let .dumbbells(data, style):
+            drawDumbbells(
+                context: &layer,
+                layout: layout,
+                palette: palette,
+                points: data.filter { layout.leftEdge...layout.rightEdge ~= $0.time },
+                style: style,
+                alpha: state.chartReveal
+            )
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+            drawDiscreteCrosshair(context: &layer, layout: layout, palette: palette, hover: hover, points: renderData.primaryVisible, config: config, alpha: scrubAmount)
+
+        case let .stackedBars(data, style):
+            drawStackedBars(
+                context: &layer,
+                layout: layout,
+                palette: palette,
+                points: data.filter { layout.leftEdge...layout.rightEdge ~= $0.time },
+                style: style,
+                alpha: state.chartReveal
+            )
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+            drawDiscreteCrosshair(context: &layer, layout: layout, palette: palette, hover: hover, points: renderData.primaryVisible, config: config, alpha: scrubAmount)
+
+        case let .stackedAreas(data, style):
+            drawStackedAreas(
+                context: &layer,
+                layout: layout,
+                palette: palette,
+                points: data.filter { layout.leftEdge...layout.rightEdge ~= $0.time },
+                style: style,
+                alpha: state.chartReveal
+            )
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+            drawDiscreteCrosshair(context: &layer, layout: layout, palette: palette, hover: hover, points: renderData.primaryVisible, config: config, alpha: scrubAmount)
+
+        case let .timeline(data, style):
+            drawTimeline(
+                context: &layer,
+                layout: layout,
+                palette: palette,
+                items: data.filter { $0.end >= layout.leftEdge && $0.start <= layout.rightEdge },
+                style: style,
+                alpha: state.chartReveal
+            )
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+
+        case let .heatmap(data, style):
+            drawHeatmap(
+                context: &layer,
+                layout: layout,
+                palette: palette,
+                cells: data.filter { layout.leftEdge...layout.rightEdge ~= $0.time },
+                style: style,
+                formatValue: config.formatValue,
+                alpha: state.chartReveal
+            )
+            drawTimeAxis(context: &layer, layout: layout, palette: palette, state: state, window: input.activeWindow, formatTime: config.formatTime, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+
+        case let .radar(data, style):
+            drawRadar(context: &layer, layout: layout, palette: palette, points: data, style: style, alpha: state.chartReveal)
+
+        case let .donut(data, style):
+            drawDonut(context: &layer, layout: layout, palette: palette, data: data, style: style, formatValue: config.formatValue, alpha: state.chartReveal)
+
+        case let .gauge(value, range, style):
+            drawGauge(context: &layer, layout: layout, palette: palette, value: value, range: range, style: style, formatValue: config.formatValue, alpha: state.chartReveal)
+
+        case let .funnel(data, style):
+            drawFunnel(context: &layer, layout: layout, palette: palette, data: data, style: style, formatValue: config.formatValue, alpha: state.chartReveal)
+
         case let .candle(_, _, candles, candleWidth, liveCandle, lineData, lineValue):
             drawCandleMode(
                 context: &layer,
@@ -512,7 +605,8 @@ private extension LivelineRenderer {
     }
 
     static func hoverState(input: LivelineRenderInput, layout: LivelineLayout, points: [LivelinePoint]) -> LivelineHoverPoint? {
-        guard input.configuration.scrub,
+        guard input.content.supportsHover,
+              input.configuration.scrub,
               let hoverLocation = input.hoverLocation,
               hoverLocation.x >= layout.plotLeftX,
               hoverLocation.x <= layout.rightX
@@ -687,6 +781,152 @@ private extension LivelineRenderer {
                     exaggerate: config.exaggerate
                 ),
                 primaryValue: primaryValue
+            )
+
+        case let .errorBars(data, _):
+            let visible = data.filter { (leftEdge - 2)...rightEdge ~= $0.time }
+            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let values = source.map { LivelinePoint(time: $0.time, value: $0.value) }
+            let bounds = source.flatMap {
+                [
+                    LivelinePoint(time: $0.time, value: $0.lower),
+                    LivelinePoint(time: $0.time, value: $0.upper),
+                ]
+            }
+            let primaryValue = data.last?.value ?? 0
+            return RenderData(
+                primaryVisible: visible.map { LivelinePoint(time: $0.time, value: $0.value) },
+                rangePoints: values,
+                rangeOverride: bounds.isEmpty ? nil : LivelineMath.computeRange(
+                    points: bounds,
+                    currentValue: primaryValue,
+                    referenceValue: config.referenceLine?.value,
+                    exaggerate: config.exaggerate
+                ),
+                primaryValue: primaryValue
+            )
+
+        case let .dumbbells(data, _):
+            let visible = data.filter { (leftEdge - 2)...rightEdge ~= $0.time }
+            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let endpoints = source.flatMap {
+                [
+                    LivelinePoint(time: $0.time, value: $0.start),
+                    LivelinePoint(time: $0.time, value: $0.end),
+                ]
+            }
+            let primaryValue = data.last?.end ?? 0
+            return RenderData(
+                primaryVisible: visible.map { LivelinePoint(time: $0.time, value: $0.end) },
+                rangePoints: source.map { LivelinePoint(time: $0.time, value: $0.end) },
+                rangeOverride: endpoints.isEmpty ? nil : LivelineMath.computeRange(
+                    points: endpoints,
+                    currentValue: primaryValue,
+                    referenceValue: config.referenceLine?.value,
+                    exaggerate: config.exaggerate
+                ),
+                primaryValue: primaryValue
+            )
+
+        case let .stackedBars(data, style):
+            let visible = data.filter { (leftEdge - 2)...rightEdge ~= $0.time }
+            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let rangePoints = LivelineMath.stackedRangePoints(points: source, mode: style.mode)
+            let primaryValue = LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode)
+            return RenderData(
+                primaryVisible: visible.map {
+                    LivelinePoint(time: $0.time, value: LivelineMath.stackedPrimaryValue(point: $0, mode: style.mode))
+                },
+                rangePoints: rangePoints,
+                rangeOverride: rangePoints.isEmpty ? nil : LivelineMath.computeRange(
+                    points: rangePoints,
+                    currentValue: primaryValue,
+                    referenceValue: config.referenceLine?.value,
+                    exaggerate: config.exaggerate
+                ),
+                primaryValue: primaryValue
+            )
+
+        case let .stackedAreas(data, style):
+            let visible = data.filter { (leftEdge - 2)...rightEdge ~= $0.time }
+            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let rangePoints = LivelineMath.stackedRangePoints(points: source, mode: style.mode)
+            let primaryValue = LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode)
+            return RenderData(
+                primaryVisible: visible.map {
+                    LivelinePoint(time: $0.time, value: LivelineMath.stackedPrimaryValue(point: $0, mode: style.mode))
+                },
+                rangePoints: rangePoints,
+                rangeOverride: rangePoints.isEmpty ? nil : LivelineMath.computeRange(
+                    points: rangePoints,
+                    currentValue: primaryValue,
+                    referenceValue: config.referenceLine?.value,
+                    exaggerate: config.exaggerate
+                ),
+                primaryValue: primaryValue
+            )
+
+        case let .timeline(data, _):
+            let visible = data.filter { $0.end >= leftEdge - 2 && $0.start <= rightEdge }
+            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let laneCount = max((data.map(\.lane).max() ?? 0) + 1, 1)
+            let lastDuration = data.last.map { $0.end - $0.start } ?? 0
+            return RenderData(
+                primaryVisible: [],
+                rangePoints: source.map { LivelinePoint(time: $0.end, value: $0.end - $0.start) },
+                rangeOverride: source.isEmpty ? nil : -0.5...Double(laneCount) - 0.5,
+                primaryValue: lastDuration
+            )
+
+        case let .heatmap(data, style):
+            let visible = data.filter { (leftEdge - 2)...rightEdge ~= $0.time }
+            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let rowCount = max((data.map(\.row).max() ?? 0) + 1, style.rowLabels.count, 1)
+            return RenderData(
+                primaryVisible: [],
+                rangePoints: source.map { LivelinePoint(time: $0.time, value: $0.value) },
+                rangeOverride: source.isEmpty ? nil : -0.5...Double(rowCount) - 0.5,
+                primaryValue: data.last?.value ?? 0
+            )
+
+        case let .radar(data, style):
+            let hasData = data.count >= 3
+            let average = data.isEmpty ? 0 : data.map(\.value).reduce(0, +) / Double(data.count)
+            return RenderData(
+                primaryVisible: [],
+                rangePoints: hasData ? [LivelinePoint(time: 0, value: average)] : [],
+                rangeOverride: style.range,
+                primaryValue: average
+            )
+
+        case let .donut(data, _):
+            let total = data.map(\.value).reduce(0, +)
+            return RenderData(
+                primaryVisible: [],
+                rangePoints: total > 0 ? [LivelinePoint(time: 0, value: total)] : [],
+                rangeOverride: 0...max(total, 1),
+                primaryValue: total
+            )
+
+        case let .gauge(value, range, _):
+            let resolvedValue = value.isFinite ? value : range.lowerBound
+            return RenderData(
+                primaryVisible: [],
+                rangePoints: [LivelinePoint(time: 0, value: resolvedValue)],
+                rangeOverride: range.lowerBound == range.upperBound
+                    ? (range.lowerBound - 0.5)...(range.upperBound + 0.5)
+                    : range,
+                primaryValue: resolvedValue
+            )
+
+        case let .funnel(data, _):
+            let positive = data.filter { $0.value > 0 }
+            let lastValue = positive.last?.value ?? 0
+            return RenderData(
+                primaryVisible: [],
+                rangePoints: positive.isEmpty ? [] : [LivelinePoint(time: 0, value: lastValue)],
+                rangeOverride: 0...max(positive.map(\.value).max() ?? 1, 1),
+                primaryValue: lastValue
             )
 
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
@@ -3036,7 +3276,9 @@ private extension LivelineChartContent {
         switch self {
         case .line, .candle:
             return true
-        case .bars, .range, .scatter, .steps, .lollipops, .bubbles, .boxPlots, .waterfall, .series:
+        case .bars, .range, .scatter, .steps, .lollipops, .bubbles, .boxPlots, .waterfall,
+             .errorBars, .dumbbells, .stackedBars, .stackedAreas, .timeline, .heatmap,
+             .radar, .donut, .gauge, .funnel, .series:
             return false
         }
     }
@@ -3046,17 +3288,40 @@ private extension LivelineChartContent {
         switch self {
         case .line, .candle, .series:
             return true
-        case .bars, .range, .scatter, .steps, .lollipops, .bubbles, .boxPlots, .waterfall:
+        case .bars, .range, .scatter, .steps, .lollipops, .bubbles, .boxPlots, .waterfall,
+             .errorBars, .dumbbells, .stackedBars, .stackedAreas, .timeline, .heatmap,
+             .radar, .donut, .gauge, .funnel:
             return false
         }
     }
 
     var usesDiscreteHover: Bool {
         switch self {
-        case .bars, .scatter, .steps, .lollipops, .bubbles, .boxPlots, .waterfall:
+        case .bars, .scatter, .steps, .lollipops, .bubbles, .boxPlots, .waterfall,
+             .errorBars, .dumbbells, .stackedBars, .stackedAreas:
             return true
-        case .line, .range, .candle, .series:
+        case .line, .range, .timeline, .heatmap, .radar, .donut, .gauge, .funnel, .candle, .series:
             return false
+        }
+    }
+
+    var supportsHover: Bool {
+        switch self {
+        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel:
+            return false
+        case .line, .bars, .range, .scatter, .steps, .lollipops, .bubbles, .boxPlots,
+             .waterfall, .errorBars, .dumbbells, .stackedBars, .stackedAreas, .candle, .series:
+            return true
+        }
+    }
+
+    var usesCartesianGrid: Bool {
+        switch self {
+        case .candle, .timeline, .heatmap, .radar, .donut, .gauge, .funnel:
+            return false
+        case .line, .bars, .range, .scatter, .steps, .lollipops, .bubbles, .boxPlots,
+             .waterfall, .errorBars, .dumbbells, .stackedBars, .stackedAreas, .series:
+            return true
         }
     }
 
@@ -3080,6 +3345,20 @@ private extension LivelineChartContent {
             return data.last?.time
         case let .waterfall(data, _):
             return data.last?.time
+        case let .errorBars(data, _):
+            return data.last?.time
+        case let .dumbbells(data, _):
+            return data.last?.time
+        case let .stackedBars(data, _):
+            return data.last?.time
+        case let .stackedAreas(data, _):
+            return data.last?.time
+        case let .timeline(data, _):
+            return data.map(\.end).max()
+        case let .heatmap(data, _):
+            return data.last?.time
+        case .radar, .donut, .gauge, .funnel:
+            return nil
         case let .candle(data, _, candles, candleWidth, liveCandle, lineData, _):
             let liveTickTime = [
                 data.last?.time,

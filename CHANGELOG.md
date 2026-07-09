@@ -4,6 +4,7 @@
 
 - Adds customizable time-based bar, range-band, and scatter charts with six deterministic Storybook variants.
 - Adds step, lollipop, bubble, box-plot, and waterfall charts with typed customization, normalization tests, and ten deterministic Storybook variants.
+- Adds error-bar, dumbbell, stacked-bar, stacked-area, timeline, heatmap, radar, donut, gauge, and funnel charts with typed customization and twenty deterministic Storybook variants.
 - Improves single-range rendering, formatter-aware grid labels, and empty-state contrast following visual edge-case review.
 - Adds Swift Package Index metadata for public DocC hosting.
 - Bundles an empty privacy manifest with the Swift package target.

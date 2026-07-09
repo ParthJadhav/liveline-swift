@@ -23,6 +23,86 @@ LivelineChart(
 .frame(height: 260)
 ```
 
+## Error Bars and Dumbbells
+
+```swift
+LivelineChart(
+    errorBars: estimates.map {
+        LivelineErrorBarPoint(time: $0.time, value: $0.mean, lower: $0.p10, upper: $0.p90)
+    },
+    style: LivelineErrorBarStyle(capWidth: 12, pointSymbol: .diamond)
+)
+
+LivelineChart(
+    dumbbells: comparisons.map {
+        LivelineDumbbellPoint(time: $0.time, start: $0.before, end: $0.after)
+    },
+    style: LivelineDumbbellStyle(startColor: .orange, endColor: .blue, showsDirection: true)
+)
+```
+
+## Stacked Bars and Areas
+
+```swift
+let stacks = buckets.map { LivelineStackedPoint(time: $0.time, values: $0.segments) }
+
+LivelineChart(
+    stackedBars: stacks,
+    style: LivelineStackedBarStyle(mode: .normalized, colors: [.blue, .purple, .cyan])
+)
+
+LivelineChart(
+    stackedAreas: stacks,
+    style: LivelineStackedAreaStyle(colors: [.blue, .purple, .cyan], fillOpacity: 0.6)
+)
+```
+
+Normalized stacks use a `0...1` value domain. Supply a percentage `formatValue` closure when grid labels should display `0...100%`.
+
+## Timeline and Heatmap
+
+```swift
+LivelineChart(
+    timeline: workItems,
+    style: LivelineTimelineStyle(colors: [.blue, .green, .orange], showsLabels: true)
+)
+
+LivelineChart(
+    heatmap: cells,
+    style: LivelineHeatmapStyle(rowLabels: ["US", "EU", "APAC"], showsValues: true),
+    configuration: LivelineChartConfiguration(padding: LivelinePadding(left: 48))
+)
+```
+
+## Radar and Donut
+
+```swift
+LivelineChart(
+    radar: profile,
+    style: LivelineRadarStyle(range: 0...100, gridLevels: 5, fillOpacity: 0.2)
+)
+
+LivelineChart(
+    donut: revenueMix,
+    style: LivelineDonutStyle(innerRadiusRatio: 0.65, gapDegrees: 3, showsValues: true)
+)
+```
+
+## Gauge and Funnel
+
+```swift
+LivelineChart(
+    gauge: 72,
+    range: 0...100,
+    style: LivelineGaugeStyle(target: 80, showsTicks: true)
+)
+
+LivelineChart(
+    funnel: conversionStages,
+    style: LivelineFunnelStyle(maximumWidthRatio: 0.9, spacing: 4, showsValues: true)
+)
+```
+
 ## Candlestick With Built-In Mode Toggle
 
 ```swift

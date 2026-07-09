@@ -1,6 +1,6 @@
 # Liveline Swift
 
-Native SwiftUI real-time charts for iOS apps. Liveline renders animated line, candlestick, multi-series, bar, range-band, scatter, step, lollipop, bubble, box-plot, and waterfall charts with smooth value interpolation, scrubbing, time windows, loading/empty states, and optional market-style effects.
+Native SwiftUI real-time charts for iOS apps. Liveline includes line, candlestick, multi-series, bar, range-band, scatter, step, lollipop, bubble, box-plot, waterfall, error-bar, dumbbell, stacked-bar, stacked-area, timeline, heatmap, radar, donut, gauge, and funnel renderers with typed customization.
 
 <p align="center">
   <img src="Media/readme/cover.png" alt="Liveline Swift cover showing line, candlestick, and multi-series charts" />
@@ -164,6 +164,31 @@ LivelineChart(boxPlots: summaries, style: LivelineBoxPlotStyle(fillOpacity: 0.2)
 LivelineChart(waterfall: deltas, style: LivelineWaterfallStyle(initialValue: 100))
 ```
 
+Uncertainty, comparison, and stacks:
+
+```swift
+LivelineChart(errorBars: estimates, style: LivelineErrorBarStyle(pointSymbol: .diamond))
+LivelineChart(dumbbells: comparisons, style: LivelineDumbbellStyle(showsDirection: true))
+LivelineChart(stackedBars: stacks, style: LivelineStackedBarStyle(mode: .normalized))
+LivelineChart(stackedAreas: stacks, style: LivelineStackedAreaStyle(colors: palette))
+```
+
+Intervals and matrices:
+
+```swift
+LivelineChart(timeline: work, style: LivelineTimelineStyle(showsLabels: true))
+LivelineChart(heatmap: cells, style: LivelineHeatmapStyle(rowLabels: regions))
+```
+
+Radial and categorical charts:
+
+```swift
+LivelineChart(radar: profile, style: LivelineRadarStyle(range: 0...100))
+LivelineChart(donut: mix, style: LivelineDonutStyle(innerRadiusRatio: 0.65))
+LivelineChart(gauge: 72, range: 0...100, style: LivelineGaugeStyle(target: 80))
+LivelineChart(funnel: stages, style: LivelineFunnelStyle(showsValues: true))
+```
+
 ## Features
 
 - SwiftUI `Canvas` rendering, no WebView and no JavaScript bridge
@@ -185,6 +210,15 @@ LivelineChart(waterfall: deltas, style: LivelineWaterfallStyle(initialValue: 100
 - Bubble charts with area or diameter magnitude scaling
 - Time-based box plots with normalized five-number summaries
 - Cumulative waterfall charts with signed colors, connectors, and configurable initial value
+- Error bars with capped bounds and configurable estimate symbols
+- Dumbbell comparisons with endpoint colors and optional direction chevrons
+- Signed or normalized stacked bars and stacked areas with custom segment palettes
+- Multi-lane timelines with interval labels and lane guides
+- Time-row heatmaps with labels, intensity ranges, and optional cell values
+- Radar charts with configurable domains, grid levels, labels, fill, and markers
+- Donut charts with configurable ring thickness, gaps, palettes, and labels
+- Radial gauges with custom sweeps, tracks, ticks, targets, and value labels
+- Funnel charts with configurable widths, spacing, palettes, labels, and values
 - Reference line and orderbook stream labels
 
 ## Example App

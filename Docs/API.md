@@ -23,6 +23,16 @@ LivelineChart(lollipops:color:style:configuration:)
 LivelineChart(bubbles:color:style:configuration:)
 LivelineChart(boxPlots:color:style:configuration:)
 LivelineChart(waterfall:color:style:configuration:)
+LivelineChart(errorBars:color:style:configuration:)
+LivelineChart(dumbbells:color:style:configuration:)
+LivelineChart(stackedBars:color:style:configuration:)
+LivelineChart(stackedAreas:color:style:configuration:)
+LivelineChart(timeline:color:style:configuration:)
+LivelineChart(heatmap:color:style:configuration:)
+LivelineChart(radar:color:style:configuration:)
+LivelineChart(donut:color:style:configuration:)
+LivelineChart(gauge:range:color:style:configuration:)
+LivelineChart(funnel:color:style:configuration:)
 ```
 
 ## Data Types
@@ -75,6 +85,20 @@ LivelineBoxPlotPoint(
 ```
 
 Five-number summaries normalize into ascending order during initialization.
+
+Extended data types:
+
+```swift
+LivelineErrorBarPoint(time: unixSeconds, value: 42, lower: 38, upper: 47)
+LivelineDumbbellPoint(time: unixSeconds, start: 38, end: 47)
+LivelineStackedPoint(time: unixSeconds, values: [18, 12, 7])
+LivelineTimelineItem(id: "build", label: "Build", start: start, end: end, lane: 0)
+LivelineHeatmapCell(time: unixSeconds, row: 2, value: 0.84)
+LivelineRadarPoint(label: "Speed", value: 84)
+LivelineCategoryValue(id: "pro", label: "Pro", value: 42)
+```
+
+Error bounds, reversed timeline intervals, negative lanes, non-finite stacked values, heatmap rows, and negative categorical values are normalized at initialization.
 
 ## Chart Styles
 
@@ -135,10 +159,64 @@ LivelineWaterfallStyle(
     connectorLineWidth: 1,
     showsConnectors: true
 )
+
+LivelineErrorBarStyle(capWidth: 12, lineWidth: 1.5, pointSize: 8, pointSymbol: .diamond)
+
+LivelineDumbbellStyle(
+    lineWidth: 2,
+    pointSize: 9,
+    startColor: .orange,
+    endColor: .blue,
+    showsDirection: true
+)
+
+LivelineStackedBarStyle(
+    mode: .normalized,
+    widthRatio: 0.8,
+    cornerRadius: 2,
+    segmentSpacing: 1,
+    colors: [.blue, .purple, .cyan]
+)
+
+LivelineStackedAreaStyle(
+    mode: .standard,
+    colors: [.blue, .purple, .cyan],
+    fillOpacity: 0.62,
+    boundaryLineWidth: 1
+)
+
+LivelineTimelineStyle(barHeightRatio: 0.62, cornerRadius: 5, showsLabels: true)
+
+LivelineHeatmapStyle(
+    rowLabels: ["US", "EU", "APAC"],
+    minimumOpacity: 0.1,
+    maximumOpacity: 0.95,
+    showsValues: false
+)
+
+LivelineRadarStyle(range: 0...100, gridLevels: 5, fillOpacity: 0.2, showsLabels: true)
+
+LivelineDonutStyle(innerRadiusRatio: 0.6, gapDegrees: 2, showsLabels: true)
+
+LivelineGaugeStyle(
+    startAngleDegrees: 150,
+    sweepDegrees: 240,
+    lineWidth: 18,
+    target: 80,
+    showsTicks: true
+)
+
+LivelineFunnelStyle(
+    maximumWidthRatio: 0.88,
+    minimumWidthRatio: 0.18,
+    spacing: 4,
+    showsLabels: true,
+    showsValues: true
+)
 ```
 
 Scatter symbols are `.circle`, `.square`, and `.diamond`. Connections are `.none`, `.straight`, and `.curved`.
-Step positions are `.leading`, `.center`, and `.trailing`. Bubble scales are `.area` and `.diameter`. Invalid sizes, widths, opacities, magnitudes, and reversed statistical summaries are normalized before drawing.
+Step positions are `.leading`, `.center`, and `.trailing`. Bubble scales are `.area` and `.diameter`. Stack modes are `.standard` and `.normalized`. Invalid sizes, widths, opacities, magnitudes, and reversed statistical summaries are normalized before drawing.
 
 ## Configuration
 

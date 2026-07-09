@@ -241,6 +241,124 @@ final class LivelineMathTests: XCTestCase {
         XCTAssertEqual(charts.count, 8)
     }
 
+    func testErrorBarAndTimelineInputsNormalizeBounds() {
+        let error = LivelineErrorBarPoint(time: 10, value: 20, lower: 14, upper: 6)
+        XCTAssertEqual(error.lower, 6)
+        XCTAssertEqual(error.upper, 14)
+        XCTAssertEqual(error.value, 14)
+
+        let interval = LivelineTimelineItem(id: "deploy", label: "Deploy", start: 30, end: 10, lane: -2)
+        XCTAssertEqual(interval.start, 10)
+        XCTAssertEqual(interval.end, 30)
+        XCTAssertEqual(interval.lane, 0)
+    }
+
+    func testStackedSegmentsSupportSignedAndNormalizedValues() {
+        XCTAssertEqual(
+            LivelineMath.stackedSegments(values: [3, 2, -4, -1], mode: .standard),
+            [
+                LivelineStackSegment(lower: 0, upper: 3),
+                LivelineStackSegment(lower: 3, upper: 5),
+                LivelineStackSegment(lower: -4, upper: 0),
+                LivelineStackSegment(lower: -5, upper: -4),
+            ]
+        )
+
+        XCTAssertEqual(
+            LivelineMath.stackedSegments(values: [3, 1, -2, -2], mode: .normalized),
+            [
+                LivelineStackSegment(lower: 0, upper: 0.75),
+                LivelineStackSegment(lower: 0.75, upper: 1),
+                LivelineStackSegment(lower: -0.5, upper: 0),
+                LivelineStackSegment(lower: -1, upper: -0.5),
+            ]
+        )
+    }
+
+    func testStackedRangeIncludesPositiveAndNegativeTotals() {
+        let points = [LivelineStackedPoint(time: 10, values: [4, -3, 2, -5])]
+        let range = LivelineMath.stackedRangePoints(points: points, mode: .standard)
+
+        XCTAssertEqual(range, [
+            LivelinePoint(time: 10, value: -8),
+            LivelinePoint(time: 10, value: 6),
+        ])
+        XCTAssertEqual(LivelineMath.stackedPrimaryValue(point: points[0], mode: .standard), -2)
+        XCTAssertEqual(LivelineMath.stackedPrimaryValue(point: points[0], mode: .normalized), 1)
+    }
+
+    func testGaugeAndHeatmapMathClampToVisibleRanges() {
+        XCTAssertEqual(LivelineMath.gaugeProgress(value: -20, range: 0...100), 0)
+        XCTAssertEqual(LivelineMath.gaugeProgress(value: 35, range: 0...100), 0.35, accuracy: 0.0001)
+        XCTAssertEqual(LivelineMath.gaugeProgress(value: 140, range: 0...100), 1)
+
+        XCTAssertEqual(
+            LivelineMath.heatmapOpacity(value: 25, minimum: 0, maximum: 100, minimumOpacity: 0.2, maximumOpacity: 1),
+            0.4,
+            accuracy: 0.0001
+        )
+    }
+
+    func testExtendedModelsAndStylesNormalizeInvalidInput() {
+        let cell = LivelineHeatmapCell(time: 10, row: -4, value: .infinity)
+        XCTAssertEqual(cell.row, 0)
+        XCTAssertEqual(cell.value, 0)
+
+        let category = LivelineCategoryValue(id: "lost", label: "Lost", value: -4)
+        XCTAssertEqual(category.value, 0)
+
+        let errorStyle = LivelineErrorBarStyle(capWidth: -1, lineWidth: -2, pointSize: 0, fillOpacity: 5)
+        XCTAssertEqual(errorStyle.resolvedCapWidth, 1)
+        XCTAssertEqual(errorStyle.resolvedLineWidth, 0)
+        XCTAssertEqual(errorStyle.resolvedPointSize, 2)
+        XCTAssertEqual(errorStyle.resolvedFillOpacity, 1)
+
+        let heatmapStyle = LivelineHeatmapStyle(
+            minimumOpacity: -1,
+            maximumOpacity: 4,
+            cellWidthRatio: 0,
+            cellHeightRatio: 3,
+            cornerRadius: -2
+        )
+        XCTAssertEqual(heatmapStyle.resolvedMinimumOpacity, 0)
+        XCTAssertEqual(heatmapStyle.resolvedMaximumOpacity, 1)
+        XCTAssertEqual(heatmapStyle.resolvedCellWidthRatio, 0.05)
+        XCTAssertEqual(heatmapStyle.resolvedCellHeightRatio, 1)
+        XCTAssertEqual(heatmapStyle.resolvedCornerRadius, 0)
+    }
+
+    func testExtendedChartInitializersConstructViews() {
+        let error = [LivelineErrorBarPoint(time: 10, value: 5, lower: 3, upper: 7)]
+        let dumbbell = [LivelineDumbbellPoint(time: 10, start: 3, end: 7)]
+        let stack = [LivelineStackedPoint(time: 10, values: [2, 3])]
+        let timeline = [LivelineTimelineItem(id: "a", label: "A", start: 8, end: 12, lane: 0)]
+        let heatmap = [LivelineHeatmapCell(time: 10, row: 0, value: 0.8)]
+        let radar = [
+            LivelineRadarPoint(label: "A", value: 0.4),
+            LivelineRadarPoint(label: "B", value: 0.7),
+            LivelineRadarPoint(label: "C", value: 0.5),
+        ]
+        let categories = [
+            LivelineCategoryValue(id: "a", label: "A", value: 4),
+            LivelineCategoryValue(id: "b", label: "B", value: 2),
+        ]
+
+        let charts = [
+            LivelineChart(errorBars: error),
+            LivelineChart(dumbbells: dumbbell),
+            LivelineChart(stackedBars: stack),
+            LivelineChart(stackedAreas: stack),
+            LivelineChart(timeline: timeline),
+            LivelineChart(heatmap: heatmap),
+            LivelineChart(radar: radar),
+            LivelineChart(donut: categories),
+            LivelineChart(gauge: 0.7),
+            LivelineChart(funnel: categories),
+        ]
+
+        XCTAssertEqual(charts.count, 10)
+    }
+
     func testInterpolateFindsValueInsideSeries() {
         let points = [
             LivelinePoint(time: 10, value: 100),

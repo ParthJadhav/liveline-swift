@@ -4,7 +4,7 @@ Animated real-time SwiftUI charts for Apple apps.
 
 ## Overview
 
-Liveline renders line, candlestick, multi-series, bar, range-band, scatter, step, lollipop, bubble, box-plot, and waterfall charts with SwiftUI `Canvas`.
+Liveline renders twenty-one typed line, financial, statistical, time-series, matrix, radial, and categorical chart forms with SwiftUI `Canvas`.
 It is designed for live data streams such as prices, telemetry, scores, or metrics.
 
 Use ``LivelineChart`` as the main view:
@@ -26,6 +26,13 @@ LivelineChart(data: points, value: latest)
 - ``LivelineRangePoint``
 - ``LivelineBubblePoint``
 - ``LivelineBoxPlotPoint``
+- ``LivelineErrorBarPoint``
+- ``LivelineDumbbellPoint``
+- ``LivelineStackedPoint``
+- ``LivelineTimelineItem``
+- ``LivelineHeatmapCell``
+- ``LivelineRadarPoint``
+- ``LivelineCategoryValue``
 - ``LivelineCandle``
 - ``LivelineSeries``
 
@@ -44,3 +51,13 @@ LivelineChart(data: points, value: latest)
 - ``LivelineBubbleStyle``
 - ``LivelineBoxPlotStyle``
 - ``LivelineWaterfallStyle``
+- ``LivelineErrorBarStyle``
+- ``LivelineDumbbellStyle``
+- ``LivelineStackedBarStyle``
+- ``LivelineStackedAreaStyle``
+- ``LivelineTimelineStyle``
+- ``LivelineHeatmapStyle``
+- ``LivelineRadarStyle``
+- ``LivelineDonutStyle``
+- ``LivelineGaugeStyle``
+- ``LivelineFunnelStyle``

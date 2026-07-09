@@ -98,6 +98,26 @@ enum StorybookCatalog {
         boxPlotMinimal,
         waterfallBasic,
         waterfallNoConnectors,
+        errorBarBasic,
+        errorBarDiamond,
+        dumbbellBasic,
+        dumbbellDirectional,
+        stackedBarBasic,
+        stackedBarNormalized,
+        stackedAreaBasic,
+        stackedAreaNormalized,
+        timelineBasic,
+        timelineCompact,
+        heatmapBasic,
+        heatmapValues,
+        radarBasic,
+        radarMinimal,
+        donutBasic,
+        donutThin,
+        gaugeBasic,
+        gaugeTarget,
+        funnelBasic,
+        funnelCompact,
     ]
 
     static func scenario(id: String) -> StorybookScenario? {
@@ -830,6 +850,359 @@ private extension StorybookCatalog {
         )
     }
 
+    static let errorBarBasic = chart(
+        id: "errorbar-basic",
+        group: "Error bar",
+        title: "Confidence Intervals",
+        detail: "Central estimates with capped uncertainty bounds.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            errorBars: StorybookData.errorBars,
+            color: StorybookData.cyan,
+            style: LivelineErrorBarStyle(capWidth: 11, lineWidth: 1.5, pointSize: 7),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: " ms")
+        )
+    }
+
+    static let errorBarDiamond = chart(
+        id: "errorbar-diamond",
+        group: "Error bar",
+        title: "Forecast Bounds",
+        detail: "Diamond estimates with wide, lightly filled caps.",
+        background: .white
+    ) {
+        LivelineChart(
+            errorBars: StorybookData.errorBars,
+            color: StorybookData.orange,
+            style: LivelineErrorBarStyle(capWidth: 16, lineWidth: 2, pointSize: 9, pointSymbol: .diamond, fillOpacity: 0.18),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: " ms")
+        )
+    }
+
+    static let dumbbellBasic = chart(
+        id: "dumbbell-basic",
+        group: "Dumbbell",
+        title: "Before and After",
+        detail: "Paired values connected across each time bucket.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            dumbbells: StorybookData.dumbbells,
+            color: StorybookData.green,
+            style: LivelineDumbbellStyle(lineWidth: 2, pointSize: 9, startColor: StorybookData.violet),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "%")
+        )
+    }
+
+    static let dumbbellDirectional = chart(
+        id: "dumbbell-directional",
+        group: "Dumbbell",
+        title: "Directional Change",
+        detail: "Square endpoints and direction chevrons emphasize movement.",
+        background: .white
+    ) {
+        LivelineChart(
+            dumbbells: StorybookData.dumbbells,
+            color: StorybookData.blue,
+            style: LivelineDumbbellStyle(
+                lineWidth: 3,
+                pointSize: 10,
+                pointSymbol: .square,
+                startColor: StorybookData.orange,
+                endColor: StorybookData.blue,
+                showsDirection: true
+            ),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: "%")
+        )
+    }
+
+    static let stackedBarBasic = chart(
+        id: "stackedbar-basic",
+        group: "Stacked bar",
+        title: "Traffic Mix",
+        detail: "Absolute segment totals with rounded, separated stacks.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            stackedBars: StorybookData.stacked,
+            color: StorybookData.blue,
+            style: LivelineStackedBarStyle(
+                widthRatio: 0.74,
+                cornerRadius: 2,
+                segmentSpacing: 1,
+                colors: StorybookData.segmentColors
+            ),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: " k")
+        )
+    }
+
+    static let stackedBarNormalized = chart(
+        id: "stackedbar-normalized",
+        group: "Stacked bar",
+        title: "Traffic Share",
+        detail: "Each stack is normalized to 100 percent.",
+        background: .white
+    ) {
+        LivelineChart(
+            stackedBars: StorybookData.stacked,
+            color: StorybookData.blue,
+            style: LivelineStackedBarStyle(
+                mode: .normalized,
+                widthRatio: 0.88,
+                cornerRadius: 0,
+                segmentSpacing: 0,
+                colors: StorybookData.segmentColors,
+                showsBaseline: false
+            ),
+            configuration: StorybookData.normalizedSnapshotConfig(theme: .light, window: 180)
+        )
+    }
+
+    static let stackedAreaBasic = chart(
+        id: "stackedarea-basic",
+        group: "Stacked area",
+        title: "Service Volume",
+        detail: "Layered absolute volumes with visible boundaries.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            stackedAreas: StorybookData.stackedArea,
+            color: StorybookData.blue,
+            style: LivelineStackedAreaStyle(colors: StorybookData.segmentColors, fillOpacity: 0.55, boundaryLineWidth: 1.25),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: " k")
+        )
+    }
+
+    static let stackedAreaNormalized = chart(
+        id: "stackedarea-normalized",
+        group: "Stacked area",
+        title: "Service Share",
+        detail: "Normalized layers show composition rather than magnitude.",
+        background: .white
+    ) {
+        LivelineChart(
+            stackedAreas: StorybookData.stackedArea,
+            color: StorybookData.blue,
+            style: LivelineStackedAreaStyle(
+                mode: .normalized,
+                colors: StorybookData.segmentColors,
+                fillOpacity: 0.72,
+                boundaryLineWidth: 0,
+                showsBaseline: false
+            ),
+            configuration: StorybookData.normalizedSnapshotConfig(theme: .light, window: 180)
+        )
+    }
+
+    static let timelineBasic = chart(
+        id: "timeline-basic",
+        group: "Timeline",
+        title: "Release Pipeline",
+        detail: "Overlapping work intervals arranged across lanes.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            timeline: StorybookData.timeline,
+            color: StorybookData.cyan,
+            style: LivelineTimelineStyle(colors: StorybookData.segmentColors, showsLabels: true),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "")
+        )
+    }
+
+    static let timelineCompact = chart(
+        id: "timeline-compact",
+        group: "Timeline",
+        title: "Compact Schedule",
+        detail: "Slim square intervals without lane guides.",
+        background: .white
+    ) {
+        LivelineChart(
+            timeline: StorybookData.timeline,
+            color: StorybookData.orange,
+            style: LivelineTimelineStyle(barHeightRatio: 0.36, cornerRadius: 0, colors: [StorybookData.orange], showsLabels: false, showsLaneGuides: false),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: "")
+        )
+    }
+
+    static let heatmapBasic = chart(
+        id: "heatmap-basic",
+        group: "Heatmap",
+        title: "Regional Load",
+        detail: "Color intensity tracks load across time and regions.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            heatmap: StorybookData.heatmap,
+            color: StorybookData.violet,
+            style: LivelineHeatmapStyle(rowLabels: ["US", "EU", "APAC", "LATAM"], color: StorybookData.violet),
+            configuration: StorybookData.staticSnapshotConfig(
+                theme: .dark,
+                window: 180,
+                suffix: "%",
+                padding: LivelinePadding(left: 50)
+            )
+        )
+    }
+
+    static let heatmapValues = chart(
+        id: "heatmap-values",
+        group: "Heatmap",
+        title: "Annotated Matrix",
+        detail: "Wide cells display their rounded intensity values.",
+        background: .white
+    ) {
+        LivelineChart(
+            heatmap: StorybookData.heatmapSparse,
+            color: StorybookData.teal,
+            style: LivelineHeatmapStyle(
+                rowLabels: ["API", "Jobs", "DB"],
+                color: StorybookData.teal,
+                minimumOpacity: 0.08,
+                cellWidthRatio: 0.94,
+                cellHeightRatio: 0.74,
+                cornerRadius: 5,
+                showsValues: true
+            ),
+            configuration: StorybookData.staticSnapshotConfig(
+                theme: .light,
+                window: 180,
+                suffix: "%",
+                padding: LivelinePadding(left: 50)
+            )
+        )
+    }
+
+    static let radarBasic = chart(
+        id: "radar-basic",
+        group: "Radar",
+        title: "System Profile",
+        detail: "Six labeled axes with filled performance coverage.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            radar: StorybookData.radar,
+            color: StorybookData.cyan,
+            style: LivelineRadarStyle(range: 0...100, gridLevels: 5, fillOpacity: 0.22, lineWidth: 2, pointSize: 5),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "%")
+        )
+    }
+
+    static let radarMinimal = chart(
+        id: "radar-minimal",
+        group: "Radar",
+        title: "Minimal Profile",
+        detail: "Three grid levels without labels or point markers.",
+        background: .white
+    ) {
+        LivelineChart(
+            radar: StorybookData.radar,
+            color: StorybookData.orange,
+            style: LivelineRadarStyle(range: 0...100, gridLevels: 3, fillOpacity: 0.10, lineWidth: 3, pointSize: 0, showsLabels: false),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: "%")
+        )
+    }
+
+    static let donutBasic = chart(
+        id: "donut-basic",
+        group: "Donut",
+        title: "Revenue Mix",
+        detail: "Categorical composition with an aggregate center value.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            donut: StorybookData.categories,
+            color: StorybookData.blue,
+            style: LivelineDonutStyle(innerRadiusRatio: 0.58, gapDegrees: 3, colors: StorybookData.segmentColors),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: " k")
+        )
+    }
+
+    static let donutThin = chart(
+        id: "donut-thin",
+        group: "Donut",
+        title: "Thin Ring Breakdown",
+        detail: "A thin ring with value-bearing outside labels.",
+        background: .white
+    ) {
+        LivelineChart(
+            donut: StorybookData.categories,
+            color: StorybookData.violet,
+            style: LivelineDonutStyle(innerRadiusRatio: 0.78, gapDegrees: 1, colors: StorybookData.segmentColors, showsLabels: true, showsValues: true),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: " k")
+        )
+    }
+
+    static let gaugeBasic = chart(
+        id: "gauge-basic",
+        group: "Gauge",
+        title: "Capacity",
+        detail: "A 240-degree radial progress gauge with ticks.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            gauge: 72,
+            range: 0...100,
+            color: StorybookData.green,
+            style: LivelineGaugeStyle(lineWidth: 20, trackOpacity: 0.18),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "%")
+        )
+    }
+
+    static let gaugeTarget = chart(
+        id: "gauge-target",
+        group: "Gauge",
+        title: "SLA Target",
+        detail: "A wide sweep with an explicit target marker.",
+        background: .white
+    ) {
+        LivelineChart(
+            gauge: 91.4,
+            range: 0...100,
+            color: StorybookData.blue,
+            style: LivelineGaugeStyle(startAngleDegrees: 180, sweepDegrees: 180, lineWidth: 14, trackOpacity: 0.10, target: 95, showsTicks: false),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: "%")
+        )
+    }
+
+    static let funnelBasic = chart(
+        id: "funnel-basic",
+        group: "Funnel",
+        title: "Conversion Funnel",
+        detail: "Stage widths preserve absolute conversion volume.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            funnel: StorybookData.funnel,
+            color: StorybookData.blue,
+            style: LivelineFunnelStyle(colors: StorybookData.segmentColors),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "")
+        )
+    }
+
+    static let funnelCompact = chart(
+        id: "funnel-compact",
+        group: "Funnel",
+        title: "Compact Stages",
+        detail: "Tightly spaced square stages with labels only.",
+        background: .white
+    ) {
+        LivelineChart(
+            funnel: StorybookData.funnel,
+            color: StorybookData.orange,
+            style: LivelineFunnelStyle(
+                maximumWidthRatio: 0.76,
+                minimumWidthRatio: 0.24,
+                spacing: 1,
+                cornerRadius: 0,
+                colors: [StorybookData.orange, StorybookData.red],
+                showsLabels: true,
+                showsValues: false
+            ),
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: "")
+        )
+    }
+
     static func chart<V: View>(
         id: String,
         group: String,
@@ -870,6 +1243,7 @@ enum StorybookData {
     static let violet = Color(red: 139 / 255, green: 92 / 255, blue: 246 / 255)
     static let indigo = Color(red: 99 / 255, green: 102 / 255, blue: 241 / 255)
     static let teal = Color(red: 20 / 255, green: 184 / 255, blue: 166 / 255)
+    static let segmentColors = [blue, violet, cyan, green, orange, red]
     static let baseTime: TimeInterval = 1_788_888_000
     static var orderbookReferenceRandomState: UInt32 {
         StorybookLaunch.orderbookSeedFromArguments() ?? 12_345
@@ -1006,6 +1380,121 @@ enum StorybookData {
         }
     }
 
+    static var errorBars: [LivelineErrorBarPoint] {
+        (0..<12).map { index in
+            let t = Double(index)
+            let value = 72 + sin(t * 0.64) * 9 + cos(t * 0.23) * 4
+            let spread = 4 + Double(index % 4) * 1.3
+            return LivelineErrorBarPoint(
+                time: baseTime - Double(11 - index) * 15,
+                value: value,
+                lower: value - spread,
+                upper: value + spread * 0.8
+            )
+        }
+    }
+
+    static var dumbbells: [LivelineDumbbellPoint] {
+        (0..<12).map { index in
+            let t = Double(index)
+            let start = 58 + sin(t * 0.52) * 8
+            let change = 7 + cos(t * 0.81) * 6 - (index % 4 == 0 ? 10 : 0)
+            return LivelineDumbbellPoint(
+                time: baseTime - Double(11 - index) * 15,
+                start: start,
+                end: start + change
+            )
+        }
+    }
+
+    static var stacked: [LivelineStackedPoint] {
+        (0..<12).map { index in
+            let t = Double(index)
+            return LivelineStackedPoint(
+                time: baseTime - Double(11 - index) * 15,
+                values: [
+                    20 + sin(t * 0.43) * 7,
+                    13 + cos(t * 0.61) * 5,
+                    8 + sin(t * 0.77 + 1) * 4,
+                ]
+            )
+        }
+    }
+
+    static var stackedArea: [LivelineStackedPoint] {
+        (0..<25).map { index in
+            let t = Double(index)
+            return LivelineStackedPoint(
+                time: baseTime - Double(24 - index) * 7,
+                values: [
+                    18 + sin(t * 0.28) * 6,
+                    12 + cos(t * 0.34 + 0.8) * 4,
+                    7 + sin(t * 0.47 + 1.7) * 3,
+                ]
+            )
+        }
+    }
+
+    static var timeline: [LivelineTimelineItem] {
+        [
+            LivelineTimelineItem(id: "design", label: "Design", start: baseTime - 170, end: baseTime - 118, lane: 0),
+            LivelineTimelineItem(id: "api", label: "API", start: baseTime - 148, end: baseTime - 82, lane: 1),
+            LivelineTimelineItem(id: "ios", label: "iOS", start: baseTime - 126, end: baseTime - 54, lane: 2),
+            LivelineTimelineItem(id: "qa", label: "QA", start: baseTime - 78, end: baseTime - 30, lane: 0),
+            LivelineTimelineItem(id: "docs", label: "Docs", start: baseTime - 65, end: baseTime - 18, lane: 1),
+            LivelineTimelineItem(id: "ship", label: "Ship", start: baseTime - 38, end: baseTime - 8, lane: 2),
+        ]
+    }
+
+    static var heatmap: [LivelineHeatmapCell] {
+        (0..<12).flatMap { column in
+            (0..<4).map { row in
+                let value = 20 + Double((column * 17 + row * 23) % 68) + sin(Double(column + row) * 0.7) * 8
+                return LivelineHeatmapCell(
+                    time: baseTime - Double(11 - column) * 15,
+                    row: row,
+                    value: value
+                )
+            }
+        }
+    }
+
+    static var heatmapSparse: [LivelineHeatmapCell] {
+        var cells: [LivelineHeatmapCell] = []
+        for column in 0..<6 {
+            for row in 0..<3 {
+                let time = baseTime - Double(5 - column) * 30
+                let value = 18 + Double((column * 19 + row * 27) % 76)
+                cells.append(LivelineHeatmapCell(time: time, row: row, value: value))
+            }
+        }
+        return cells
+    }
+
+    static let radar = [
+        LivelineRadarPoint(label: "Speed", value: 84),
+        LivelineRadarPoint(label: "Uptime", value: 96),
+        LivelineRadarPoint(label: "Cost", value: 61),
+        LivelineRadarPoint(label: "Scale", value: 78),
+        LivelineRadarPoint(label: "DX", value: 88),
+        LivelineRadarPoint(label: "Safety", value: 73),
+    ]
+
+    static let categories = [
+        LivelineCategoryValue(id: "pro", label: "Pro", value: 42),
+        LivelineCategoryValue(id: "team", label: "Team", value: 31),
+        LivelineCategoryValue(id: "starter", label: "Starter", value: 18),
+        LivelineCategoryValue(id: "other", label: "Other", value: 9),
+    ]
+
+    static let funnel = [
+        LivelineCategoryValue(id: "visit", label: "Visits", value: 1_000),
+        LivelineCategoryValue(id: "signup", label: "Signups", value: 680),
+        LivelineCategoryValue(id: "trial", label: "Trials", value: 420),
+        LivelineCategoryValue(id: "paid", label: "Paid", value: 240),
+        LivelineCategoryValue(id: "renew", label: "Renewed", value: 172),
+    ]
+
     static func candles(width: TimeInterval) -> (committed: [LivelineCandle], live: LivelineCandle?) {
         let source = points(.normal, count: 360)
         var candles: [LivelineCandle] = []
@@ -1088,7 +1577,8 @@ enum StorybookData {
     static func staticSnapshotConfig(
         theme: LivelineThemeMode,
         window: TimeInterval,
-        suffix: String
+        suffix: String,
+        padding: LivelinePadding = LivelinePadding()
     ) -> LivelineChartConfiguration {
         LivelineChartConfiguration(
             theme: theme,
@@ -1099,6 +1589,25 @@ enum StorybookData {
             endpointDecorations: false,
             formatValue: { value in
                 value.formatted(.number.precision(.fractionLength(0))) + suffix
+            },
+            snapshotElapsedTime: StorybookLaunch.snapshotElapsedTimeFromArguments(),
+            padding: padding
+        )
+    }
+
+    static func normalizedSnapshotConfig(
+        theme: LivelineThemeMode,
+        window: TimeInterval
+    ) -> LivelineChartConfiguration {
+        LivelineChartConfiguration(
+            theme: theme,
+            window: window,
+            badge: false,
+            fill: false,
+            pulse: false,
+            endpointDecorations: false,
+            formatValue: { value in
+                (value * 100).formatted(.number.precision(.fractionLength(0))) + "%"
             },
             snapshotElapsedTime: StorybookLaunch.snapshotElapsedTimeFromArguments()
         )
