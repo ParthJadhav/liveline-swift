@@ -649,7 +649,7 @@ private extension LivelineRenderer {
                 context: &context,
                 at: CGPoint(x: layout.plotLeftX + layout.chartWidth / 2, y: centerY),
                 anchor: .center,
-                color: palette.gridLabel.opacity(0.35),
+                color: palette.emptyText,
                 font: font
             )
         }
@@ -714,28 +714,45 @@ private extension LivelineRenderer {
             state.gridLabelAlphas[key] = fadeEffects ? target * 0.18 : target
         }
 
-        for (key, labelAlpha) in state.gridLabelAlphas {
-            guard labelAlpha > 0.02 else { continue }
+        let visibleRows = state.gridLabelAlphas.compactMap { key, labelAlpha -> (key: Int, value: Double, y: CGFloat, alpha: Double)? in
+            guard labelAlpha > 0.02 else { return nil }
             let value = Double(key) / 1000
             let y = layout.y(for: value)
-            guard y >= layout.padding.top - 10, y <= layout.bottomY + 10 else { continue }
+            guard y >= layout.padding.top - 10, y <= layout.bottomY + 10 else { return nil }
+            return (key, value, y, labelAlpha)
+        }
+        let centerY = layout.padding.top + layout.chartHeight / 2
+        let labelKeys = LivelineMath.uniqueFormattedGridLabelKeys(
+            candidates: visibleRows.map { row in
+                let centerPreference = 1 - min(abs(row.y - centerY) / max(layout.chartHeight, 1), 1)
+                return (row.key, row.value, row.alpha + Double(centerPreference) * 0.001)
+            },
+            formatValue: formatValue
+        )
+
+        for row in visibleRows {
+            let key = row.key
+            let value = row.value
+            let y = row.y
 
             var rowLayer = layer
-            rowLayer.opacity *= labelAlpha
+            rowLayer.opacity *= row.alpha
 
             var path = Path()
             path.move(to: CGPoint(x: layout.plotLeftX, y: y))
             path.addLine(to: CGPoint(x: layout.rightX, y: y))
             rowLayer.stroke(path, with: .color(palette.gridLine), style: StrokeStyle(lineWidth: 1, dash: [1, 3]))
 
-            drawText(
-                formatValue(value),
-                context: &rowLayer,
-                at: CGPoint(x: layout.rightX + axisLabelOffsetX, y: y),
-                anchor: .leading,
-                color: palette.gridLabel,
-                font: .system(size: 11, weight: .regular, design: .monospaced)
-            )
+            if labelKeys.contains(key) {
+                drawText(
+                    formatValue(value),
+                    context: &rowLayer,
+                    at: CGPoint(x: layout.rightX + axisLabelOffsetX, y: y),
+                    anchor: .leading,
+                    color: palette.gridLabel,
+                    font: .system(size: 11, weight: .regular, design: .monospaced)
+                )
+            }
         }
     }
 
@@ -1420,6 +1437,43 @@ private extension LivelineRenderer {
         var layer = context
         layer.opacity *= alpha
         layer.clip(to: Path(CGRect(x: layout.plotLeftX, y: layout.padding.top, width: layout.chartWidth, height: layout.chartHeight)))
+
+        if upperPoints.count == 1, let upper = upperPoints.first, let lower = lowerPoints.first {
+            let markerWidth = max(style.resolvedBoundaryLineWidth * 2, 4)
+            let markerRect = LivelineMath.verticalRangeMarkerRect(
+                x: upper.x,
+                upperY: upper.y,
+                lowerY: lower.y,
+                width: markerWidth
+            )
+            let marker = Path(roundedRect: markerRect, cornerRadius: markerWidth / 2)
+
+            if style.resolvedFillOpacity > 0 {
+                layer.fill(marker, with: .color(palette.line.opacity(style.resolvedFillOpacity)))
+            }
+            if style.resolvedBoundaryLineWidth > 0 {
+                layer.stroke(
+                    marker,
+                    with: .color(palette.line),
+                    style: StrokeStyle(lineWidth: style.resolvedBoundaryLineWidth, lineCap: .round, lineJoin: .round)
+                )
+            }
+            if style.showsCenterLine, style.resolvedCenterLineWidth > 0 {
+                let diameter = max(style.resolvedCenterLineWidth * 2, 3)
+                let center = CGPoint(x: upper.x, y: (upper.y + lower.y) / 2)
+                layer.fill(
+                    Path(ellipseIn: CGRect(
+                        x: center.x - diameter / 2,
+                        y: center.y - diameter / 2,
+                        width: diameter,
+                        height: diameter
+                    )),
+                    with: .color(palette.line.opacity(0.9))
+                )
+            }
+
+            return midpointData
+        }
 
         var band = Path()
         if let first = upperPoints.first {

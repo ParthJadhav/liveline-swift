@@ -12,6 +12,45 @@ enum LivelineMath {
         min(max(value, lower), upper)
     }
 
+    static func verticalRangeMarkerRect(
+        x: CGFloat,
+        upperY: CGFloat,
+        lowerY: CGFloat,
+        width: CGFloat
+    ) -> CGRect {
+        let resolvedWidth = max(width, 1)
+        let midpoint = (upperY + lowerY) / 2
+        let height = max(abs(lowerY - upperY), resolvedWidth)
+        return CGRect(
+            x: x - resolvedWidth / 2,
+            y: midpoint - height / 2,
+            width: resolvedWidth,
+            height: height
+        )
+    }
+
+    static func uniqueFormattedGridLabelKeys(
+        candidates: [(key: Int, value: Double, priority: Double)],
+        formatValue: (Double) -> String
+    ) -> Set<Int> {
+        var selections: [String: (key: Int, priority: Double)] = [:]
+
+        for candidate in candidates {
+            let label = formatValue(candidate.value)
+            guard let current = selections[label] else {
+                selections[label] = (candidate.key, candidate.priority)
+                continue
+            }
+
+            if candidate.priority > current.priority
+                || (candidate.priority == current.priority && candidate.key < current.key) {
+                selections[label] = (candidate.key, candidate.priority)
+            }
+        }
+
+        return Set(selections.values.map(\.key))
+    }
+
     static func lerp(_ current: Double, _ target: Double, speed: Double, deltaTime: TimeInterval) -> Double {
         if speed >= 1 { return target }
         let normalized = 1 - pow(1 - speed, deltaTime / 16.667)

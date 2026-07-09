@@ -47,6 +47,36 @@ final class LivelineMathTests: XCTestCase {
         XCTAssertEqual(style.resolvedConnectionLineWidth, 0)
     }
 
+    func testSingleRangeMarkerHasVisibleAreaForIntervalAndPoint() {
+        let interval = LivelineMath.verticalRangeMarkerRect(x: 20, upperY: 10, lowerY: 40, width: 4)
+        XCTAssertEqual(interval, CGRect(x: 18, y: 10, width: 4, height: 30))
+
+        let point = LivelineMath.verticalRangeMarkerRect(x: 20, upperY: 25, lowerY: 25, width: 4)
+        XCTAssertEqual(point, CGRect(x: 18, y: 23, width: 4, height: 4))
+    }
+
+    func testGridLabelsDeduplicateFormattedValuesByPriority() {
+        let keys = LivelineMath.uniqueFormattedGridLabelKeys(
+            candidates: [
+                (key: 81_800, value: 81.8, priority: 0.4),
+                (key: 82_000, value: 82.0, priority: 0.9),
+                (key: 82_200, value: 82.2, priority: 0.7),
+                (key: 83_000, value: 83.0, priority: 0.5),
+            ],
+            formatValue: { "\(Int($0.rounded())) ms" }
+        )
+
+        XCTAssertEqual(keys, Set([82_000, 83_000]))
+    }
+
+    func testEmptyStateTextUsesReadablePaletteOpacity() {
+        let dark = LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2)
+        let light = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
+
+        XCTAssertGreaterThanOrEqual(dark.emptyText.livelineRGBA().alpha, 0.55)
+        XCTAssertGreaterThanOrEqual(light.emptyText.livelineRGBA().alpha, 0.55)
+    }
+
     func testAdditionalChartInitializersConstructViews() {
         let points = [
             LivelinePoint(time: 10, value: 4),
