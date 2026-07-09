@@ -2,6 +2,19 @@ import XCTest
 @testable import Liveline
 
 final class LivelineMathTests: XCTestCase {
+    func testBarRangePointsOnlyAddBaselineToRealData() {
+        XCTAssertTrue(LivelineMath.barRangePoints(points: [], baseline: 4).isEmpty)
+
+        let points = [
+            LivelinePoint(time: 10, value: 8),
+            LivelinePoint(time: 20, value: 12),
+        ]
+        let rangePoints = LivelineMath.barRangePoints(points: points, baseline: 4)
+
+        XCTAssertEqual(rangePoints.count, 3)
+        XCTAssertEqual(rangePoints.last, LivelinePoint(time: 20, value: 4))
+    }
+
     func testRangePointNormalizesBoundsAndExposesMidpoint() {
         let point = LivelineRangePoint(time: 10, lower: 14, upper: 6)
 

@@ -491,8 +491,8 @@ private extension LivelineRenderer {
 
         case let .bars(data, style):
             let visible = data.visible(in: (leftEdge - 2)...rightEdge)
-            var range = visible.isEmpty ? data.suffixArray(8) : visible
-            range.append(LivelinePoint(time: range.last?.time ?? rightEdge, value: style.baseline))
+            let source = visible.isEmpty ? data.suffixArray(8) : visible
+            let range = LivelineMath.barRangePoints(points: source, baseline: style.baseline)
             return RenderData(
                 primaryVisible: visible,
                 rangePoints: range,

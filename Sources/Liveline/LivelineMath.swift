@@ -3,6 +3,11 @@ import Foundation
 import SwiftUI
 
 enum LivelineMath {
+    static func barRangePoints(points: [LivelinePoint], baseline: Double) -> [LivelinePoint] {
+        guard let last = points.last else { return [] }
+        return points + [LivelinePoint(time: last.time, value: baseline)]
+    }
+
     static func clamp<T: Comparable>(_ value: T, _ lower: T, _ upper: T) -> T {
         min(max(value, lower), upper)
     }
