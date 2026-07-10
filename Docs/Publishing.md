@@ -25,8 +25,11 @@ xcodegen generate --spec Examples/LivelineDemo/project.yml
 xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
 xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
 scripts/capture-storybook.sh --chart-only
-scripts/diff-storybook.sh --fail-changed-pct 5 --fail-rms 12
+VISUAL_PARITY_EXCLUSIONS=line-show-value-windows,line-rounded-windows,line-text-windows,candle-mode-controls,multi-basic,multi-light,multi-compact,multi-two-series
+scripts/diff-storybook.sh --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12
 ```
+
+The excluded upstream scenarios place controls inside the plot's layout. Liveline Swift deliberately gives controls their own space so chart geometry and placeholders remain centered in the remaining canvas; the strict parity thresholds still cover every upstream scenario without that structural difference.
 
 When the optional platform SDK components are installed, also verify the declared package platforms:
 
@@ -41,7 +44,7 @@ xcodebuild -scheme Liveline -destination 'generic/platform=visionOS' build
 SwiftPM can consume a branch, but app teams usually prefer version tags.
 
 ```bash
-VERSION=0.1.2
+VERSION=0.2.0
 git tag "$VERSION"
 git push origin "$VERSION"
 ```
@@ -55,7 +58,7 @@ git show --stat --oneline "$VERSION"
 Then depend on:
 
 ```swift
-.package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.1.2")
+.package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.2.0")
 ```
 
 ## GitHub Release

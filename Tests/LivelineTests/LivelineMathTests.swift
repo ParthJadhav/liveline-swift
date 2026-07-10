@@ -329,6 +329,27 @@ final class LivelineMathTests: XCTestCase {
         )
     }
 
+    func testCandleContentReservesValueAxisPaddingForItsInternalGrid() {
+        let candleContent = LivelineChartContent.candle(
+            data: [],
+            value: 0,
+            candles: [],
+            candleWidth: 30,
+            liveCandle: nil,
+            lineData: [],
+            lineValue: nil
+        )
+
+        XCTAssertTrue(candleContent.usesValueAxis)
+        XCTAssertFalse(
+            LivelineChartContent.gauge(
+                value: 0.5,
+                range: 0...1,
+                style: LivelineGaugeStyle()
+            ).usesValueAxis
+        )
+    }
+
     func testIntrinsicRevealEasesStaggersAndBuildsPathPrefixes() {
         XCTAssertEqual(LivelineMath.easedReveal(0), 0)
         XCTAssertEqual(LivelineMath.easedReveal(0.5), 0.5, accuracy: 0.0001)

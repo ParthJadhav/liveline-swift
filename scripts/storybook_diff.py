@@ -15,6 +15,11 @@ def parse_args():
     parser.add_argument("--crop-x", type=int, default=48, help="Native screenshot crop origin x in device pixels.")
     parser.add_argument("--crop-y", type=int, default=234, help="Native screenshot crop origin y in device pixels.")
     parser.add_argument("--pixel-threshold", type=int, default=2, help="Per-channel delta treated as a changed pixel.")
+    parser.add_argument(
+        "--exclude-scenarios",
+        default="",
+        help="Comma-separated scenario IDs excluded from upstream parity thresholds.",
+    )
     parser.add_argument("--fail-changed-pct", type=float, default=None, help="Fail when any scenario exceeds this changed-pixel percentage.")
     parser.add_argument("--fail-rms", type=float, default=None, help="Fail when any scenario exceeds this RGB RMS delta.")
     return parser.parse_args()
@@ -67,6 +72,11 @@ def main():
     web_dir = Path(args.web_dir)
     native_dir = Path(args.native_dir)
     out_dir = Path(args.out_dir)
+    excluded_scenarios = {
+        scenario.strip()
+        for scenario in args.exclude_scenarios.split(",")
+        if scenario.strip()
+    }
 
     if not web_dir.exists():
         raise SystemExit(f"Missing web reference directory: {web_dir}")
@@ -77,6 +87,19 @@ def main():
 
     rows = []
     for reference_path in sorted(web_dir.glob("*.png")):
+        if reference_path.stem in excluded_scenarios:
+            rows.append({
+                "scenario": reference_path.stem,
+                "status": "excluded-intentional-layout",
+                "width": "",
+                "height": "",
+                "changed_pct": "",
+                "mean_abs": "",
+                "rms": "",
+                "max_delta": "",
+            })
+            continue
+
         native_path = native_dir / reference_path.name
         if not native_path.exists():
             rows.append({

@@ -1582,6 +1582,7 @@ enum StorybookData {
             badgeVariant: badgeVariant,
             fill: fill,
             pulse: pulse,
+            fadeEffects: true,
             momentum: momentum,
             exaggerate: exaggerate,
             showValue: showValue,

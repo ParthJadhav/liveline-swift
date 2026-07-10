@@ -48,6 +48,19 @@ enum LivelineChartContent {
         lineValue: Double?
     )
     case series([LivelineSeries])
+
+    /// Whether the chart renders numeric value labels when its grid is enabled.
+    /// Candles draw their grid inside `drawCandleMode`, so this deliberately
+    /// differs from `usesCartesianGrid`.
+    var usesValueAxis: Bool {
+        switch self {
+        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel:
+            return false
+        case .line, .bars, .range, .scatter, .steps, .lollipops, .bubbles, .boxPlots,
+             .waterfall, .errorBars, .dumbbells, .stackedBars, .stackedAreas, .candle, .series:
+            return true
+        }
+    }
 }
 
 enum LivelineRenderer {
@@ -85,7 +98,7 @@ enum LivelineRenderer {
         let resolvedPadding = LivelineMath.resolvedPadding(
             config.padding,
             badgeEnabled: reservesBadgePadding,
-            showValueAxis: config.grid && input.content.usesCartesianGrid,
+            showValueAxis: config.grid && input.content.usesValueAxis,
             showTimeAxis: input.content.usesTimeAxis
         )
         let anchor = anchorTime(for: input.content, timelineTimestamp: input.timestamp, window: input.activeWindow)
