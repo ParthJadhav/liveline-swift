@@ -269,37 +269,13 @@ open LivelineDemo.xcodeproj
 
 The generated project uses the local package path (`../..`). CI builds this demo target as an iOS simulator app.
 
-## Demo Recording
-
-A current simulator recording is available at [Media/liveline-demo.mp4](Media/liveline-demo.mp4).
-
-To regenerate it:
-
-```bash
-scripts/record-demo.sh
-```
-
-## Release
-
-For release verification and tagging:
-
-```bash
-swift test
-swift build -c release
-xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
-xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
-scripts/capture-storybook.sh --chart-only
-scripts/diff-storybook.sh --fail-changed-pct 5 --fail-rms 12
-```
-
-See [Docs/Publishing.md](Docs/Publishing.md) for the release checklist. Repository visibility is intentionally left unchanged by the release process.
-
 ## Documentation
 
 - [API overview](Docs/API.md)
 - [Animation model](Docs/Animations.md)
 - [Example recipes](Docs/Examples.md)
 - [Scenario matrix](Docs/ScenarioMatrix.md)
+- [Development and verification](Docs/Development.md)
 - [Visual parity status](Docs/ParityStatus.md)
 - [Publishing checklist](Docs/Publishing.md)
 - [Changelog](CHANGELOG.md)
