@@ -29,6 +29,7 @@ SCENARIOS=(
   line-degen
   line-loading
   line-empty
+  line-empty-controls
   candle-basic
   candle-light
   candle-line-mode
@@ -40,6 +41,42 @@ SCENARIOS=(
   multi-light
   multi-compact
   multi-two-series
+  bar-basic
+  bar-signed
+  range-basic
+  range-center-line
+  scatter-basic
+  scatter-connected
+  step-basic
+  step-centered
+  lollipop-basic
+  lollipop-diamond
+  bubble-basic
+  bubble-diameter
+  boxplot-basic
+  boxplot-minimal
+  waterfall-basic
+  waterfall-no-connectors
+  errorbar-basic
+  errorbar-diamond
+  dumbbell-basic
+  dumbbell-directional
+  stackedbar-basic
+  stackedbar-normalized
+  stackedarea-basic
+  stackedarea-normalized
+  timeline-basic
+  timeline-compact
+  heatmap-basic
+  heatmap-values
+  radar-basic
+  radar-minimal
+  donut-basic
+  donut-thin
+  gauge-basic
+  gauge-target
+  funnel-basic
+  funnel-compact
 )
 
 if [[ -n "${STORYBOOK_SCENARIOS:-}" ]]; then
@@ -84,7 +121,10 @@ xcodebuild \
   -derivedDataPath "$DERIVED_DATA" \
   build
 
-DEVICE_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && /Booted/ { print $2; exit }')"
+DEVICE_ID="${STORYBOOK_DEVICE_ID:-}"
+if [[ -z "${DEVICE_ID:-}" ]]; then
+  DEVICE_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && /Booted/ { print $2; exit }')"
+fi
 if [[ -z "${DEVICE_ID:-}" ]]; then
   DEVICE_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && /Shutdown/ { print $2; exit }')"
   if [[ -z "${DEVICE_ID:-}" ]]; then

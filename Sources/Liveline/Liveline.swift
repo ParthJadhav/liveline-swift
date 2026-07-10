@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Liveline is a SwiftUI-first chart package for animated real-time line,
-/// candlestick, and multi-series charts.
+/// candlestick, multi-series, and discrete time-series charts.
 ///
 /// The main entry point is ``LivelineChart``:
 ///

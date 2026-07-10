@@ -42,6 +42,7 @@ struct LivelinePalette {
     var gridLine: Color
     var gridLabel: Color
     var gridLabelRGB: LivelineRGBA
+    var emptyText: Color
     var dotUp: Color
     var dotDown: Color
     var dotFlat: Color
@@ -79,6 +80,7 @@ extension LivelinePalette {
             gridLabelRGB: isDark
                 ? LivelineRGBA(red: 1, green: 1, blue: 1, alpha: 0.40)
                 : LivelineRGBA(red: 0, green: 0, blue: 0, alpha: 0.35),
+            emptyText: isDark ? Color.white.opacity(0.55) : Color.black.opacity(0.55),
             dotUp: Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255),
             dotDown: Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255),
             dotFlat: accent,

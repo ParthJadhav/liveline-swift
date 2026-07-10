@@ -52,6 +52,7 @@ Diff panels are written to `Media/storybook-diff` as reference/native/heatmap tr
 | `line-degen` | Line | Particle/shake mode. |
 | `line-loading` | State | Loading line. |
 | `line-empty` | State | Empty state. |
+| `line-empty-controls` | State | Empty state centered below value and window controls. |
 | `candle-basic` | Candles | OHLC bars with live candle. |
 | `candle-light` | Candles | Light theme candles. |
 | `candle-line-mode` | Candles | Candle data rendered as line. |
@@ -63,7 +64,43 @@ Diff panels are written to `Media/storybook-diff` as reference/native/heatmap tr
 | `multi-light` | Multi-series | Light theme multi-series. |
 | `multi-compact` | Multi-series | Dot-only series chips. |
 | `multi-two-series` | Multi-series | Two series. |
+| `bar-basic` | Bars | Rounded positive time buckets. |
+| `bar-signed` | Bars | Narrow square bars diverging from a custom target baseline. |
+| `range-basic` | Range bands | Filled forecast interval with emphasized boundaries. |
+| `range-center-line` | Range bands | Light interval with a dashed center estimate. |
+| `scatter-basic` | Scatter | Independent circular observations. |
+| `scatter-connected` | Scatter | Diamond observations with a curved connection. |
+| `step-basic` | Step | Trailing transitions with a subtle fill. |
+| `step-centered` | Step | Centered transitions with an unfilled heavy line. |
+| `lollipop-basic` | Lollipop | Signed circular heads around zero. |
+| `lollipop-diamond` | Lollipop | Diamond heads around a custom target. |
+| `bubble-basic` | Bubble | Request volume mapped to visible area. |
+| `bubble-diameter` | Bubble | Linear diameter scaling with bold outlines. |
+| `boxplot-basic` | Box plot | Filled rolling five-number summaries. |
+| `boxplot-minimal` | Box plot | Narrow outlined summaries with heavy medians. |
+| `waterfall-basic` | Waterfall | Connected cumulative gains and losses. |
+| `waterfall-no-connectors` | Waterfall | Wide square changes without connectors. |
+| `errorbar-basic` | Error bar | Circular estimates with capped uncertainty intervals. |
+| `errorbar-diamond` | Error bar | Diamond estimates with wider caps and translucent centers. |
+| `dumbbell-basic` | Dumbbell | Paired before/after values with gradient connectors. |
+| `dumbbell-directional` | Dumbbell | Square endpoints with direction chevrons. |
+| `stackedbar-basic` | Stacked bar | Absolute multi-segment time buckets. |
+| `stackedbar-normalized` | Stacked bar | Segment shares normalized to 100 percent. |
+| `stackedarea-basic` | Stacked area | Layered absolute volumes with boundaries. |
+| `stackedarea-normalized` | Stacked area | Layered composition normalized to 100 percent. |
+| `timeline-basic` | Timeline | Labeled overlapping intervals across three lanes. |
+| `timeline-compact` | Timeline | Slim square intervals without guides or labels. |
+| `heatmap-basic` | Heatmap | Regional load intensity across four labeled rows. |
+| `heatmap-values` | Heatmap | Wide rounded cells with embedded values. |
+| `radar-basic` | Radar | Six labeled axes, five grid levels, fill, and markers. |
+| `radar-minimal` | Radar | Unlabeled three-level outline with no markers. |
+| `donut-basic` | Donut | Composition ring with outside labels and center total. |
+| `donut-thin` | Donut | Thin ring with value-bearing labels. |
+| `gauge-basic` | Gauge | Tick-marked 240-degree capacity gauge. |
+| `gauge-target` | Gauge | Half-circle SLA gauge with target marker. |
+| `funnel-basic` | Funnel | Labeled conversion stages with values. |
+| `funnel-compact` | Funnel | Tight square stages with labels only. |
 
 ## Parity Notes
 
-The gallery is the audit surface for visual parity work. Each scenario must pass the web-reference diff before marking parity complete. Static parity scenarios suppress the live pulse unless pulse behavior is the thing being inspected. The current native renderer ports the web loading waveform, empty-state center gap, curved badge path, momentum badge colors, live dot structure, icon mode controls, centered reference labels, baseline-adjusted axis text, segmented candle wicks, live candle glow, deterministic snapshot timing, time-axis intervals, grid/time-axis label state, and coarse/fine grid interval selection.
+The gallery is the audit surface for visual work. Scenarios inherited from the upstream chart must pass the web-reference diff before marking parity complete; native-only chart types are reviewed through their deterministic captures. Static parity scenarios suppress the live pulse unless pulse behavior is the thing being inspected. The current native renderer ports the web loading waveform, empty-state center gap, curved badge path, momentum badge colors, live dot structure, icon mode controls, centered reference labels, baseline-adjusted axis text, segmented candle wicks, live candle glow, deterministic snapshot timing, time-axis intervals, grid/time-axis label state, and coarse/fine grid interval selection.

@@ -1,6 +1,6 @@
 # Liveline Swift
 
-Native SwiftUI real-time charts for iOS apps. Liveline renders animated line, candlestick, and multi-series charts with smooth value interpolation, scrubbing, live badges, time windows, loading/empty states, and optional market-style effects.
+Native SwiftUI real-time charts for iOS apps. Liveline includes line, candlestick, multi-series, bar, range-band, scatter, step, lollipop, bubble, box-plot, waterfall, error-bar, dumbbell, stacked-bar, stacked-area, timeline, heatmap, radar, donut, gauge, and funnel renderers with typed customization.
 
 <p align="center">
   <img src="Media/readme/cover.png" alt="Liveline Swift cover showing line, candlestick, and multi-series charts" />
@@ -15,6 +15,12 @@ These screenshots are captured from the included deterministic iOS Storybook sce
 <p align="center">
   <img src="Media/readme/examples.png" alt="Liveline Swift Storybook screenshots showing line, momentum, orderbook, candlestick, mode control, and multi-series charts" />
 </p>
+
+### Animated chart showcase
+
+[![Watch the Liveline Swift animated chart showcase](Media/liveline-chart-showcase-poster.png)](Media/liveline-chart-showcase.mp4)
+
+The 1080p showcase renders all eighteen additional chart families with renderer-driven geometry animation in the included iOS demo. Regenerate it with `scripts/record-chart-showcase.sh`.
 
 ## Requirements
 
@@ -119,6 +125,76 @@ LivelineChart(series: [
 .frame(height: 260)
 ```
 
+Bars:
+
+```swift
+LivelineChart(
+    bars: buckets,
+    style: LivelineBarStyle(widthRatio: 0.7, cornerRadius: 3, baseline: 0)
+)
+.frame(height: 260)
+```
+
+Range band:
+
+```swift
+LivelineChart(
+    range: intervals,
+    style: LivelineRangeStyle(fillOpacity: 0.2, showsCenterLine: true)
+)
+.frame(height: 260)
+```
+
+Scatter:
+
+```swift
+LivelineChart(
+    scatter: observations,
+    style: LivelineScatterStyle(symbol: .diamond, connection: .curved)
+)
+.frame(height: 260)
+```
+
+Step and lollipop:
+
+```swift
+LivelineChart(steps: levels, style: LivelineStepStyle(position: .center))
+LivelineChart(lollipops: changes, style: LivelineLollipopStyle(baseline: 0))
+```
+
+Bubble, box plot, and waterfall:
+
+```swift
+LivelineChart(bubbles: observations, style: LivelineBubbleStyle(scale: .area))
+LivelineChart(boxPlots: summaries, style: LivelineBoxPlotStyle(fillOpacity: 0.2))
+LivelineChart(waterfall: deltas, style: LivelineWaterfallStyle(initialValue: 100))
+```
+
+Uncertainty, comparison, and stacks:
+
+```swift
+LivelineChart(errorBars: estimates, style: LivelineErrorBarStyle(pointSymbol: .diamond))
+LivelineChart(dumbbells: comparisons, style: LivelineDumbbellStyle(showsDirection: true))
+LivelineChart(stackedBars: stacks, style: LivelineStackedBarStyle(mode: .normalized))
+LivelineChart(stackedAreas: stacks, style: LivelineStackedAreaStyle(colors: palette))
+```
+
+Intervals and matrices:
+
+```swift
+LivelineChart(timeline: work, style: LivelineTimelineStyle(showsLabels: true))
+LivelineChart(heatmap: cells, style: LivelineHeatmapStyle(rowLabels: regions))
+```
+
+Radial and categorical charts:
+
+```swift
+LivelineChart(radar: profile, style: LivelineRadarStyle(range: 0...100))
+LivelineChart(donut: mix, style: LivelineDonutStyle(innerRadiusRatio: 0.65))
+LivelineChart(gauge: 72, range: 0...100, style: LivelineGaugeStyle(target: 80))
+LivelineChart(funnel: stages, style: LivelineFunnelStyle(showsValues: true))
+```
+
 ## Features
 
 - SwiftUI `Canvas` rendering, no WebView and no JavaScript bridge
@@ -132,6 +208,23 @@ LivelineChart(series: [
 - Loading/empty morph states
 - Candlestick drawing with live candle glow
 - Multi-series toggles
+- Signed bar charts with configurable baseline, width, rounding, and colors
+- Range bands with configurable fill, boundaries, and center line
+- Scatter plots with circle, square, or diamond symbols and optional connections
+- Step charts with leading, centered, or trailing transitions and optional fill
+- Lollipop charts with configurable baselines, stems, head symbols, and signed colors
+- Bubble charts with area or diameter magnitude scaling
+- Time-based box plots with normalized five-number summaries
+- Cumulative waterfall charts with signed colors, connectors, and configurable initial value
+- Error bars with capped bounds and configurable estimate symbols
+- Dumbbell comparisons with endpoint colors and optional direction chevrons
+- Signed or normalized stacked bars and stacked areas with custom segment palettes
+- Multi-lane timelines with interval labels and lane guides
+- Time-row heatmaps with labels, intensity ranges, and optional cell values
+- Radar charts with configurable domains, grid levels, labels, fill, and markers
+- Donut charts with configurable ring thickness, gaps, palettes, and labels
+- Radial gauges with custom sweeps, tracks, ticks, targets, and value labels
+- Funnel charts with configurable widths, spacing, palettes, labels, and values
 - Reference line and orderbook stream labels
 
 ## Example App

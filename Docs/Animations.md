@@ -20,6 +20,8 @@ When `loading` is true, or when no data is present, the chart draws a breathing 
 
 During the reveal, the line color also blends from the placeholder/grid-label color into the accent color. This matches the upstream choreography and avoids a sudden color flash when data replaces the loading state.
 
+The additional chart families use the same reveal state to animate their own geometry rather than applying a mask or scale to a finished chart. Time-based paths grow through interpolated points; bars, intervals, whiskers, and stacked marks expand from their semantic baseline; point marks appear with a stable stagger; and radial charts sweep their real angles. This keeps intermediate frames meaningful and gives every renderer the same inherent motion model as the line chart.
+
 ## Scrubbing
 
 Drag scrubbing converts the pointer location to a chart time, interpolates a value at that time, and draws a crosshair tooltip. The live dot and the part of the line to the right of the scrub point dim so the inspected history reads clearly.
@@ -35,3 +37,7 @@ Candlestick charts animate between OHLC bars and line mode with the same staged 
 ## Degen Effects
 
 `LivelineDegenOptions` adds particle bursts and a short chart shake on momentum changes. This is intentionally opt-in.
+
+## Reduced Motion
+
+Liveline follows the system Reduce Motion setting automatically. Renderer reveals complete immediately, continuous pulses stop, and opt-in particle or shake effects are suppressed while static chart state and color feedback remain available.

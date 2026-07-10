@@ -2,9 +2,133 @@ import CoreGraphics
 import Foundation
 import SwiftUI
 
+struct LivelineWaterfallSegment: Equatable {
+    var time: TimeInterval
+    var start: Double
+    var end: Double
+    var delta: Double
+}
+
 enum LivelineMath {
+    static func barRangePoints(points: [LivelinePoint], baseline: Double) -> [LivelinePoint] {
+        guard let last = points.last else { return [] }
+        return points + [LivelinePoint(time: last.time, value: baseline)]
+    }
+
     static func clamp<T: Comparable>(_ value: T, _ lower: T, _ upper: T) -> T {
         min(max(value, lower), upper)
+    }
+
+    static func verticalRangeMarkerRect(
+        x: CGFloat,
+        upperY: CGFloat,
+        lowerY: CGFloat,
+        width: CGFloat
+    ) -> CGRect {
+        let resolvedWidth = max(width, 1)
+        let midpoint = (upperY + lowerY) / 2
+        let height = max(abs(lowerY - upperY), resolvedWidth)
+        return CGRect(
+            x: x - resolvedWidth / 2,
+            y: midpoint - height / 2,
+            width: resolvedWidth,
+            height: height
+        )
+    }
+
+    static func uniqueFormattedGridLabelKeys(
+        candidates: [(key: Int, value: Double, priority: Double)],
+        formatValue: (Double) -> String
+    ) -> Set<Int> {
+        var selections: [String: (key: Int, priority: Double)] = [:]
+
+        for candidate in candidates {
+            let label = formatValue(candidate.value)
+            guard let current = selections[label] else {
+                selections[label] = (candidate.key, candidate.priority)
+                continue
+            }
+
+            if candidate.priority > current.priority
+                || (candidate.priority == current.priority && candidate.key < current.key) {
+                selections[label] = (candidate.key, candidate.priority)
+            }
+        }
+
+        return Set(selections.values.map(\.key))
+    }
+
+    static func stepScreenPoints(
+        points: [CGPoint],
+        position: LivelineStepPosition
+    ) -> [CGPoint] {
+        guard let first = points.first else { return [] }
+        guard points.count > 1 else { return [first] }
+
+        var result = [first]
+        result.reserveCapacity(points.count * 3)
+
+        for (left, right) in zip(points, points.dropFirst()) {
+            switch position {
+            case .leading:
+                result.append(CGPoint(x: left.x, y: right.y))
+                result.append(right)
+            case .center:
+                let midpointX = (left.x + right.x) / 2
+                result.append(CGPoint(x: midpointX, y: left.y))
+                result.append(CGPoint(x: midpointX, y: right.y))
+                result.append(right)
+            case .trailing:
+                result.append(CGPoint(x: right.x, y: left.y))
+                result.append(right)
+            }
+        }
+
+        return result
+    }
+
+    static func bubbleDiameter(
+        magnitude: Double,
+        minimumMagnitude: Double,
+        maximumMagnitude: Double,
+        minimumSize: CGFloat,
+        maximumSize: CGFloat,
+        scale: LivelineBubbleScale
+    ) -> CGFloat {
+        guard maximumMagnitude > minimumMagnitude else {
+            return (minimumSize + maximumSize) / 2
+        }
+
+        let progress = clamp(
+            (magnitude - minimumMagnitude) / (maximumMagnitude - minimumMagnitude),
+            0,
+            1
+        )
+        switch scale {
+        case .area:
+            let minimumSquared = Double(minimumSize * minimumSize)
+            let maximumSquared = Double(maximumSize * maximumSize)
+            return CGFloat(sqrt(minimumSquared + progress * (maximumSquared - minimumSquared)))
+        case .diameter:
+            return minimumSize + CGFloat(progress) * (maximumSize - minimumSize)
+        }
+    }
+
+    static func waterfallSegments(
+        points: [LivelinePoint],
+        initialValue: Double
+    ) -> [LivelineWaterfallSegment] {
+        var running = initialValue
+        return points.map { point in
+            let start = running
+            running += point.value
+            return LivelineWaterfallSegment(
+                time: point.time,
+                start: start,
+                end: running,
+                delta: point.value
+            )
+        }
     }
 
     static func lerp(_ current: Double, _ target: Double, speed: Double, deltaTime: TimeInterval) -> Double {
