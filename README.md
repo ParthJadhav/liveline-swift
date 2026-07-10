@@ -279,24 +279,6 @@ To regenerate it:
 scripts/record-demo.sh
 ```
 
-## Verification
-
-```bash
-swift test
-swift build -c release
-xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
-xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
-scripts/capture-storybook.sh
-scripts/capture-storybook.sh --chart-only
-python3 scripts/build-readme-media.py
-scripts/capture-web-references.sh
-scripts/diff-storybook.sh --fail-changed-pct 5 --fail-rms 12
-```
-
-Use the chart-only capture plus web-reference diff when comparing the native renderer against the upstream React/canvas implementation. Native Storybook captures use deterministic snapshot timing, README media is built from `Media/storybook-chart-only`, and diff panels are written to `Media/storybook-diff`.
-
-The normal CI workflow runs package tests and the iOS demo build. The manual `Visual Parity` workflow captures upstream/native Storybook screenshots, runs the diff gate, and uploads the visual artifacts.
-
 ## Release
 
 For release verification and tagging:
