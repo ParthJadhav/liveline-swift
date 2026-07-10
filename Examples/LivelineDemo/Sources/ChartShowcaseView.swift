@@ -10,7 +10,6 @@ struct ChartShowcaseView: View {
 
     @State private var phase: Phase = .intro
     @State private var sceneIndex = 0
-    @State private var reveal = 0.0
     @State private var introVisible = false
     @State private var outroVisible = false
     @State private var started = false
@@ -153,8 +152,6 @@ struct ChartShowcaseView: View {
                 }
                 .frame(width: min(250, size.width * 0.29), alignment: .leading)
                 .padding(.vertical, 8)
-                .offset(x: 18 * (1 - reveal))
-                .opacity(0.35 + 0.65 * reveal)
 
                 VStack(spacing: 0) {
                     HStack(spacing: 8) {
@@ -238,16 +235,7 @@ struct ChartShowcaseView: View {
 
         for index in scenes.indices {
             sceneIndex = index
-            reveal = 0
-            await pause(0.12)
-            withAnimation(.easeOut(duration: 0.72)) {
-                reveal = 1
-            }
-            await pause(1.18)
-            withAnimation(.easeIn(duration: 0.20)) {
-                reveal = 0
-            }
-            await pause(0.24)
+            await pause(1.54)
         }
 
         withAnimation(.easeInOut(duration: 0.36)) {
