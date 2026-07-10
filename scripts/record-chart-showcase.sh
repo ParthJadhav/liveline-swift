@@ -77,6 +77,7 @@ ffmpeg \
   -hide_banner \
   -loglevel error \
   -y \
+  -noautorotate \
   -i "$RAW_VIDEO" \
   -ss "$TRIM_START" \
   -vf "transpose=2,crop=iw-310:ih:155:0,fps=30,scale=1920:1080:force_original_aspect_ratio=decrease:flags=lanczos,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0x070b14,format=yuv420p" \
@@ -92,7 +93,7 @@ ffmpeg \
   -hide_banner \
   -loglevel error \
   -y \
-  -ss 27.3 \
+  -ss 27.8 \
   -i "$VIDEO_PATH" \
   -frames:v 1 \
   "$POSTER_PATH"

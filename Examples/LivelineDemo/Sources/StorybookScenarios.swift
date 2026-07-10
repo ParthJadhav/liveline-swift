@@ -1614,6 +1614,7 @@ enum StorybookData {
             fill: false,
             pulse: false,
             endpointDecorations: false,
+            fadeEffects: StorybookLaunch.chartShowcaseFromArguments(),
             formatValue: { value in
                 value.formatted(.number.precision(.fractionLength(0))) + suffix
             },
@@ -1633,6 +1634,7 @@ enum StorybookData {
             fill: false,
             pulse: false,
             endpointDecorations: false,
+            fadeEffects: StorybookLaunch.chartShowcaseFromArguments(),
             formatValue: { value in
                 (value * 100).formatted(.number.precision(.fractionLength(0))) + "%"
             },

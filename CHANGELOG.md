@@ -5,6 +5,7 @@
 - Adds customizable time-based bar, range-band, and scatter charts with six deterministic Storybook variants.
 - Adds step, lollipop, bubble, box-plot, and waterfall charts with typed customization, normalization tests, and ten deterministic Storybook variants.
 - Adds error-bar, dumbbell, stacked-bar, stacked-area, timeline, heatmap, radar, donut, gauge, and funnel charts with typed customization and twenty deterministic Storybook variants.
+- Adds intrinsic reveal animation to all eighteen additional chart renderers: paths trace their data, marks grow from semantic baselines, and radial charts sweep their actual angles without showcase-level masks.
 - Centers radial, categorical, loading, and empty renderers with content-aware axis gutters; controlled charts now size their Canvas to the remaining viewport, and gauges use sweep-aware geometry with refined ticks and target pins.
 - Improves single-range rendering, formatter-aware grid labels, and empty-state contrast following visual edge-case review.
 - Adds Swift Package Index metadata for public DocC hosting.

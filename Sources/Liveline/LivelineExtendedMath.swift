@@ -13,6 +13,45 @@ struct LivelineGaugeGeometry: Equatable {
 }
 
 extension LivelineMath {
+    static func easedReveal(_ reveal: Double) -> Double {
+        let progress = clamp(reveal.isFinite ? reveal : 0, 0, 1)
+        return progress * progress * (3 - 2 * progress)
+    }
+
+    static func staggeredReveal(
+        index: Int,
+        count: Int,
+        reveal: Double,
+        staggerFraction: Double = 0.35
+    ) -> Double {
+        guard count > 1 else { return easedReveal(reveal) }
+        let stagger = clamp(staggerFraction.isFinite ? staggerFraction : 0.35, 0, 0.95)
+        let position = Double(clamp(index, 0, count - 1)) / Double(count - 1)
+        let local = (clamp(reveal.isFinite ? reveal : 0, 0, 1) - position * stagger) / (1 - stagger)
+        return easedReveal(local)
+    }
+
+    static func revealedPoints(_ points: [CGPoint], reveal: Double) -> [CGPoint] {
+        guard let first = points.first else { return [] }
+        guard points.count > 1 else { return reveal > 0 ? [first] : [] }
+
+        let progress = clamp(reveal.isFinite ? reveal : 0, 0, 1)
+        guard progress > 0 else { return [] }
+        guard progress < 1 else { return points }
+
+        let position = progress * Double(points.count - 1)
+        let lowerIndex = min(Int(floor(position)), points.count - 2)
+        let fraction = CGFloat(position - Double(lowerIndex))
+        var result = Array(points[...lowerIndex])
+        let lower = points[lowerIndex]
+        let upper = points[lowerIndex + 1]
+        result.append(CGPoint(
+            x: lower.x + (upper.x - lower.x) * fraction,
+            y: lower.y + (upper.y - lower.y) * fraction
+        ))
+        return result
+    }
+
     static func resolvedPadding(
         _ padding: LivelinePadding,
         badgeEnabled: Bool,

@@ -329,6 +329,34 @@ final class LivelineMathTests: XCTestCase {
         )
     }
 
+    func testIntrinsicRevealEasesStaggersAndBuildsPathPrefixes() {
+        XCTAssertEqual(LivelineMath.easedReveal(0), 0)
+        XCTAssertEqual(LivelineMath.easedReveal(0.5), 0.5, accuracy: 0.0001)
+        XCTAssertEqual(LivelineMath.easedReveal(1), 1)
+        XCTAssertEqual(LivelineMath.easedReveal(.nan), 0)
+
+        let leading = LivelineMath.staggeredReveal(index: 0, count: 5, reveal: 0.4)
+        let trailing = LivelineMath.staggeredReveal(index: 4, count: 5, reveal: 0.4)
+        XCTAssertGreaterThan(leading, trailing)
+        XCTAssertEqual(LivelineMath.staggeredReveal(index: 4, count: 5, reveal: 1), 1)
+
+        let points = [
+            CGPoint(x: 0, y: 0),
+            CGPoint(x: 10, y: 20),
+            CGPoint(x: 20, y: 0),
+        ]
+        let firstQuarter = LivelineMath.revealedPoints(points, reveal: 0.25)
+        XCTAssertEqual(firstQuarter.count, 2)
+        XCTAssertEqual(firstQuarter.last?.x ?? -1, 5, accuracy: 0.0001)
+        XCTAssertEqual(firstQuarter.last?.y ?? -1, 10, accuracy: 0.0001)
+
+        let finalQuarter = LivelineMath.revealedPoints(points, reveal: 0.75)
+        XCTAssertEqual(finalQuarter.count, 3)
+        XCTAssertEqual(finalQuarter.last?.x ?? -1, 15, accuracy: 0.0001)
+        XCTAssertEqual(finalQuarter.last?.y ?? -1, 10, accuracy: 0.0001)
+        XCTAssertEqual(LivelineMath.revealedPoints(points, reveal: 1), points)
+    }
+
     func testGaugeGeometryCentersDifferentSweepShapes() {
         let rect = CGRect(x: 0, y: 0, width: 360, height: 240)
         for geometry in [

@@ -261,7 +261,7 @@ Important options:
 | `badge` | `true` | Draws the live value pill for line charts. |
 | `fill` | `true` | Draws a gradient under line charts. |
 | `endpointDecorations` | `true` | Draws the endpoint dot and momentum arrows. Disable this for forecast or historical charts where the final point is not a live value. |
-| `fadeEffects` | `false` | Enables chart reveal, edge masks, scrub dimming, axis label, series, and tooltip fade transitions. Disabled by default so charts render at full opacity immediately. |
+| `fadeEffects` | `false` | Enables renderer-driven chart reveals, line edge masks, scrub dimming, axis label, series, and tooltip fade transitions. Disabled by default so charts render at full opacity immediately. |
 | `momentum` | `nil` | Use `.up`, `.down`, or `.flat` to override auto detection. |
 | `autoDetectMomentum` | `true` | Uses recent velocity to color momentum affordances. |
 | `scrub` | `true` | Enables drag scrubbing and tooltips. |

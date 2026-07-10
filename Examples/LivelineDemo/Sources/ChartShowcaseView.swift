@@ -177,10 +177,10 @@ struct ChartShowcaseView: View {
                     ZStack {
                         scenario.background
                         scenario.makeView()
+                            .id(scenario.id)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
-                            .modifier(ChartShowcaseReveal(motion: scene.motion, progress: reveal))
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: min(322, size.height - 48))
@@ -191,8 +191,6 @@ struct ChartShowcaseView: View {
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
                 .shadow(color: .black.opacity(0.34), radius: 24, y: 16)
-                .scaleEffect(0.97 + 0.03 * reveal)
-                .opacity(0.5 + 0.5 * reveal)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -312,72 +310,30 @@ private struct ChartShowcaseBackdrop: View {
     }
 }
 
-private struct ChartShowcaseReveal: ViewModifier {
-    let motion: ChartShowcaseMotion
-    let progress: Double
-
-    func body(content: Content) -> some View {
-        Group {
-            switch motion {
-            case .horizontal:
-                content
-                    .mask {
-                        Rectangle()
-                            .scaleEffect(x: max(progress, 0.001), anchor: .leading)
-                    }
-                    .offset(x: 12 * (1 - progress))
-            case .vertical:
-                content
-                    .mask {
-                        Rectangle()
-                            .scaleEffect(y: max(progress, 0.001), anchor: .bottom)
-                    }
-                    .offset(y: 10 * (1 - progress))
-            case .radial:
-                content
-                    .scaleEffect(0.72 + 0.28 * progress)
-                    .rotationEffect(.degrees(-14 * (1 - progress)))
-            case .pop:
-                content
-                    .scaleEffect(0.80 + 0.20 * progress)
-            }
-        }
-        .opacity(progress)
-    }
-}
-
-private enum ChartShowcaseMotion {
-    case horizontal
-    case vertical
-    case radial
-    case pop
-}
-
 private struct ChartShowcaseScene {
     let family: String
     let scenarioID: String
     let caption: String
     let accent: Color
-    let motion: ChartShowcaseMotion
 
     static let all: [ChartShowcaseScene] = [
-        .init(family: "Bar", scenarioID: "bar-basic", caption: "ROUNDED BUCKETS", accent: StorybookData.teal, motion: .vertical),
-        .init(family: "Range Band", scenarioID: "range-basic", caption: "LOWER + UPPER", accent: StorybookData.indigo, motion: .horizontal),
-        .init(family: "Scatter", scenarioID: "scatter-basic", caption: "SYMBOLS + OUTLINES", accent: StorybookData.violet, motion: .pop),
-        .init(family: "Step", scenarioID: "step-basic", caption: "DISCRETE LEVELS", accent: StorybookData.cyan, motion: .horizontal),
-        .init(family: "Lollipop", scenarioID: "lollipop-basic", caption: "SIGNED EVENTS", accent: StorybookData.green, motion: .vertical),
-        .init(family: "Bubble", scenarioID: "bubble-basic", caption: "MAGNITUDE SCALE", accent: StorybookData.violet, motion: .pop),
-        .init(family: "Box Plot", scenarioID: "boxplot-basic", caption: "FIVE-NUMBER SUMMARY", accent: StorybookData.indigo, motion: .vertical),
-        .init(family: "Waterfall", scenarioID: "waterfall-basic", caption: "CUMULATIVE CHANGE", accent: StorybookData.green, motion: .vertical),
-        .init(family: "Error Bar", scenarioID: "errorbar-basic", caption: "UNCERTAINTY BOUNDS", accent: StorybookData.cyan, motion: .vertical),
-        .init(family: "Dumbbell", scenarioID: "dumbbell-basic", caption: "BEFORE + AFTER", accent: StorybookData.green, motion: .horizontal),
-        .init(family: "Stacked Bar", scenarioID: "stackedbar-basic", caption: "SEGMENT TOTALS", accent: StorybookData.blue, motion: .vertical),
-        .init(family: "Stacked Area", scenarioID: "stackedarea-basic", caption: "LAYERED VOLUME", accent: StorybookData.blue, motion: .horizontal),
-        .init(family: "Timeline", scenarioID: "timeline-basic", caption: "MULTI-LANE INTERVALS", accent: StorybookData.cyan, motion: .horizontal),
-        .init(family: "Heatmap", scenarioID: "heatmap-basic", caption: "TIME × CATEGORY", accent: StorybookData.violet, motion: .pop),
-        .init(family: "Radar", scenarioID: "radar-basic", caption: "RADIAL PROFILE", accent: StorybookData.cyan, motion: .radial),
-        .init(family: "Donut", scenarioID: "donut-basic", caption: "CATEGORICAL MIX", accent: StorybookData.blue, motion: .radial),
-        .init(family: "Gauge", scenarioID: "gauge-basic", caption: "SWEEP + TARGETS", accent: StorybookData.green, motion: .radial),
-        .init(family: "Funnel", scenarioID: "funnel-basic", caption: "STAGE CONVERSION", accent: StorybookData.blue, motion: .vertical),
+        .init(family: "Bar", scenarioID: "bar-basic", caption: "ROUNDED BUCKETS", accent: StorybookData.teal),
+        .init(family: "Range Band", scenarioID: "range-basic", caption: "LOWER + UPPER", accent: StorybookData.indigo),
+        .init(family: "Scatter", scenarioID: "scatter-basic", caption: "SYMBOLS + OUTLINES", accent: StorybookData.violet),
+        .init(family: "Step", scenarioID: "step-basic", caption: "DISCRETE LEVELS", accent: StorybookData.cyan),
+        .init(family: "Lollipop", scenarioID: "lollipop-basic", caption: "SIGNED EVENTS", accent: StorybookData.green),
+        .init(family: "Bubble", scenarioID: "bubble-basic", caption: "MAGNITUDE SCALE", accent: StorybookData.violet),
+        .init(family: "Box Plot", scenarioID: "boxplot-basic", caption: "FIVE-NUMBER SUMMARY", accent: StorybookData.indigo),
+        .init(family: "Waterfall", scenarioID: "waterfall-basic", caption: "CUMULATIVE CHANGE", accent: StorybookData.green),
+        .init(family: "Error Bar", scenarioID: "errorbar-basic", caption: "UNCERTAINTY BOUNDS", accent: StorybookData.cyan),
+        .init(family: "Dumbbell", scenarioID: "dumbbell-basic", caption: "BEFORE + AFTER", accent: StorybookData.green),
+        .init(family: "Stacked Bar", scenarioID: "stackedbar-basic", caption: "SEGMENT TOTALS", accent: StorybookData.blue),
+        .init(family: "Stacked Area", scenarioID: "stackedarea-basic", caption: "LAYERED VOLUME", accent: StorybookData.blue),
+        .init(family: "Timeline", scenarioID: "timeline-basic", caption: "MULTI-LANE INTERVALS", accent: StorybookData.cyan),
+        .init(family: "Heatmap", scenarioID: "heatmap-basic", caption: "TIME × CATEGORY", accent: StorybookData.violet),
+        .init(family: "Radar", scenarioID: "radar-basic", caption: "RADIAL PROFILE", accent: StorybookData.cyan),
+        .init(family: "Donut", scenarioID: "donut-basic", caption: "CATEGORICAL MIX", accent: StorybookData.blue),
+        .init(family: "Gauge", scenarioID: "gauge-basic", caption: "SWEEP + TARGETS", accent: StorybookData.green),
+        .init(family: "Funnel", scenarioID: "funnel-basic", caption: "STAGE CONVERSION", accent: StorybookData.blue),
     ]
 }
