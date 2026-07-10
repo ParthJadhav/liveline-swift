@@ -82,7 +82,12 @@ enum LivelineRenderer {
         let isMultiSeries = input.content.isMultiSeries
         let showBadge = input.content.supportsLiveBadge && config.badge
         let reservesBadgePadding = input.content.reservesBadgePadding && config.badge
-        let resolvedPadding = resolvePadding(config.padding, badgeEnabled: reservesBadgePadding, showGrid: config.grid)
+        let resolvedPadding = LivelineMath.resolvedPadding(
+            config.padding,
+            badgeEnabled: reservesBadgePadding,
+            showValueAxis: config.grid && input.content.usesCartesianGrid,
+            showTimeAxis: input.content.usesTimeAxis
+        )
         let anchor = anchorTime(for: input.content, timelineTimestamp: input.timestamp, window: input.activeWindow)
         let baseBuffer = input.content.isCandle ? windowBufferNoBadge : (showBadge ? windowBuffer : windowBufferNoBadge)
         let labelReveal = config.fadeEffects ? state.chartReveal : 1
@@ -168,7 +173,14 @@ enum LivelineRenderer {
         let swingMagnitude = swingMagnitude(points: renderData.primaryVisible, valueRange: layout.maxValue - layout.minValue)
 
         if config.loading || !hasRenderableData {
-            drawLoadingOrEmpty(context: &context, layout: layout, palette: palette, input: input, animationTimestamp: animationTimestamp, showText: !config.loading)
+            drawLoadingOrEmpty(
+                context: &context,
+                layout: centeredPlaceholderLayout(from: layout, input: input),
+                palette: palette,
+                input: input,
+                animationTimestamp: animationTimestamp,
+                showText: !config.loading
+            )
         }
 
         guard hasRenderableData else {
@@ -523,12 +535,22 @@ enum LivelineRenderer {
 }
 
 private extension LivelineRenderer {
-    static func resolvePadding(_ padding: LivelinePadding, badgeEnabled: Bool, showGrid: Bool) -> LivelineResolvedPadding {
-        LivelineResolvedPadding(
-            top: padding.top ?? 12,
-            right: padding.right ?? (badgeEnabled ? 80 : showGrid ? 54 : 12),
-            bottom: padding.bottom ?? 28,
-            left: padding.left ?? 12
+    static func centeredPlaceholderLayout(
+        from layout: LivelineLayout,
+        input: LivelineRenderInput
+    ) -> LivelineLayout {
+        LivelineLayout(
+            size: input.size,
+            padding: LivelineMath.resolvedPadding(
+                input.configuration.padding,
+                badgeEnabled: false,
+                showValueAxis: false,
+                showTimeAxis: false
+            ),
+            minValue: layout.minValue,
+            maxValue: layout.maxValue,
+            leftEdge: layout.leftEdge,
+            rightEdge: layout.rightEdge
         )
     }
 
@@ -3321,6 +3343,17 @@ private extension LivelineChartContent {
             return false
         case .line, .bars, .range, .scatter, .steps, .lollipops, .bubbles, .boxPlots,
              .waterfall, .errorBars, .dumbbells, .stackedBars, .stackedAreas, .series:
+            return true
+        }
+    }
+
+    var usesTimeAxis: Bool {
+        switch self {
+        case .radar, .donut, .gauge, .funnel:
+            return false
+        case .line, .bars, .range, .scatter, .steps, .lollipops, .bubbles, .boxPlots,
+             .waterfall, .errorBars, .dumbbells, .stackedBars, .stackedAreas, .timeline,
+             .heatmap, .candle, .series:
             return true
         }
     }

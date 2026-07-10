@@ -299,6 +299,81 @@ final class LivelineMathTests: XCTestCase {
         )
     }
 
+    func testLayoutPaddingOnlyReservesSpaceForVisibleAxes() {
+        XCTAssertEqual(
+            LivelineMath.resolvedPadding(
+                LivelinePadding(),
+                badgeEnabled: false,
+                showValueAxis: false,
+                showTimeAxis: false
+            ),
+            LivelineResolvedPadding(top: 12, right: 12, bottom: 12, left: 12)
+        )
+        XCTAssertEqual(
+            LivelineMath.resolvedPadding(
+                LivelinePadding(),
+                badgeEnabled: false,
+                showValueAxis: true,
+                showTimeAxis: true
+            ),
+            LivelineResolvedPadding(top: 12, right: 54, bottom: 28, left: 12)
+        )
+        XCTAssertEqual(
+            LivelineMath.resolvedPadding(
+                LivelinePadding(top: 3, right: 4, bottom: 5, left: 6),
+                badgeEnabled: true,
+                showValueAxis: true,
+                showTimeAxis: true
+            ),
+            LivelineResolvedPadding(top: 3, right: 4, bottom: 5, left: 6)
+        )
+    }
+
+    func testGaugeGeometryCentersDifferentSweepShapes() {
+        let rect = CGRect(x: 0, y: 0, width: 360, height: 240)
+        for geometry in [
+            LivelineMath.gaugeGeometry(
+                in: rect,
+                startAngleDegrees: 150,
+                sweepDegrees: 240,
+                lineWidth: 20,
+                hasOuterMarks: true,
+                showsValue: true
+            ),
+            LivelineMath.gaugeGeometry(
+                in: rect,
+                startAngleDegrees: 180,
+                sweepDegrees: 180,
+                lineWidth: 14,
+                hasOuterMarks: true,
+                showsValue: true
+            ),
+        ] {
+            XCTAssertEqual(geometry.visualBounds.midX, rect.midX, accuracy: 0.0001)
+            XCTAssertEqual(geometry.visualBounds.midY, rect.midY, accuracy: 0.0001)
+            XCTAssertGreaterThan(geometry.radius, 0)
+            XCTAssertTrue(rect.insetBy(dx: -0.001, dy: -0.001).contains(geometry.visualBounds))
+        }
+    }
+
+    func testGaugeStyleNormalizesGeometryAndMarkings() {
+        let style = LivelineGaugeStyle(
+            startAngleDegrees: .nan,
+            sweepDegrees: .infinity,
+            lineWidth: .nan,
+            trackOpacity: .nan,
+            target: .infinity,
+            tickCount: 99
+        )
+
+        XCTAssertEqual(style.resolvedStartAngleDegrees, 150)
+        XCTAssertEqual(style.resolvedSweepDegrees, 240)
+        XCTAssertEqual(style.resolvedLineWidth, 18)
+        XCTAssertEqual(style.resolvedTrackOpacity, 0.12)
+        XCTAssertNil(style.target)
+        XCTAssertEqual(style.resolvedTickCount, 25)
+    }
+
     func testExtendedModelsAndStylesNormalizeInvalidInput() {
         let cell = LivelineHeatmapCell(time: 10, row: -4, value: .infinity)
         XCTAssertEqual(cell.row, 0)

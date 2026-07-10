@@ -324,10 +324,11 @@ public struct LivelineChart: View {
                             )
                         )
                     }
-                    .frame(height: proxy.size.height)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
                     .gesture(scrubGesture(configuration))
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }

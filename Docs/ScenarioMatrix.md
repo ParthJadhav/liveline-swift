@@ -52,6 +52,7 @@ Diff panels are written to `Media/storybook-diff` as reference/native/heatmap tr
 | `line-degen` | Line | Particle/shake mode. |
 | `line-loading` | State | Loading line. |
 | `line-empty` | State | Empty state. |
+| `line-empty-controls` | State | Empty state centered below value and window controls. |
 | `candle-basic` | Candles | OHLC bars with live candle. |
 | `candle-light` | Candles | Light theme candles. |
 | `candle-line-mode` | Candles | Candle data rendered as line. |

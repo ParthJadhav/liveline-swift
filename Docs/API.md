@@ -203,7 +203,9 @@ LivelineGaugeStyle(
     sweepDegrees: 240,
     lineWidth: 18,
     target: 80,
-    showsTicks: true
+    targetColor: .orange,
+    showsTicks: true,
+    tickCount: 9
 )
 
 LivelineFunnelStyle(
@@ -217,6 +219,8 @@ LivelineFunnelStyle(
 
 Scatter symbols are `.circle`, `.square`, and `.diamond`. Connections are `.none`, `.straight`, and `.curved`.
 Step positions are `.leading`, `.center`, and `.trailing`. Bubble scales are `.area` and `.diameter`. Stack modes are `.standard` and `.normalized`. Invalid sizes, widths, opacities, magnitudes, and reversed statistical summaries are normalized before drawing.
+
+Default padding is content-aware: value-axis space is reserved only when value labels are rendered, time-axis space only when a time axis is rendered, and radial/categorical charts use symmetric insets. Explicit `LivelinePadding` values always take precedence. Loading and empty states use a symmetric placeholder viewport even when the populated chart reserves axis or badge space.
 
 ## Configuration
 

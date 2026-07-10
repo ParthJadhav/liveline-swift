@@ -71,6 +71,7 @@ enum StorybookCatalog {
         lineDegen,
         lineLoading,
         lineEmpty,
+        lineEmptyControls,
         candleBasic,
         candleLight,
         candleLineMode,
@@ -373,6 +374,28 @@ private extension StorybookCatalog {
             value: 0,
             color: StorybookData.blue,
             configuration: StorybookData.lineConfig(theme: .dark, emptyText: "No data to display")
+        )
+    }
+
+    static let lineEmptyControls = chart(
+        id: "line-empty-controls",
+        group: "States",
+        title: "Empty With Controls",
+        detail: "Empty state centered in the remaining plot viewport.",
+        background: StorybookData.darkBackground,
+        height: 310
+    ) {
+        LivelineChart(
+            data: [],
+            value: 0,
+            color: StorybookData.blue,
+            configuration: StorybookData.lineConfig(
+                theme: .dark,
+                window: 60,
+                windows: StorybookData.windows,
+                showValue: true,
+                emptyText: "No data to display"
+            )
         )
     }
 

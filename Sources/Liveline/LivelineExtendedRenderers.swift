@@ -488,9 +488,23 @@ extension LivelineRenderer {
         guard alpha > 0.01 else { return }
         var layer = context
         layer.opacity *= alpha
-        let center = CGPoint(x: (layout.plotLeftX + layout.rightX) / 2, y: layout.padding.top + layout.chartHeight * 0.56)
-        let radius = max(12, min(layout.chartWidth * 0.38, layout.chartHeight * 0.42))
-        let start = style.startAngleDegrees
+        let plotRect = CGRect(
+            x: layout.plotLeftX,
+            y: layout.padding.top,
+            width: layout.chartWidth,
+            height: layout.chartHeight
+        )
+        let geometry = LivelineMath.gaugeGeometry(
+            in: plotRect,
+            startAngleDegrees: style.resolvedStartAngleDegrees,
+            sweepDegrees: style.resolvedSweepDegrees,
+            lineWidth: style.resolvedLineWidth,
+            hasOuterMarks: style.showsTicks || style.target != nil,
+            showsValue: style.showsValue
+        )
+        let center = geometry.center
+        let radius = geometry.radius
+        let start = style.resolvedStartAngleDegrees
         let end = start + style.resolvedSweepDegrees
         let progress = LivelineMath.gaugeProgress(value: value, range: range)
 
@@ -498,7 +512,7 @@ extension LivelineRenderer {
         track.addArc(center: center, radius: radius, startAngle: .degrees(start), endAngle: .degrees(end), clockwise: false)
         layer.stroke(
             track,
-            with: .color(palette.gridLabel.opacity(style.resolvedTrackOpacity)),
+            with: .color(palette.tooltipText.opacity(style.resolvedTrackOpacity)),
             style: StrokeStyle(lineWidth: style.resolvedLineWidth, lineCap: .round)
         )
 
@@ -519,33 +533,44 @@ extension LivelineRenderer {
         }
 
         if style.showsTicks {
-            for index in 0...5 {
-                let angle = (start + style.resolvedSweepDegrees * Double(index) / 5) * Double.pi / 180
-                let outside = LivelineMath.polarPoint(center: center, radius: radius + style.resolvedLineWidth / 2 + 4, angle: angle)
-                let inside = LivelineMath.polarPoint(center: center, radius: radius + style.resolvedLineWidth / 2 - 2, angle: angle)
+            let lastIndex = style.resolvedTickCount - 1
+            for index in 0...lastIndex {
+                let angle = (start + style.resolvedSweepDegrees * Double(index) / Double(lastIndex)) * Double.pi / 180
+                let isMajor = index == 0 || index == lastIndex || index * 2 == lastIndex
+                let innerRadius = radius + style.resolvedLineWidth / 2 + 5
+                let outerRadius = innerRadius + (isMajor ? 7 : 4)
+                let inside = LivelineMath.polarPoint(center: center, radius: innerRadius, angle: angle)
+                let outside = LivelineMath.polarPoint(center: center, radius: outerRadius, angle: angle)
                 var tick = Path()
                 tick.move(to: inside)
                 tick.addLine(to: outside)
-                layer.stroke(tick, with: .color(palette.gridLabel), lineWidth: 1)
+                layer.stroke(
+                    tick,
+                    with: .color(palette.tooltipText.opacity(isMajor ? 0.42 : 0.26)),
+                    style: StrokeStyle(lineWidth: isMajor ? 1.5 : 1, lineCap: .round)
+                )
             }
         }
 
         if let target = style.target {
             let targetProgress = LivelineMath.gaugeProgress(value: target, range: range)
             let angle = (start + style.resolvedSweepDegrees * targetProgress) * Double.pi / 180
-            let inside = LivelineMath.polarPoint(center: center, radius: radius - style.resolvedLineWidth / 2 - 3, angle: angle)
-            let outside = LivelineMath.polarPoint(center: center, radius: radius + style.resolvedLineWidth / 2 + 3, angle: angle)
-            var marker = Path()
-            marker.move(to: inside)
-            marker.addLine(to: outside)
-            layer.stroke(marker, with: .color(palette.tooltipText), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            let markerColor = style.targetColor ?? palette.tooltipText
+            let markerCenter = LivelineMath.polarPoint(
+                center: center,
+                radius: radius + style.resolvedLineWidth / 2 + 6,
+                angle: angle
+            )
+            let targetPin = extendedSymbolPath(.diamond, center: markerCenter, size: 8)
+            layer.fill(targetPin, with: .color(markerColor))
+            layer.stroke(targetPin, with: .color(palette.backgroundRGB.color), lineWidth: 1)
         }
 
         if style.showsValue {
             extendedDrawText(
                 formatValue(value),
                 context: &layer,
-                at: CGPoint(x: center.x, y: center.y + 8),
+                at: CGPoint(x: center.x, y: center.y + min(10, radius * 0.08)),
                 anchor: .center,
                 color: palette.tooltipText,
                 font: .system(size: 24, weight: .semibold, design: .rounded)

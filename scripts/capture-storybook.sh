@@ -29,6 +29,7 @@ SCENARIOS=(
   line-degen
   line-loading
   line-empty
+  line-empty-controls
   candle-basic
   candle-light
   candle-line-mode

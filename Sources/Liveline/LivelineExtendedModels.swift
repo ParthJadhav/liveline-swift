@@ -357,7 +357,9 @@ public struct LivelineGaugeStyle {
     public var trackOpacity: Double
     public var progressColor: Color?
     public var target: Double?
+    public var targetColor: Color?
     public var showsTicks: Bool
+    public var tickCount: Int
     public var showsValue: Bool
 
     public init(
@@ -367,22 +369,28 @@ public struct LivelineGaugeStyle {
         trackOpacity: Double = 0.12,
         progressColor: Color? = nil,
         target: Double? = nil,
+        targetColor: Color? = nil,
         showsTicks: Bool = true,
+        tickCount: Int = 9,
         showsValue: Bool = true
     ) {
-        self.startAngleDegrees = startAngleDegrees
-        self.sweepDegrees = sweepDegrees
-        self.lineWidth = lineWidth
-        self.trackOpacity = trackOpacity
+        self.startAngleDegrees = startAngleDegrees.isFinite ? startAngleDegrees : 150
+        self.sweepDegrees = sweepDegrees.isFinite ? sweepDegrees : 240
+        self.lineWidth = lineWidth.isFinite ? lineWidth : 18
+        self.trackOpacity = trackOpacity.isFinite ? trackOpacity : 0.12
         self.progressColor = progressColor
-        self.target = target
+        self.target = target.flatMap { $0.isFinite ? $0 : nil }
+        self.targetColor = targetColor
         self.showsTicks = showsTicks
+        self.tickCount = tickCount
         self.showsValue = showsValue
     }
 
+    var resolvedStartAngleDegrees: Double { startAngleDegrees.isFinite ? startAngleDegrees : 150 }
     var resolvedSweepDegrees: Double { min(max(abs(sweepDegrees), 1), 359.5) }
     var resolvedLineWidth: CGFloat { max(lineWidth, 1) }
     var resolvedTrackOpacity: Double { min(max(trackOpacity, 0), 1) }
+    var resolvedTickCount: Int { min(max(tickCount, 2), 25) }
 }
 
 /// Visual options for a funnel chart.
