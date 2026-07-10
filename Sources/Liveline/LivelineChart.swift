@@ -15,6 +15,7 @@ public struct LivelineChart: View {
     private let accent: Color
     private let baseConfiguration: LivelineChartConfiguration
 
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @StateObject private var renderState = LivelineRenderState()
     @State private var activeWindow: TimeInterval
     @State private var hoverLocation: CGPoint?
@@ -396,7 +397,7 @@ private extension LivelineChart {
     var effectiveConfiguration: LivelineChartConfiguration {
         var configuration = baseConfiguration
         configuration.lineMode = lineMode
-        return configuration
+        return configuration.respectingReducedMotion(accessibilityReduceMotion)
     }
 
     var currentValue: Double {

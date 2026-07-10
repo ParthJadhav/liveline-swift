@@ -725,6 +725,17 @@ public struct LivelineChartConfiguration {
     }
 }
 
+extension LivelineChartConfiguration {
+    func respectingReducedMotion(_ enabled: Bool) -> LivelineChartConfiguration {
+        guard enabled else { return self }
+        var configuration = self
+        configuration.fadeEffects = false
+        configuration.pulse = false
+        configuration.degen = nil
+        return configuration
+    }
+}
+
 public enum LivelineFormatters {
     public static func value(_ value: Double) -> String {
         String(format: "%.2f", value)

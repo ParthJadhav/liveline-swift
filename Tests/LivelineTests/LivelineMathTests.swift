@@ -357,6 +357,24 @@ final class LivelineMathTests: XCTestCase {
         XCTAssertEqual(LivelineMath.revealedPoints(points, reveal: 1), points)
     }
 
+    func testReducedMotionSuppressesContinuousAndSpatialEffects() {
+        let configuration = LivelineChartConfiguration(
+            pulse: true,
+            fadeEffects: true,
+            degen: LivelineDegenOptions(scale: 1, downMomentum: true)
+        )
+
+        let unchanged = configuration.respectingReducedMotion(false)
+        XCTAssertTrue(unchanged.pulse)
+        XCTAssertTrue(unchanged.fadeEffects)
+        XCTAssertNotNil(unchanged.degen)
+
+        let reduced = configuration.respectingReducedMotion(true)
+        XCTAssertFalse(reduced.pulse)
+        XCTAssertFalse(reduced.fadeEffects)
+        XCTAssertNil(reduced.degen)
+    }
+
     func testGaugeGeometryCentersDifferentSweepShapes() {
         let rect = CGRect(x: 0, y: 0, width: 360, height: 240)
         for geometry in [

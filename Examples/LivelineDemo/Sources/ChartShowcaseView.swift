@@ -8,6 +8,7 @@ struct ChartShowcaseView: View {
         case outro
     }
 
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @State private var phase: Phase = .intro
     @State private var sceneIndex = 0
     @State private var introVisible = false
@@ -65,7 +66,7 @@ struct ChartShowcaseView: View {
                     .lineSpacing(4)
             }
             .frame(maxWidth: 390, alignment: .leading)
-            .offset(x: introVisible ? 0 : -28)
+            .offset(x: accessibilityReduceMotion ? 0 : (introVisible ? 0 : -28))
             .opacity(introVisible ? 1 : 0)
 
             VStack(alignment: .leading, spacing: 10) {
@@ -75,7 +76,7 @@ struct ChartShowcaseView: View {
                 showcasePillRow(["STACKS", "TIMELINE", "HEATMAP"])
                 showcasePillRow(["RADAR", "DONUT", "GAUGE", "FUNNEL"])
             }
-            .scaleEffect(introVisible ? 1 : 0.9, anchor: .leading)
+            .scaleEffect(accessibilityReduceMotion ? 1 : (introVisible ? 1 : 0.9), anchor: .leading)
             .opacity(introVisible ? 1 : 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -214,7 +215,7 @@ struct ChartShowcaseView: View {
                 .foregroundStyle(.white.opacity(0.74))
                 .padding(.top, 20)
         }
-        .scaleEffect(outroVisible ? 1 : 0.92)
+        .scaleEffect(accessibilityReduceMotion ? 1 : (outroVisible ? 1 : 0.92))
         .opacity(outroVisible ? 1 : 0)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -222,7 +223,7 @@ struct ChartShowcaseView: View {
     @MainActor
     private func playShowcase() async {
         await pause(1.65)
-        withAnimation(.spring(response: 0.85, dampingFraction: 0.82)) {
+        withAnimation(entranceAnimation) {
             introVisible = true
         }
         await pause(2.2)
@@ -242,9 +243,15 @@ struct ChartShowcaseView: View {
             phase = .outro
         }
         await pause(0.08)
-        withAnimation(.spring(response: 0.8, dampingFraction: 0.84)) {
+        withAnimation(entranceAnimation) {
             outroVisible = true
         }
+    }
+
+    private var entranceAnimation: Animation {
+        accessibilityReduceMotion
+            ? .easeOut(duration: 0.2)
+            : .spring(response: 0.4, dampingFraction: 1)
     }
 
     private func pause(_ seconds: Double) async {

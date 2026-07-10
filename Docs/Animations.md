@@ -37,3 +37,7 @@ Candlestick charts animate between OHLC bars and line mode with the same staged 
 ## Degen Effects
 
 `LivelineDegenOptions` adds particle bursts and a short chart shake on momentum changes. This is intentionally opt-in.
+
+## Reduced Motion
+
+Liveline follows the system Reduce Motion setting automatically. Renderer reveals complete immediately, continuous pulses stop, and opt-in particle or shake effects are suppressed while static chart state and color feedback remain available.
