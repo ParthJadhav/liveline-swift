@@ -2,11 +2,14 @@ import Liveline
 import SwiftUI
 
 struct ContentView: View {
+    private let chartShowcase = StorybookLaunch.chartShowcaseFromArguments()
     private let launchedScenario = StorybookLaunch.scenarioFromArguments()
     private let chartOnly = StorybookLaunch.chartOnlyFromArguments()
 
     var body: some View {
-        if let launchedScenario {
+        if chartShowcase {
+            ChartShowcaseView()
+        } else if let launchedScenario {
             StorybookScenarioScreen(scenario: launchedScenario, chrome: false, chartOnly: chartOnly)
         } else {
             TabView {

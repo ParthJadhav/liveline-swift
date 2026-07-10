@@ -16,6 +16,12 @@ These screenshots are captured from the included deterministic iOS Storybook sce
   <img src="Media/readme/examples.png" alt="Liveline Swift Storybook screenshots showing line, momentum, orderbook, candlestick, mode control, and multi-series charts" />
 </p>
 
+### Animated chart showcase
+
+[![Watch the Liveline Swift animated chart showcase](Media/liveline-chart-showcase-poster.png)](Media/liveline-chart-showcase.mp4)
+
+The 1080p showcase renders and animates all eighteen additional chart families in the included iOS demo. Regenerate it with `scripts/record-chart-showcase.sh`.
+
 ## Requirements
 
 - iOS 16+

@@ -2,6 +2,10 @@ import Liveline
 import SwiftUI
 
 struct StorybookLaunch {
+    static func chartShowcaseFromArguments() -> Bool {
+        ProcessInfo.processInfo.arguments.contains("--chart-showcase")
+    }
+
     static func scenarioFromArguments() -> StorybookScenario? {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: "--storybook-scenario"),
