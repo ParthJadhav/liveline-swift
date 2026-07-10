@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Build README media with browser-rendered HTML/CSS layouts."""
+"""Build consistently cropped chart tiles for the README gallery."""
 
 from __future__ import annotations
 
-import subprocess
 from collections import deque
 from pathlib import Path
 
@@ -12,19 +11,35 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIR = ROOT / "Media" / "storybook-chart-only"
-OUT_DIR = ROOT / "Media" / "readme"
-BUILD_DIR = ROOT / ".build" / "readme-media"
-RENDER_SCRIPT = ROOT / "scripts" / "render-readme-media.mjs"
+OUT_DIR = ROOT / "Media" / "readme" / "charts"
 
+# Removes the simulator chrome and the unused lower portion of each Storybook
+# capture while retaining the complete chart panel.
 PANEL_CROP = (46, 226, 1160, 1164)
+OUTPUT_WIDTH = 900
 
-EXAMPLES = [
-    ("line-basic-dark", "Line chart", "Live value badge and scrub marker"),
-    ("line-momentum-up", "Momentum", "Value-aware color and direction arrows"),
-    ("line-orderbook", "Orderbook labels", "Streaming side labels beside the plot"),
-    ("candle-basic", "Candlesticks", "OHLC bodies with live-candle glow"),
-    ("candle-mode-controls", "Mode controls", "Line/candle toggle states"),
-    ("multi-basic", "Multi-series", "Labeled comparison lines"),
+CHARTS = [
+    ("line-basic-dark", "Line"),
+    ("candle-basic", "Candlestick"),
+    ("multi-basic", "Multi-series"),
+    ("bar-basic", "Bar"),
+    ("range-basic", "Range band"),
+    ("scatter-basic", "Scatter"),
+    ("step-basic", "Step"),
+    ("lollipop-basic", "Lollipop"),
+    ("bubble-basic", "Bubble"),
+    ("boxplot-basic", "Box plot"),
+    ("waterfall-basic", "Waterfall"),
+    ("errorbar-basic", "Error bar"),
+    ("dumbbell-basic", "Dumbbell"),
+    ("stackedbar-basic", "Stacked bar"),
+    ("stackedarea-basic", "Stacked area"),
+    ("timeline-basic", "Timeline"),
+    ("heatmap-basic", "Heatmap"),
+    ("radar-basic", "Radar"),
+    ("donut-basic", "Donut"),
+    ("gauge-basic", "Gauge"),
+    ("funnel-basic", "Funnel"),
 ]
 
 
@@ -35,8 +50,8 @@ def remove_edge_background(image: Image.Image) -> None:
     queue: deque[tuple[int, int]] = deque()
 
     def is_background(x: int, y: int) -> bool:
-        r, g, b, a = pixels[x, y]
-        return a > 0 and r >= 242 and g >= 242 and b >= 242
+        red, green, blue, alpha = pixels[x, y]
+        return alpha > 0 and red >= 242 and green >= 242 and blue >= 242
 
     for x in range(width):
         if is_background(x, 0):
@@ -66,317 +81,27 @@ def remove_edge_background(image: Image.Image) -> None:
             queue.append((x, y + 1))
 
 
-def crop_panel(slug: str) -> Image.Image:
+def build_tile(slug: str) -> None:
     source = Image.open(SOURCE_DIR / f"{slug}.png").convert("RGBA")
     panel = source.crop(PANEL_CROP)
     remove_edge_background(panel)
-    bbox = panel.getbbox()
-    return panel if bbox is None else panel.crop(bbox)
+    bounds = panel.getbbox()
+    if bounds is not None:
+        panel = panel.crop(bounds)
 
-
-def save_panel(slug: str) -> None:
-    panel = crop_panel(slug)
-    scale = 900 / panel.width
-    resized = panel.resize((900, round(panel.height * scale)), Image.Resampling.LANCZOS)
-    resized.save(OUT_DIR / f"{slug}.png")
-
-
-def image_src(name: str) -> str:
-    return (OUT_DIR / name).resolve().as_uri()
-
-
-def write_html(filename: str, body: str) -> Path:
-    html = f"""<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root {{
-      --ink: #101725;
-      --muted: #5f6d7e;
-      --paper: #ffffff;
-      --canvas: #f3f6fb;
-      --rail: #e7edf5;
-      --rule: #d6dee9;
-    }}
-
-    * {{ box-sizing: border-box; }}
-
-    body {{
-      margin: 0;
-      background: transparent;
-      color: var(--ink);
-      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
-    }}
-
-    .cover {{
-      width: 1600px;
-      height: 900px;
-      display: grid;
-      grid-template-columns: 600px 1fr;
-      gap: 58px;
-      padding: 72px 92px;
-      background: var(--canvas);
-    }}
-
-    .cover-copy {{
-      display: flex;
-      min-width: 0;
-      flex-direction: column;
-      justify-content: flex-start;
-      padding: 24px 0 0;
-    }}
-
-    h1 {{
-      margin: 0 0 22px;
-      font-size: 74px;
-      line-height: 0.98;
-      font-weight: 650;
-      letter-spacing: -0.032em;
-    }}
-
-    .dek {{
-      max-width: 540px;
-      margin: 0;
-      color: #2d3746;
-      font-size: 32px;
-      line-height: 1.24;
-      letter-spacing: -0.018em;
-    }}
-
-    .summary {{
-      max-width: 550px;
-      margin: 20px 0 0;
-      color: var(--muted);
-      font-size: 23px;
-      line-height: 1.4;
-    }}
-
-    .facts {{
-      display: grid;
-      gap: 0;
-      margin: 52px 0 0;
-      border-top: 1px solid var(--rule);
-    }}
-
-    .fact {{
-      display: grid;
-      grid-template-columns: 142px 1fr;
-      align-items: baseline;
-      min-height: 72px;
-      border-bottom: 1px solid var(--rule);
-    }}
-
-    .fact span {{
-      color: #7a8798;
-      font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      font-size: 18px;
-      letter-spacing: 0.02em;
-    }}
-
-    .fact strong {{
-      font-size: 27px;
-      font-weight: 500;
-      letter-spacing: -0.018em;
-    }}
-
-    .runtime {{
-      display: grid;
-      gap: 16px;
-      margin-top: 50px;
-      color: var(--muted);
-      font-size: 23px;
-    }}
-
-    .runtime code {{
-      display: inline-flex;
-      align-items: center;
-      width: max-content;
-      height: 50px;
-      padding: 0 20px;
-      border-radius: 12px;
-      background: var(--ink);
-      color: #fff;
-      font-family: ui-monospace, "SF Mono", Menlo, monospace;
-      font-size: 19px;
-      white-space: nowrap;
-    }}
-
-    .cover-visual {{
-      min-width: 0;
-      padding: 28px;
-      border-radius: 30px;
-      background: var(--rail);
-    }}
-
-    .cover-stage {{
-      height: 100%;
-      display: grid;
-      grid-template-rows: 1fr 210px;
-      gap: 24px;
-      padding: 30px;
-      border-radius: 24px;
-      background: #fbfcfe;
-    }}
-
-    .hero-shot,
-    .thumb {{
-      overflow: hidden;
-      display: grid;
-      place-items: center;
-      border-radius: 14px;
-      background: #070707;
-      box-shadow: 0 14px 28px rgba(16, 23, 37, 0.12);
-    }}
-
-    .hero-shot img,
-    .thumb img {{
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }}
-
-    .thumb-grid {{
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 24px;
-      min-height: 0;
-    }}
-
-    .examples {{
-      width: 1600px;
-      height: 1060px;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 30px;
-      padding: 72px;
-      background: var(--canvas);
-    }}
-
-    .example-card {{
-      min-width: 0;
-      min-height: 0;
-      display: grid;
-      grid-template-rows: auto 1fr;
-      gap: 22px;
-      padding: 30px;
-      border-radius: 18px;
-      background: var(--paper);
-    }}
-
-    .example-label {{
-      min-width: 0;
-    }}
-
-    .example-label h2 {{
-      margin: 0;
-      color: var(--ink);
-      font-size: 28px;
-      line-height: 1.05;
-      font-weight: 620;
-      letter-spacing: -0.02em;
-    }}
-
-    .example-label p {{
-      margin: 8px 0 0;
-      color: var(--muted);
-      font-size: 18px;
-      line-height: 1.3;
-    }}
-
-    .example-image {{
-      min-width: 0;
-      min-height: 0;
-      display: grid;
-      place-items: center;
-      overflow: hidden;
-      border-radius: 10px;
-      background: #070707;
-    }}
-
-    .example-card img {{
-      display: block;
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-    }}
-  </style>
-</head>
-<body>
-{body}
-</body>
-</html>
-"""
-    path = BUILD_DIR / filename
-    path.write_text(html)
-    return path
-
-
-def render(html_path: Path, output: Path, selector: str) -> None:
-    subprocess.run(
-        ["node", str(RENDER_SCRIPT), str(html_path), str(output), selector],
-        cwd=ROOT,
-        check=True,
+    scale = OUTPUT_WIDTH / panel.width
+    tile = panel.resize(
+        (OUTPUT_WIDTH, round(panel.height * scale)),
+        Image.Resampling.LANCZOS,
     )
-
-
-def build_cover() -> None:
-    body = f"""
-<main class="cover capture">
-  <section class="cover-copy">
-    <div>
-      <h1>Liveline Swift</h1>
-      <p class="dek">Native SwiftUI charts for live data.</p>
-      <p class="summary">Line, candlestick, and multi-series rendering captured from deterministic iOS Storybook scenarios.</p>
-      <div class="facts" aria-label="Liveline capabilities">
-        <div class="fact"><span>Renderer</span><strong>SwiftUI Canvas</strong></div>
-        <div class="fact"><span>Modes</span><strong>Line / Candle / Multi-series</strong></div>
-        <div class="fact"><span>States</span><strong>Scrub · live badge · loading · empty</strong></div>
-      </div>
-    </div>
-    <div class="runtime"><code>iOS 16+ / Swift 5.9+</code><span>No WebView. No JavaScript bridge.</span></div>
-  </section>
-  <section class="cover-visual" aria-label="Liveline chart examples">
-    <div class="cover-stage">
-      <div class="hero-shot"><img src="{image_src('line-basic-dark.png')}" alt="" /></div>
-      <div class="thumb-grid">
-        <div class="thumb"><img src="{image_src('candle-basic.png')}" alt="" /></div>
-        <div class="thumb"><img src="{image_src('multi-basic.png')}" alt="" /></div>
-      </div>
-    </div>
-  </section>
-</main>
-"""
-    html = write_html("cover.html", body)
-    render(html, OUT_DIR / "cover.png", ".capture")
-
-
-def build_examples() -> None:
-    cards = "\n".join(
-        f"""
-        <figure class="example-card">
-          <figcaption class="example-label">
-            <h2>{title}</h2>
-            <p>{caption}</p>
-          </figcaption>
-          <div class="example-image"><img src="{image_src(slug + ".png")}" alt="" /></div>
-        </figure>
-        """
-        for slug, title, caption in EXAMPLES
-    )
-    html = write_html("examples.html", f'<main class="examples capture">{cards}</main>')
-    render(html, OUT_DIR / "examples.png", ".capture")
+    tile.save(OUT_DIR / f"{slug}.png", optimize=True)
 
 
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    BUILD_DIR.mkdir(parents=True, exist_ok=True)
-    for slug, _, _ in EXAMPLES:
-        save_panel(slug)
-    build_cover()
-    build_examples()
+    for slug, _ in CHARTS:
+        build_tile(slug)
+    print(f"Wrote {len(CHARTS)} README chart tiles to {OUT_DIR}")
 
 
 if __name__ == "__main__":

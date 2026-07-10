@@ -2,19 +2,49 @@
 
 Native SwiftUI real-time charts for iOS apps. Liveline includes line, candlestick, multi-series, bar, range-band, scatter, step, lollipop, bubble, box-plot, waterfall, error-bar, dumbbell, stacked-bar, stacked-area, timeline, heatmap, radar, donut, gauge, and funnel renderers with typed customization.
 
-<p align="center">
-  <img src="Media/readme/cover.png" alt="Liveline Swift cover showing line, candlestick, and multi-series charts" />
-</p>
-
 This repository is a Swift Package. Any iOS app can add it with Swift Package Manager and import `Liveline`.
 
-## Gallery
+## Chart gallery
 
-These screenshots are captured from the included deterministic iOS Storybook scenarios.
+Each cell is captured from the included deterministic iOS Storybook.
 
-<p align="center">
-  <img src="Media/readme/examples.png" alt="Liveline Swift Storybook screenshots showing line, momentum, orderbook, candlestick, mode control, and multi-series charts" />
-</p>
+<table>
+  <tr>
+    <td width="33.333%" align="center" valign="top"><strong>Line</strong><br><br><img src="Media/readme/charts/line-basic-dark.png" alt="Line chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Candlestick</strong><br><br><img src="Media/readme/charts/candle-basic.png" alt="Candlestick chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Multi-series</strong><br><br><img src="Media/readme/charts/multi-basic.png" alt="Multi-series chart" /></td>
+  </tr>
+  <tr>
+    <td width="33.333%" align="center" valign="top"><strong>Bar</strong><br><br><img src="Media/readme/charts/bar-basic.png" alt="Bar chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Range band</strong><br><br><img src="Media/readme/charts/range-basic.png" alt="Range-band chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Scatter</strong><br><br><img src="Media/readme/charts/scatter-basic.png" alt="Scatter chart" /></td>
+  </tr>
+  <tr>
+    <td width="33.333%" align="center" valign="top"><strong>Step</strong><br><br><img src="Media/readme/charts/step-basic.png" alt="Step chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Lollipop</strong><br><br><img src="Media/readme/charts/lollipop-basic.png" alt="Lollipop chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Bubble</strong><br><br><img src="Media/readme/charts/bubble-basic.png" alt="Bubble chart" /></td>
+  </tr>
+  <tr>
+    <td width="33.333%" align="center" valign="top"><strong>Box plot</strong><br><br><img src="Media/readme/charts/boxplot-basic.png" alt="Box-plot chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Waterfall</strong><br><br><img src="Media/readme/charts/waterfall-basic.png" alt="Waterfall chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Error bar</strong><br><br><img src="Media/readme/charts/errorbar-basic.png" alt="Error-bar chart" /></td>
+  </tr>
+  <tr>
+    <td width="33.333%" align="center" valign="top"><strong>Dumbbell</strong><br><br><img src="Media/readme/charts/dumbbell-basic.png" alt="Dumbbell chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Stacked bar</strong><br><br><img src="Media/readme/charts/stackedbar-basic.png" alt="Stacked-bar chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Stacked area</strong><br><br><img src="Media/readme/charts/stackedarea-basic.png" alt="Stacked-area chart" /></td>
+  </tr>
+  <tr>
+    <td width="33.333%" align="center" valign="top"><strong>Timeline</strong><br><br><img src="Media/readme/charts/timeline-basic.png" alt="Timeline chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Heatmap</strong><br><br><img src="Media/readme/charts/heatmap-basic.png" alt="Heatmap chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Radar</strong><br><br><img src="Media/readme/charts/radar-basic.png" alt="Radar chart" /></td>
+  </tr>
+  <tr>
+    <td width="33.333%" align="center" valign="top"><strong>Donut</strong><br><br><img src="Media/readme/charts/donut-basic.png" alt="Donut chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Gauge</strong><br><br><img src="Media/readme/charts/gauge-basic.png" alt="Gauge chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Funnel</strong><br><br><img src="Media/readme/charts/funnel-basic.png" alt="Funnel chart" /></td>
+  </tr>
+</table>
 
 ### Animated chart showcase
 
