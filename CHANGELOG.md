@@ -26,7 +26,7 @@
 - Adds release, optimized package, and macOS package build checks to CI and the release checklist.
 - Updates release documentation so tagging and GitHub releases do not imply a repository visibility change.
 
-## 0.1.1 - 2026-07-06
+## 0.1.1 - 2026-07-07
 
 - Documents the SwiftPM release tag and private repository install path.
 

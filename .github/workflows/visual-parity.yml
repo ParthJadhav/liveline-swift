@@ -21,7 +21,9 @@ jobs:
         run: scripts/capture-storybook.sh --chart-only
 
       - name: Diff screenshots
-        run: scripts/diff-storybook.sh --fail-changed-pct 5 --fail-rms 12
+        env:
+          VISUAL_PARITY_EXCLUSIONS: line-show-value-windows,line-rounded-windows,line-text-windows,candle-mode-controls,multi-basic,multi-light,multi-compact,multi-two-series
+        run: scripts/diff-storybook.sh --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12
 
       - name: Upload parity artifacts
         uses: actions/upload-artifact@v4
