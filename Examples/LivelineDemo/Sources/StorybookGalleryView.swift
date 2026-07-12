@@ -36,17 +36,15 @@ struct StorybookGalleryView: View {
                 }
             }
             .animation(.easeInOut(duration: 0.2), value: showsDitherExamples)
-            .navigationTitle(showsDitherExamples ? "Dither" : "Storybook")
+            .navigationTitle("Storybook")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    HStack(spacing: 6) {
-                        Text("Dither")
-                            .font(.caption.weight(.medium))
-                        Toggle("Dither examples", isOn: $showsDitherExamples)
-                            .labelsHidden()
-                            .accessibilityIdentifier("storybook-dither-toggle")
-                    }
+                    Toggle("Dither", isOn: $showsDitherExamples)
+                        .toggleStyle(.switch)
+                        .font(.caption.weight(.medium))
+                        .accessibilityLabel("Dither examples")
+                        .accessibilityIdentifier("storybook-dither-toggle")
                 }
             }
         }
