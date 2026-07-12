@@ -158,6 +158,12 @@ sparkles. It is clipped to chart marks so axes, labels, and tooltips stay crisp.
 Set `animated: false` for a static treatment. Reduce Motion freezes dither
 animation automatically.
 
+Scrubbing and tooltips work across every chart family. Cartesian charts select
+the nearest time bucket; timelines and heatmaps hit-test their cells; donut,
+radar, gauge, and funnel charts resolve the touched segment or axis. Compound
+marks show structured rows such as OHLC values, quartiles, ranges, and stacked
+series contributions.
+
 ![Dither style across line, bar, donut, and radar charts](Media/dither/dither-showcase.png)
 
 ![Animated Dither style](Media/dither/dither-showcase.gif)

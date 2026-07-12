@@ -209,6 +209,80 @@ final class LivelineRuntimeTests: XCTestCase {
         )
     }
 
+    func testEveryChartKindBuildsResolvableTooltipTargets() {
+        let points = [
+            LivelinePoint(time: 1, value: 4),
+            LivelinePoint(time: 2, value: 7),
+            LivelinePoint(time: 3, value: 5),
+        ]
+        let categories = [
+            LivelineCategoryValue(id: "a", label: "Alpha", value: 6),
+            LivelineCategoryValue(id: "b", label: "Beta", value: 4),
+        ]
+        let contents: [(LivelineChartKind, LivelineChartContent)] = [
+            (.line, .line(data: points, value: 5)),
+            (.bars, .bars(data: points, style: LivelineBarStyle())),
+            (.range, .range(data: [LivelineRangePoint(time: 1, lower: 2, upper: 6)], style: LivelineRangeStyle())),
+            (.scatter, .scatter(data: points, value: 5, style: LivelineScatterStyle())),
+            (.steps, .steps(data: points, value: 5, style: LivelineStepStyle())),
+            (.lollipops, .lollipops(data: points, style: LivelineLollipopStyle())),
+            (.bubbles, .bubbles(data: [LivelineBubblePoint(time: 1, value: 4, magnitude: 8)], style: LivelineBubbleStyle())),
+            (.boxPlots, .boxPlots(data: [LivelineBoxPlotPoint(time: 1, minimum: 1, lowerQuartile: 2, median: 4, upperQuartile: 6, maximum: 8)], style: LivelineBoxPlotStyle())),
+            (.waterfall, .waterfall(data: points, style: LivelineWaterfallStyle())),
+            (.errorBars, .errorBars(data: [LivelineErrorBarPoint(time: 1, value: 4, lower: 2, upper: 6)], style: LivelineErrorBarStyle())),
+            (.dumbbells, .dumbbells(data: [LivelineDumbbellPoint(time: 1, start: 2, end: 6)], style: LivelineDumbbellStyle())),
+            (.stackedBars, .stackedBars(data: [LivelineStackedPoint(time: 1, values: [2, 3])], style: LivelineStackedBarStyle())),
+            (.stackedAreas, .stackedAreas(data: [LivelineStackedPoint(time: 1, values: [2, 3])], style: LivelineStackedAreaStyle())),
+            (.timeline, .timeline(data: [LivelineTimelineItem(id: "one", label: "Deploy", start: 1, end: 3, lane: 0)], style: LivelineTimelineStyle())),
+            (.heatmap, .heatmap(data: [LivelineHeatmapCell(time: 1, row: 0, value: 0.8)], style: LivelineHeatmapStyle(rowLabels: ["API"]))),
+            (.radar, .radar(data: [LivelineRadarPoint(label: "A", value: 0.3), LivelineRadarPoint(label: "B", value: 0.8), LivelineRadarPoint(label: "C", value: 0.5)], style: LivelineRadarStyle())),
+            (.donut, .donut(data: categories, style: LivelineDonutStyle())),
+            (.gauge, .gauge(value: 0.65, range: 0...1, style: LivelineGaugeStyle())),
+            (.funnel, .funnel(data: categories, style: LivelineFunnelStyle())),
+            (.candle, .candle(data: points, value: 5, candles: [LivelineCandle(time: 1, open: 3, high: 6, low: 2, close: 5)], candleWidth: 1, liveCandle: nil, lineData: points, lineValue: 5)),
+            (.series, .series([LivelineSeries(id: "a", data: points, value: 5, color: .blue, label: "Alpha")])),
+        ]
+        XCTAssertEqual(contents.count, LivelineChartKind.allCases.count)
+
+        let configuration = LivelineChartConfiguration(window: 10, scrub: true, paused: true)
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 220),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 10,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2)
+
+        for (kind, content) in contents {
+            let prepared = LivelineChartPreparer.prepare(
+                for: content,
+                hiddenSeries: [],
+                leftEdge: layout.leftEdge,
+                rightEdge: layout.rightEdge,
+                config: configuration
+            )
+            let snapshot = LivelineInteractionBuilder.snapshot(
+                content: content,
+                prepared: prepared,
+                layout: layout,
+                palette: palette,
+                configuration: configuration,
+                hiddenSeries: [],
+                behavior: content.semantics().capabilities.hoverBehavior
+            )
+            let firstTarget = snapshot.targets.first
+            XCTAssertNotNil(firstTarget, "\(kind) did not create a tooltip target")
+            guard let firstTarget else { continue }
+            let selection = LivelineHoverResolver.resolveSelection(
+                location: firstTarget.selection.anchor,
+                snapshot: snapshot
+            )
+            XCTAssertFalse(selection?.rows.isEmpty ?? true, "\(kind) did not resolve tooltip rows")
+        }
+    }
+
     func testAnimationClockAndInterpolationFreezeWhilePaused() {
         let state = LivelineRenderState()
         let first = state.frame(for: 100, isPaused: false)

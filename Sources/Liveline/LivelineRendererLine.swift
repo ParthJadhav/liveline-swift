@@ -408,20 +408,6 @@ extension LivelineRenderer {
         layer.stroke(vertical, with: .color(palette.crosshairLine), lineWidth: 1)
 
         layer.fill(Path(ellipseIn: CGRect(x: hover.x - 3, y: hover.y - 3, width: 6, height: 6)), with: .color(palette.line))
-
-        let valueText = config.formatValue(hover.value)
-        let timeText = config.formatTime(hover.time)
-        let label = "\(valueText)  ·  \(timeText)"
-        let font = Font.system(size: 11, weight: .medium, design: .monospaced)
-        let measured = measureText(label, context: layer, font: font)
-        var x = hover.x - measured.width / 2
-        x = LivelineMath.clamp(x, layout.plotLeftX + 4, layout.rightX - measured.width - 4)
-        let rect = CGRect(x: x - 7, y: layout.padding.top + config.tooltipY, width: measured.width + 14, height: measured.height + 8)
-
-        layer.fill(Path(roundedRect: rect, cornerRadius: 6), with: .color(palette.tooltipBackground))
-        if config.tooltipOutline {
-            layer.stroke(Path(roundedRect: rect, cornerRadius: 6), with: .color(palette.tooltipBorder), lineWidth: 1)
-        }
-        drawText(label, context: &layer, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center, color: palette.tooltipText, font: font)
+        _ = config
     }
 }

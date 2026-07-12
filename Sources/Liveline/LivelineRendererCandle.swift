@@ -533,16 +533,7 @@ extension LivelineRenderer {
         vertical.move(to: CGPoint(x: hover.x, y: layout.padding.top))
         vertical.addLine(to: CGPoint(x: hover.x, y: layout.bottomY))
         layer.stroke(vertical, with: .color(palette.crosshairLine), lineWidth: 1)
-
-        let valueColor = candle.close >= candle.open ? Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255) : Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255)
-        let text = layout.size.width >= 400
-            ? "O \(config.formatValue(candle.open))   H \(config.formatValue(candle.high))   L \(config.formatValue(candle.low))   C \(config.formatValue(candle.close))  ·  \(config.formatTime(candle.time))"
-            : "C \(config.formatValue(candle.close))  ·  \(config.formatTime(candle.time))"
-        let font = Font.system(size: 11, weight: .medium, design: .monospaced)
-        let measured = measureText(text, context: layer, font: font)
-        var x = hover.x - measured.width / 2
-        x = LivelineMath.clamp(x, layout.plotLeftX + 4, layout.rightX - measured.width - 4)
-        let point = CGPoint(x: x + measured.width / 2, y: layout.padding.top + 24)
-        drawText(text, context: &layer, at: point, anchor: .center, color: valueColor, font: font)
+        _ = candle
+        _ = config
     }
 }

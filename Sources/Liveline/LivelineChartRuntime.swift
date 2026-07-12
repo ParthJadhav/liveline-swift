@@ -1,5 +1,5 @@
-import CoreGraphics
 import Foundation
+import SwiftUI
 
 /// Pure rules for reconciling view-owned selections when public inputs change.
 enum LivelineSelectionReconciler {
@@ -90,6 +90,33 @@ struct LivelineInteractionSnapshot {
     var points: [LivelinePoint]
     var behavior: LivelineHoverBehavior
     var isEnabled: Bool
+    var targets: [LivelineInteractionTarget] = []
+}
+
+struct LivelineTooltipRow {
+    var label: String
+    var value: String
+    var color: Color
+}
+
+struct LivelineTooltipSelection {
+    var hover: LivelineHoverPoint
+    var heading: String?
+    var rows: [LivelineTooltipRow]
+    var anchor: CGPoint
+    var showsGuide: Bool
+}
+
+struct LivelineInteractionTarget {
+    var selection: LivelineTooltipSelection
+    var region: LivelineInteractionRegion
+}
+
+enum LivelineInteractionRegion {
+    case x
+    case rect(CGRect)
+    case circle(center: CGPoint, radius: CGFloat)
+    case sector(center: CGPoint, innerRadius: CGFloat, outerRadius: CGFloat, startAngle: Double, endAngle: Double)
 }
 
 /// Converts pointer input into chart values without performing callbacks or
@@ -99,23 +126,52 @@ enum LivelineHoverResolver {
         location: CGPoint?,
         snapshot: LivelineInteractionSnapshot?
     ) -> LivelineHoverPoint? {
+        resolveSelection(location: location, snapshot: snapshot)?.hover
+    }
+
+    static func resolveSelection(
+        location: CGPoint?,
+        snapshot: LivelineInteractionSnapshot?
+    ) -> LivelineTooltipSelection? {
         guard let location,
               let snapshot,
-              snapshot.isEnabled,
-              snapshot.behavior != .none,
-              location.x >= snapshot.layout.plotLeftX,
-              location.x <= snapshot.layout.rightX
+              snapshot.isEnabled
         else {
             return nil
         }
 
+        if !snapshot.targets.isEmpty {
+            let direct = snapshot.targets
+                .filter { contains(location, region: $0.region) }
+                .min { distanceSquared(location, $0.selection.anchor) < distanceSquared(location, $1.selection.anchor) }
+            if let direct { return direct.selection }
+
+            let plot = CGRect(
+                x: snapshot.layout.plotLeftX,
+                y: snapshot.layout.padding.top,
+                width: snapshot.layout.chartWidth,
+                height: snapshot.layout.chartHeight
+            )
+            guard plot.contains(location) else { return nil }
+            return snapshot.targets
+                .filter { if case .x = $0.region { return true }; return false }
+                .min { abs($0.selection.anchor.x - location.x) < abs($1.selection.anchor.x - location.x) }?
+                .selection
+        }
+
+        guard snapshot.behavior != .none,
+              location.x >= snapshot.layout.plotLeftX,
+              location.x <= snapshot.layout.rightX
+        else { return nil }
+
         let time = snapshot.layout.time(for: location.x)
+        let hover: LivelineHoverPoint?
         switch snapshot.behavior {
         case .none:
             return nil
         case .discrete:
             guard let nearest = nearestPoint(to: time, in: snapshot.points) else { return nil }
-            return LivelineHoverPoint(
+            hover = LivelineHoverPoint(
                 time: nearest.time,
                 value: nearest.value,
                 x: snapshot.layout.x(for: nearest.time),
@@ -125,13 +181,52 @@ enum LivelineHoverResolver {
             guard let value = LivelineMath.interpolateOrdered(points: snapshot.points, at: time) else {
                 return nil
             }
-            return LivelineHoverPoint(
+            hover = LivelineHoverPoint(
                 time: time,
                 value: value,
                 x: location.x,
                 y: snapshot.layout.y(for: value)
             )
         }
+        guard let hover else { return nil }
+        return LivelineTooltipSelection(
+            hover: hover,
+            heading: nil,
+            rows: [],
+            anchor: CGPoint(x: hover.x, y: hover.y),
+            showsGuide: true
+        )
+    }
+
+    private static func contains(_ location: CGPoint, region: LivelineInteractionRegion) -> Bool {
+        switch region {
+        case .x:
+            return false
+        case let .rect(rect):
+            return rect.insetBy(dx: -8, dy: -8).contains(location)
+        case let .circle(center, radius):
+            return distanceSquared(location, center) <= radius * radius
+        case let .sector(center, innerRadius, outerRadius, startAngle, endAngle):
+            let dx = location.x - center.x
+            let dy = location.y - center.y
+            let radius = hypot(dx, dy)
+            guard radius >= innerRadius, radius <= outerRadius else { return false }
+            let fullTurn = 2 * Double.pi
+            var angle = atan2(Double(dy), Double(dx)).truncatingRemainder(dividingBy: fullTurn)
+            if angle < 0 { angle += fullTurn }
+            var start = startAngle.truncatingRemainder(dividingBy: fullTurn)
+            if start < 0 { start += fullTurn }
+            var end = endAngle
+            while end < start { end += fullTurn }
+            if angle < start { angle += fullTurn }
+            return angle >= start && angle <= end
+        }
+    }
+
+    private static func distanceSquared(_ lhs: CGPoint, _ rhs: CGPoint) -> CGFloat {
+        let dx = lhs.x - rhs.x
+        let dy = lhs.y - rhs.y
+        return dx * dx + dy * dy
     }
 
     private static func nearestPoint(to time: TimeInterval, in points: [LivelinePoint]) -> LivelinePoint? {

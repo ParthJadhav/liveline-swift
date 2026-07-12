@@ -393,6 +393,7 @@ extension LivelineRenderer {
         hover: LivelineHoverPoint?,
         scrubAmount: Double,
         configuration: LivelineChartConfiguration,
+        tooltipSelection: LivelineTooltipSelection?,
         reveal: Double,
         animationTimestamp: TimeInterval
     ) {
@@ -465,16 +466,27 @@ extension LivelineRenderer {
         }
 
         if case .none = overlay {
-            return
+            // Radial, timeline, heatmap, and funnel charts have no endpoint
+            // overlay, but still participate in the shared tooltip layer.
+        } else {
+            drawActivePoint(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                points: prepared.primaryVisible,
+                activePoint: configuration.activePoint,
+                alpha: reveal,
+                timestamp: animationTimestamp
+            )
         }
-        drawActivePoint(
+
+        drawTooltipSelection(
             context: &context,
             layout: layout,
             palette: palette,
-            points: prepared.primaryVisible,
-            activePoint: configuration.activePoint,
-            alpha: reveal,
-            timestamp: animationTimestamp
+            selection: tooltipSelection,
+            configuration: configuration,
+            alpha: scrubAmount
         )
     }
 }

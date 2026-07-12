@@ -172,6 +172,45 @@ final class LivelineRendererSmokeTests: XCTestCase {
     }
 
     @MainActor
+    func testStructuredTooltipOverlayRendersAboveChartContent() throws {
+        let renderer = ImageRenderer(
+            content: Canvas { context, size in
+                let layout = LivelineLayout(
+                    size: size,
+                    padding: LivelineResolvedPadding(top: 10, right: 10, bottom: 10, left: 10),
+                    minValue: 0,
+                    maxValue: 10,
+                    leftEdge: 0,
+                    rightEdge: 10
+                )
+                let palette = LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2)
+                LivelineRenderer.drawTooltipSelection(
+                    context: &context,
+                    layout: layout,
+                    palette: palette,
+                    selection: LivelineTooltipSelection(
+                        hover: LivelineHoverPoint(time: 5, value: 6, x: 120, y: 80),
+                        heading: "Jun",
+                        rows: [
+                            LivelineTooltipRow(label: "Desktop", value: "158", color: .blue),
+                            LivelineTooltipRow(label: "Mobile", value: "70", color: .purple),
+                        ],
+                        anchor: CGPoint(x: 120, y: 80),
+                        showsGuide: true
+                    ),
+                    configuration: LivelineChartConfiguration(),
+                    alpha: 1
+                )
+            }
+            .frame(width: 240, height: 160)
+            .background(Color.black)
+        )
+        renderer.proposedSize = ProposedViewSize(width: 240, height: 160)
+        let image: NSImage = try XCTUnwrap(renderer.nsImage)
+        XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
+    }
+
+    @MainActor
     func testExtremeFiniteValuesRenderWithoutOverflow() throws {
         let chart = LivelineChart(
             data: [

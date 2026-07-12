@@ -207,14 +207,21 @@ enum LivelineRenderer {
             drawOrderbook(context: &layer, layout: layout, palette: palette, state: state, orderbook: orderbook, randomSeed: config.randomSeed, deltaTime: dt, swingMagnitude: swingMagnitude, alpha: state.chartReveal)
         }
 
-        let interactionSnapshot = LivelineInteractionSnapshot(
+        let interactionSnapshot = LivelineInteractionBuilder.snapshot(
+            content: input.content,
+            prepared: renderData,
             layout: layout,
-            points: renderData.primaryVisible,
-            behavior: capabilities.hoverBehavior,
-            isEnabled: config.scrub
+            palette: palette,
+            configuration: config,
+            hiddenSeries: input.hiddenSeries,
+            behavior: capabilities.hoverBehavior
         )
         state.interactionSnapshot = interactionSnapshot
-        let hover = LivelineHoverResolver.resolve(location: input.hoverLocation, snapshot: interactionSnapshot)
+        let tooltipSelection = LivelineHoverResolver.resolveSelection(
+            location: input.hoverLocation,
+            snapshot: interactionSnapshot
+        )
+        let hover = tooltipSelection?.hover
         let scrubAmount = config.scrub && hover != nil ? 1.0 : 0.0
 
         let compositorInput = LivelineCompositorInput(
@@ -300,6 +307,7 @@ enum LivelineRenderer {
             hover: hover,
             scrubAmount: scrubAmount,
             configuration: config,
+            tooltipSelection: tooltipSelection,
             reveal: state.chartReveal,
             animationTimestamp: animationTimestamp
         )
