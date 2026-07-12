@@ -27,15 +27,11 @@ extension LivelineRenderer {
             max(96, headingWidth + horizontalPadding * 2, labelWidth + valueWidth + swatchAndGap + columnGap + horizontalPadding * 2)
         )
         let height = CGFloat(rows.count) * rowHeight + headingHeight + 12
-        let minimumX = layout.plotLeftX + 4
-        let maximumX = max(minimumX, layout.rightX - width - 4)
-        let x = LivelineMath.clamp(selection.anchor.x - width / 2, minimumX, maximumX)
-        var y = selection.anchor.y - height - 12
-        if y < layout.padding.top + 4 {
-            y = selection.anchor.y + 12
-        }
-        y = LivelineMath.clamp(y, layout.padding.top + 4, layout.bottomY - height - 4)
-        let rect = CGRect(x: x, y: y, width: width, height: height)
+        let rect = tooltipRect(
+            anchor: selection.anchor,
+            size: CGSize(width: width, height: height),
+            layout: layout
+        )
 
         var layer = context
         layer.opacity *= alpha
@@ -100,5 +96,42 @@ extension LivelineRenderer {
             )
             cursorY += rowHeight
         }
+    }
+
+    static func tooltipRect(anchor: CGPoint, size: CGSize, layout: LivelineLayout) -> CGRect {
+        let minimumX = layout.plotLeftX + 4
+        let maximumX = max(minimumX, layout.rightX - size.width - 4)
+        let minimumY = layout.padding.top + 4
+        let maximumY = max(minimumY, layout.bottomY - size.height - 4)
+        let preferredAboveY = anchor.y - size.height - 12
+        let origin: CGPoint
+
+        if preferredAboveY >= minimumY {
+            origin = CGPoint(
+                x: LivelineMath.clamp(anchor.x - size.width / 2, minimumX, maximumX),
+                y: preferredAboveY
+            )
+        } else {
+            let rightX = anchor.x + 12
+            let leftX = anchor.x - size.width - 12
+            if rightX <= maximumX {
+                origin = CGPoint(
+                    x: rightX,
+                    y: LivelineMath.clamp(anchor.y - size.height / 2, minimumY, maximumY)
+                )
+            } else if leftX >= minimumX {
+                origin = CGPoint(
+                    x: leftX,
+                    y: LivelineMath.clamp(anchor.y - size.height / 2, minimumY, maximumY)
+                )
+            } else {
+                origin = CGPoint(
+                    x: LivelineMath.clamp(anchor.x - size.width / 2, minimumX, maximumX),
+                    y: LivelineMath.clamp(anchor.y + 12, minimumY, maximumY)
+                )
+            }
+        }
+
+        return CGRect(origin: origin, size: size)
     }
 }

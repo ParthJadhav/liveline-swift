@@ -334,8 +334,9 @@ enum LivelineInteractionBuilder {
             }
             return visible.sorted { $0.time < $1.time }.map { candle in
                 let color = LivelineRenderer.candleColor(isUp: candle.close >= candle.open).color
+                let centerTime = candle.time + candleWidth / 2
                 return xTarget(
-                    point: LivelinePoint(time: candle.time, value: candle.close),
+                    point: LivelinePoint(time: centerTime, value: candle.close),
                     anchorValue: candle.high,
                     heading: time(candle.time),
                     rows: [

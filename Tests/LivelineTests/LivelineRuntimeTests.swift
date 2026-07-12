@@ -275,12 +275,37 @@ final class LivelineRuntimeTests: XCTestCase {
             let firstTarget = snapshot.targets.first
             XCTAssertNotNil(firstTarget, "\(kind) did not create a tooltip target")
             guard let firstTarget else { continue }
+            if kind == .candle {
+                XCTAssertEqual(firstTarget.selection.hover.time, 1.5)
+                XCTAssertEqual(firstTarget.selection.hover.x, layout.x(for: 1.5), accuracy: 0.0001)
+            }
             let selection = LivelineHoverResolver.resolveSelection(
                 location: firstTarget.selection.anchor,
                 snapshot: snapshot
             )
             XCTAssertFalse(selection?.rows.isEmpty ?? true, "\(kind) did not resolve tooltip rows")
         }
+    }
+
+    func testTallTooltipMovesBesideHighCandleAnchor() {
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 220),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 10,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let anchor = CGPoint(x: 120, y: 38)
+        let rect = LivelineRenderer.tooltipRect(
+            anchor: anchor,
+            size: CGSize(width: 140, height: 90),
+            layout: layout
+        )
+
+        XCTAssertGreaterThan(rect.minX, anchor.x)
+        XCTAssertFalse(rect.contains(anchor))
+        XCTAssertGreaterThanOrEqual(rect.minY, layout.padding.top + 4)
     }
 
     func testAnimationClockAndInterpolationFreezeWhilePaused() {
