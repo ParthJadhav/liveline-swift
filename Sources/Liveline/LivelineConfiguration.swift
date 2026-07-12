@@ -14,7 +14,28 @@ public struct LivelineChartAppearance {
 
     public init(
         theme: LivelineThemeMode = .dark,
-        style: LivelineChartStyle = .standard,
+        grid: Bool = true,
+        fill: Bool = true,
+        lineWidth: CGFloat = 2,
+        showValue: Bool = false,
+        valueMomentumColor: Bool = false,
+        emptyText: String = "No data to display",
+        padding: LivelinePadding = LivelinePadding()
+    ) {
+        self.theme = theme
+        self.style = .standard
+        self.grid = grid
+        self.fill = fill
+        self.lineWidth = lineWidth
+        self.showValue = showValue
+        self.valueMomentumColor = valueMomentumColor
+        self.emptyText = emptyText
+        self.padding = padding
+    }
+
+    public init(
+        theme: LivelineThemeMode = .dark,
+        style: LivelineChartStyle,
         grid: Bool = true,
         fill: Bool = true,
         lineWidth: CGFloat = 2,
@@ -221,7 +242,7 @@ public struct LivelineChartConfiguration {
 
     public init(
         theme: LivelineThemeMode = .dark,
-        style: LivelineChartStyle = .standard,
+        style: LivelineChartStyle,
         window: TimeInterval = 30,
         windows: [LivelineWindowOption] = [],
         grid: Bool = true,
@@ -307,7 +328,7 @@ public struct LivelineChartConfiguration {
 
     public init(
         theme: LivelineThemeMode = .dark,
-        style: LivelineChartStyle = .standard,
+        style: LivelineChartStyle,
         window: TimeInterval = 30,
         windows: [LivelineWindowOption] = [],
         grid: Bool = true,
