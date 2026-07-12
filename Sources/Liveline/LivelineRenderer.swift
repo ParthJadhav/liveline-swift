@@ -252,7 +252,12 @@ enum LivelineRenderer {
                         )
                     )
                 }
-                contentOverlay = drawContent(context: &styledLayer, state: state, input: compositorInput)
+                contentOverlay = drawContent(
+                    context: &styledLayer,
+                    state: state,
+                    input: compositorInput,
+                    drawText: false
+                )
                 drawDitherTexture(
                     context: &styledLayer,
                     layout: layout,
@@ -261,6 +266,7 @@ enum LivelineRenderer {
                     timestamp: animationTimestamp
                 )
             }
+            drawContentText(context: &layer, input: compositorInput, overlay: contentOverlay)
         }
 
         if capabilities.usesTimeAxis {

@@ -23,7 +23,10 @@ struct LivelineCompositorInput {
 enum LivelineContentOverlay {
     case line(livePoint: CGPoint?)
     case candle(LivelineCandleOverlay)
-    case series([LivelineSeries])
+    case series(
+        entries: [LivelineSeries],
+        endpoints: [(point: CGPoint, palette: LivelinePalette, label: String?, alpha: Double)]
+    )
     case standard
     case none
 }
@@ -43,7 +46,8 @@ extension LivelineRenderer {
     static func drawContent(
         context: inout GraphicsContext,
         state: LivelineRenderState,
-        input: LivelineCompositorInput
+        input: LivelineCompositorInput,
+        drawText: Bool = true
     ) -> LivelineContentOverlay {
         let config = input.configuration
         let layout = input.layout
@@ -67,6 +71,8 @@ extension LivelineRenderer {
                 timestamp: input.animationTimestamp,
                 fadeEffects: config.fadeEffects
             )
+            var decorationConfig = config
+            if !drawText { decorationConfig.badge = false }
             drawLineDecorations(
                 context: &context,
                 state: state,
@@ -74,7 +80,7 @@ extension LivelineRenderer {
                 palette: palette,
                 points: points,
                 momentum: momentum,
-                config: config,
+                config: decorationConfig,
                 scrubAmount: input.scrubAmount,
                 smoothValue: input.smoothValue,
                 swingMagnitude: input.swingMagnitude,
@@ -223,7 +229,8 @@ extension LivelineRenderer {
                 palette: palette,
                 items: data.filter { $0.end >= layout.leftEdge && $0.start <= layout.rightEdge },
                 style: style,
-                reveal: reveal
+                reveal: reveal,
+                drawLabels: drawText
             )
             return .none
 
@@ -235,24 +242,25 @@ extension LivelineRenderer {
                 cells: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
                 style: style,
                 formatValue: config.formatValue,
-                reveal: reveal
+                reveal: reveal,
+                drawLabels: drawText
             )
             return .none
 
         case let .radar(data, style):
-            drawRadar(context: &context, layout: layout, palette: palette, points: data, style: style, reveal: reveal)
+            drawRadar(context: &context, layout: layout, palette: palette, points: data, style: style, reveal: reveal, drawLabels: drawText)
             return .none
 
         case let .donut(data, style):
-            drawDonut(context: &context, layout: layout, palette: palette, data: data, style: style, formatValue: config.formatValue, reveal: reveal)
+            drawDonut(context: &context, layout: layout, palette: palette, data: data, style: style, formatValue: config.formatValue, reveal: reveal, drawLabels: drawText)
             return .none
 
         case let .gauge(value, range, style):
-            drawGauge(context: &context, layout: layout, palette: palette, value: value, range: range, style: style, formatValue: config.formatValue, reveal: reveal)
+            drawGauge(context: &context, layout: layout, palette: palette, value: value, range: range, style: style, formatValue: config.formatValue, reveal: reveal, drawLabels: drawText)
             return .none
 
         case let .funnel(data, style):
-            drawFunnel(context: &context, layout: layout, palette: palette, data: data, style: style, formatValue: config.formatValue, reveal: reveal)
+            drawFunnel(context: &context, layout: layout, palette: palette, data: data, style: style, formatValue: config.formatValue, reveal: reveal, drawLabels: drawText)
             return .none
 
         case let .candle(_, _, candles, candleWidth, liveCandle, lineData, lineValue):
@@ -300,9 +308,78 @@ extension LivelineRenderer {
                 alpha: reveal,
                 showPulse: config.pulse && reveal > 0.6 && state.pauseProgress < 0.5,
                 timestamp: input.animationTimestamp,
-                legendSide: config.seriesLegendSide
+                legendSide: config.seriesLegendSide,
+                drawsLabel: drawText
             )
-            return .series(series)
+            return .series(entries: series, endpoints: endpoints)
+        }
+    }
+
+    static func drawContentText(
+        context: inout GraphicsContext,
+        input: LivelineCompositorInput,
+        overlay: LivelineContentOverlay
+    ) {
+        let config = input.configuration
+        let layout = input.layout
+        let palette = input.palette
+        let reveal = input.reveal
+
+        switch input.content {
+        case .line:
+            guard config.badge, case let .line(livePoint) = overlay, let livePoint else { return }
+            drawBadge(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                value: input.smoothValue,
+                momentum: resolvedMomentum(config: config, points: input.prepared.primaryVisible),
+                y: livePoint.y,
+                config: config,
+                alpha: reveal
+            )
+        case let .timeline(data, style):
+            drawTimeline(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                items: data.filter { $0.end >= layout.leftEdge && $0.start <= layout.rightEdge },
+                style: style,
+                reveal: reveal,
+                drawMarks: false
+            )
+        case let .heatmap(data, style):
+            drawHeatmap(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                cells: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                style: style,
+                formatValue: config.formatValue,
+                reveal: reveal,
+                drawMarks: false
+            )
+        case let .radar(data, style):
+            drawRadar(context: &context, layout: layout, palette: palette, points: data, style: style, reveal: reveal, drawMarks: false)
+        case let .donut(data, style):
+            drawDonut(context: &context, layout: layout, palette: palette, data: data, style: style, formatValue: config.formatValue, reveal: reveal, drawMarks: false)
+        case let .gauge(value, range, style):
+            drawGauge(context: &context, layout: layout, palette: palette, value: value, range: range, style: style, formatValue: config.formatValue, reveal: reveal, drawMarks: false)
+        case let .funnel(data, style):
+            drawFunnel(context: &context, layout: layout, palette: palette, data: data, style: style, formatValue: config.formatValue, reveal: reveal, drawMarks: false)
+        case .series:
+            guard case let .series(_, endpoints) = overlay else { return }
+            drawSeriesEndpoints(
+                context: &context,
+                endpoints: endpoints,
+                alpha: reveal,
+                showPulse: false,
+                timestamp: input.animationTimestamp,
+                legendSide: config.seriesLegendSide,
+                drawsDot: false
+            )
+        default:
+            break
         }
     }
 
@@ -360,7 +437,7 @@ extension LivelineRenderer {
                 )
             }
 
-        case let .series(series):
+        case let .series(series, _):
             drawMultiCrosshair(
                 context: &context,
                 layout: layout,

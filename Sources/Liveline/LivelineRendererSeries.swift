@@ -59,7 +59,9 @@ extension LivelineRenderer {
         alpha: Double,
         showPulse: Bool,
         timestamp: TimeInterval,
-        legendSide: LivelineLegendSide
+        legendSide: LivelineLegendSide,
+        drawsDot: Bool = true,
+        drawsLabel: Bool = true
     ) {
         let dotAlpha = alpha < 0.3 ? 0 : (alpha - 0.3) / 0.7
         guard dotAlpha > 0.01 else { return }
@@ -67,15 +69,17 @@ extension LivelineRenderer {
         for endpoint in endpoints {
             var layer = context
             layer.opacity *= dotAlpha * endpoint.alpha
-            drawMultiEndpointDot(
-                context: &layer,
-                at: endpoint.point,
-                color: endpoint.palette.line,
-                showPulse: showPulse && endpoint.alpha > 0.5,
-                timestamp: timestamp
-            )
+            if drawsDot {
+                drawMultiEndpointDot(
+                    context: &layer,
+                    at: endpoint.point,
+                    color: endpoint.palette.line,
+                    showPulse: showPulse && endpoint.alpha > 0.5,
+                    timestamp: timestamp
+                )
+            }
 
-            if let label = endpoint.label {
+            if drawsLabel, let label = endpoint.label {
                 let labelOffset: CGFloat = legendSide == .trailing ? 6 : -6
                 let anchor: UnitPoint = legendSide == .trailing ? .leading : .trailing
                 drawText(
