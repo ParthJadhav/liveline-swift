@@ -308,6 +308,56 @@ final class LivelineRuntimeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(rect.minY, layout.padding.top + 4)
     }
 
+    func testCandleLineModeTooltipTracksDenseLineInsteadOfCandleHigh() {
+        let linePoints = [
+            LivelinePoint(time: 1.25, value: 4.25),
+            LivelinePoint(time: 1.75, value: 4.75),
+        ]
+        let content = LivelineChartContent.candle(
+            data: linePoints,
+            value: 4.75,
+            candles: [LivelineCandle(time: 1, open: 3, high: 9, low: 2, close: 5)],
+            candleWidth: 1,
+            liveCandle: nil,
+            lineData: linePoints,
+            lineValue: 4.75
+        )
+        let configuration = LivelineChartConfiguration(window: 10, scrub: true, paused: true, lineMode: true)
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 220),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 10,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let palette = LivelinePalette.resolve(accent: .orange, mode: .dark, lineWidth: 2)
+        let prepared = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: layout.leftEdge,
+            rightEdge: layout.rightEdge,
+            config: configuration
+        )
+
+        let snapshot = LivelineInteractionBuilder.snapshot(
+            content: content,
+            prepared: prepared,
+            layout: layout,
+            palette: palette,
+            configuration: configuration,
+            hiddenSeries: [],
+            behavior: content.semantics().capabilities.hoverBehavior
+        )
+
+        XCTAssertEqual(snapshot.targets.count, linePoints.count)
+        XCTAssertEqual(snapshot.targets[0].selection.hover.time, linePoints[0].time)
+        XCTAssertEqual(snapshot.targets[0].selection.hover.value, linePoints[0].value)
+        XCTAssertEqual(snapshot.targets[0].selection.anchor.x, layout.x(for: linePoints[0].time), accuracy: 0.0001)
+        XCTAssertEqual(snapshot.targets[0].selection.anchor.y, layout.y(for: linePoints[0].value), accuracy: 0.0001)
+        XCTAssertEqual(snapshot.targets[0].selection.rows.map(\.label), ["Value"])
+    }
+
     func testAnimationClockAndInterpolationFreezeWhilePaused() {
         let state = LivelineRenderState()
         let first = state.frame(for: 100, isPaused: false)

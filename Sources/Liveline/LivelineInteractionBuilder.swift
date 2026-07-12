@@ -323,7 +323,23 @@ enum LivelineInteractionBuilder {
                 )
             }
 
-        case let .candle(_, _, candles, candleWidth, liveCandle, _, _):
+        case let .candle(_, _, candles, candleWidth, liveCandle, lineData, _):
+            // Once candles have morphed into line mode, the visible geometry is
+            // the dense line series rather than the candle highs and bodies.
+            // Build the interaction model from that same series so the marker,
+            // guide, and tooltip remain attached to the rendered path.
+            if configuration.lineMode, !lineData.isEmpty {
+                return lineData.livelineVisible(in: visibleRange).map { point in
+                    xTarget(
+                        point: point,
+                        anchorValue: point.value,
+                        heading: time(point.time),
+                        rows: [row("Value", value(point.value), palette.line)],
+                        layout: layout
+                    )
+                }
+            }
+
             var visible = candles.livelineVisible(in: visibleRange, candleWidth: candleWidth)
             if let liveCandle, liveCandle.time + candleWidth >= visibleRange.lowerBound, liveCandle.time <= visibleRange.upperBound {
                 if let index = visible.firstIndex(where: { $0.time == liveCandle.time }) {
