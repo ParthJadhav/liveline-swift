@@ -164,59 +164,15 @@ charts responsive. Set `maximumFramesPerSecond` up to 120 when a higher refresh
 rate is worth the additional rendering cost. Standard-style realtime charts
 continue using their 60 FPS rendering policy.
 
-## Direct MP4 Export
-
-On macOS 13 or newer, the package includes `liveline-render`, an offscreen
-renderer that writes H.264 MP4 files directly. It uses Liveline's native SwiftUI
-renderer and deterministic animation clock, so chart reveal, value interpolation,
-dither bloom, and sparkles are preserved without launching Simulator, screen
-recording, or cropping.
-
-```bash
-swift run -c release liveline-render \
-  --chart line \
-  --style dither \
-  --variant dotted \
-  --bloom aura \
-  --values 92,98,95,108,112,106,117 \
-  --value-motion stream \
-  --width 1920 \
-  --height 1080 \
-  --fps 30 \
-  --duration 5 \
-  --output Media/line-dotted.mp4
-```
-
-The command supports `line`, `bars`, `candle`, `multi`, `stacked-bar`,
-`stacked-area`, `timeline`, `heatmap`, `radar`, `donut`, `gauge`, and `funnel`.
-Use `--style standard` for regular vector rendering or configure dither with
-`--variant`, `--bloom`, `--cell-size`, `--sparkle-density`, and
-`--animation-speed`. `--value-motion static|pulse|stream` controls whether the
-supplied values remain fixed or update during the export.
-
-Categorical and radial charts accept labels alongside their values:
-
-```bash
-swift run liveline-render \
-  --chart donut \
-  --variant hatched \
-  --values 42,28,18,12 \
-  --labels Pro,Team,Starter,Other \
-  --output donut.mp4
-```
-
-Run `swift run liveline-render --help` for every video, theme, colour, value,
-and dither option.
-
 Scrubbing and tooltips work across every chart family. Cartesian charts select
 the nearest time bucket; timelines and heatmaps hit-test their cells; donut,
 radar, gauge, and funnel charts resolve the touched segment or axis. Compound
 marks show structured rows such as OHLC values, quartiles, ranges, and stacked
 series contributions.
 
-![Dither style across line, bar, donut, and radar charts](Media/dither/dither-showcase.png)
+[![Dynamically rendered Dither charts](Media/liveline-launch-poster.png)](Media/liveline-launch.mp4)
 
-![Animated Dither style](Media/dither/dither-showcase.gif)
+![Animated dynamically rendered Dither charts](Media/liveline-launch.gif)
 
 ## Chart Modes
 
@@ -381,3 +337,5 @@ The generated project uses the local package path (`../..`). CI builds this demo
 ## Attribution
 
 Liveline Swift is a native Swift implementation inspired by [benjitaylor/liveline](https://github.com/benjitaylor/liveline). It does not embed the original React/canvas implementation.
+
+The ordered-dither chart style is inspired by [Dither Kit](https://www.tripwire.sh/dither-kit) from Boring Software Inc. Liveline reimplements the effect natively in SwiftUI and does not embed Dither Kit's React/TypeScript source.
