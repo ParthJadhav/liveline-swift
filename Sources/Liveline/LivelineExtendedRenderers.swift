@@ -226,22 +226,18 @@ extension LivelineRenderer {
         context: inout GraphicsContext,
         layout: LivelineLayout,
         palette: LivelinePalette,
-        items: [LivelineTimelineItem],
+        geometry: LivelineTimelineGeometry,
         style: LivelineTimelineStyle,
-        reveal: Double
+        drawLabels: Bool = true
     ) {
-        let progress = LivelineMath.easedReveal(reveal)
-        guard !items.isEmpty, progress > 0.001 else { return }
-        let laneCount = max((items.map(\.lane).max() ?? 0) + 1, 1)
-        let laneHeight = layout.chartHeight / CGFloat(laneCount)
-        let barHeight = max(laneHeight * style.resolvedBarHeightRatio, 3)
+        guard !geometry.marks.isEmpty, geometry.progress > 0.001 else { return }
         let layer = context
 
         if style.showsLaneGuides {
             var guideLayer = layer
-            guideLayer.opacity *= min(progress * 2, 1)
-            for lane in 0..<laneCount {
-                let y = layout.padding.top + CGFloat(lane + 1) * laneHeight
+            guideLayer.opacity *= min(geometry.progress * 2, 1)
+            for lane in 0..<geometry.laneCount {
+                let y = layout.padding.top + CGFloat(lane + 1) * geometry.laneHeight
                 var guide = Path()
                 guide.move(to: CGPoint(x: layout.plotLeftX, y: y))
                 guide.addLine(to: CGPoint(x: layout.rightX, y: y))
@@ -251,37 +247,34 @@ extension LivelineRenderer {
 
         var bars = layer
         bars.clip(to: plotClip(layout))
-        for (index, item) in items.enumerated() {
-            let localReveal = LivelineMath.staggeredReveal(index: index, count: items.count, reveal: reveal)
-            guard localReveal > 0.001 else { continue }
-            let x1 = layout.x(for: item.start)
-            let x2 = layout.x(for: item.end)
-            let displayedX2 = x1 + (x2 - x1) * CGFloat(localReveal)
-            let y = layout.padding.top + (CGFloat(item.lane) + 0.5) * laneHeight
-            let rect = CGRect(
-                x: min(x1, displayedX2),
-                y: y - barHeight / 2,
-                width: max(abs(displayedX2 - x1), 2),
-                height: barHeight
-            )
-            let color = extendedSeriesColor(index: index, colors: style.colors, palette: palette)
+        for mark in geometry.marks {
             bars.fill(
-                Path(roundedRect: rect, cornerRadius: min(style.resolvedCornerRadius, barHeight / 2)),
-                with: .color(color.opacity(0.86))
+                Path(roundedRect: mark.rect, cornerRadius: min(style.resolvedCornerRadius, geometry.barHeight / 2)),
+                with: .color(mark.color.opacity(0.86))
             )
+        }
+        if drawLabels {
+            drawTimelineLabels(context: &bars, geometry: geometry, style: style)
+        }
+    }
 
-            if style.showsLabels, localReveal > 0.72, rect.width > 30 {
-                var labelLayer = bars
-                labelLayer.opacity *= LivelineMath.easedReveal((localReveal - 0.72) / 0.28)
-                drawText(
-                    item.label,
-                    context: &labelLayer,
-                    at: CGPoint(x: rect.midX, y: rect.midY),
-                    anchor: .center,
-                    color: .white.opacity(0.92),
-                    font: .system(size: 9, weight: .semibold)
-                )
-            }
+    static func drawTimelineLabels(
+        context: inout GraphicsContext,
+        geometry: LivelineTimelineGeometry,
+        style: LivelineTimelineStyle
+    ) {
+        guard style.showsLabels else { return }
+        for mark in geometry.marks where mark.reveal > 0.72 && mark.rect.width > 30 {
+            var labelLayer = context
+            labelLayer.opacity *= LivelineMath.easedReveal((mark.reveal - 0.72) / 0.28)
+            drawText(
+                mark.item.label,
+                context: &labelLayer,
+                at: CGPoint(x: mark.rect.midX, y: mark.rect.midY),
+                anchor: .center,
+                color: .white.opacity(0.92),
+                font: .system(size: 9, weight: .semibold)
+            )
         }
     }
 
@@ -289,74 +282,68 @@ extension LivelineRenderer {
         context: inout GraphicsContext,
         layout: LivelineLayout,
         palette: LivelinePalette,
-        cells: [LivelineHeatmapCell],
+        geometry: LivelineHeatmapGeometry,
         style: LivelineHeatmapStyle,
         formatValue: (Double) -> String,
-        reveal: Double
+        drawLabels: Bool = true
     ) {
-        let progress = LivelineMath.easedReveal(reveal)
-        guard !cells.isEmpty, progress > 0.001 else { return }
-        let rowCount = max((cells.map(\.row).max() ?? 0) + 1, style.rowLabels.count, 1)
-        let rowHeight = layout.chartHeight / CGFloat(rowCount)
-        let times = Array(Set(cells.map(\.time))).sorted()
-        let width = bucketWidth(times: times, layout: layout, ratio: style.resolvedCellWidthRatio, maximum: .greatestFiniteMagnitude)
-        let height = max(rowHeight * style.resolvedCellHeightRatio, 1)
-        let minimum = cells.map(\.value).min() ?? 0
-        let maximum = cells.map(\.value).max() ?? minimum
-        let baseColor = style.color ?? palette.line
-        let baseRGB = baseColor.livelineRGBA()
-        let orderedCells = cells.sorted {
-            $0.time == $1.time ? $0.row < $1.row : $0.time < $1.time
-        }
+        guard !geometry.marks.isEmpty, geometry.progress > 0.001 else { return }
 
-        let layer = context
+        var layer = context
         var clipped = layer
         clipped.clip(to: plotClip(layout))
 
-        for (index, cell) in orderedCells.enumerated() {
-            let localReveal = LivelineMath.staggeredReveal(index: index, count: orderedCells.count, reveal: reveal)
-            guard localReveal > 0.001 else { continue }
-            let opacity = LivelineMath.heatmapOpacity(
-                value: cell.value,
-                minimum: minimum,
-                maximum: maximum,
-                minimumOpacity: style.resolvedMinimumOpacity,
-                maximumOpacity: style.resolvedMaximumOpacity
-            )
-            let color = baseRGB.map { palette.backgroundRGB.blended(to: $0, t: opacity).color }
-                ?? baseColor.opacity(opacity)
-            let centerY = layout.padding.top + (CGFloat(cell.row) + 0.5) * rowHeight
-            let displayedWidth = width * CGFloat(localReveal)
-            let displayedHeight = height * CGFloat(localReveal)
-            let rect = CGRect(
-                x: layout.x(for: cell.time) - displayedWidth / 2,
-                y: centerY - displayedHeight / 2,
-                width: displayedWidth,
-                height: displayedHeight
-            )
+        for mark in geometry.marks {
             clipped.fill(
-                Path(roundedRect: rect, cornerRadius: min(style.resolvedCornerRadius, displayedWidth / 2, displayedHeight / 2)),
-                with: .color(color)
+                Path(
+                    roundedRect: mark.rect,
+                    cornerRadius: min(style.resolvedCornerRadius, mark.rect.width / 2, mark.rect.height / 2)
+                ),
+                with: .color(mark.color)
             )
+        }
 
-            if style.showsValues, localReveal > 0.8, width > 25, height > 14 {
+        if drawLabels {
+            drawHeatmapLabels(
+                context: &layer,
+                layout: layout,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: formatValue
+            )
+        }
+    }
+
+    static func drawHeatmapLabels(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        geometry: LivelineHeatmapGeometry,
+        style: LivelineHeatmapStyle,
+        formatValue: (Double) -> String
+    ) {
+        if style.showsValues, geometry.cellWidth > 25, geometry.cellHeight > 14 {
+            var clipped = context
+            clipped.clip(to: plotClip(layout))
+            for mark in geometry.marks where mark.reveal > 0.8 {
                 var valueLayer = clipped
-                valueLayer.opacity *= LivelineMath.easedReveal((localReveal - 0.8) / 0.2)
+                valueLayer.opacity *= LivelineMath.easedReveal((mark.reveal - 0.8) / 0.2)
                 drawText(
-                    formatValue(cell.value),
+                    formatValue(mark.cell.value),
                     context: &valueLayer,
-                    at: CGPoint(x: rect.midX, y: rect.midY),
+                    at: CGPoint(x: mark.rect.midX, y: mark.rect.midY),
                     anchor: .center,
-                    color: opacity > 0.55 ? .white.opacity(0.9) : palette.gridLabel,
+                    color: mark.opacity > 0.55 ? .white.opacity(0.9) : palette.gridLabel,
                     font: .system(size: 8, weight: .medium, design: .monospaced)
                 )
             }
         }
 
-        var labelLayer = layer
-        labelLayer.opacity *= min(progress * 2, 1)
-        for row in 0..<min(rowCount, style.rowLabels.count) {
-            let y = layout.padding.top + (CGFloat(row) + 0.5) * rowHeight
+        var labelLayer = context
+        labelLayer.opacity *= min(geometry.progress * 2, 1)
+        for row in 0..<min(geometry.rowCount, style.rowLabels.count) {
+            let y = layout.padding.top + (CGFloat(row) + 0.5) * geometry.rowHeight
             drawText(
                 style.rowLabels[row],
                 context: &labelLayer,
@@ -370,28 +357,26 @@ extension LivelineRenderer {
 
     static func drawRadar(
         context: inout GraphicsContext,
-        layout: LivelineLayout,
         palette: LivelinePalette,
+        geometry: LivelineRadarGeometry,
         points: [LivelineRadarPoint],
         style: LivelineRadarStyle,
-        reveal: Double
+        drawLabels: Bool = true
     ) {
-        let progress = LivelineMath.easedReveal(reveal)
-        guard points.count >= 3, progress > 0.001 else { return }
+        guard points.count >= 3, geometry.progress > 0.001 else { return }
         let layer = context
-        let center = CGPoint(x: (layout.plotLeftX + layout.rightX) / 2, y: layout.padding.top + layout.chartHeight / 2)
-        let labelInset: CGFloat = style.showsLabels ? 30 : 8
-        let radius = max(8, min(layout.chartWidth, layout.chartHeight) / 2 - labelInset)
-        let angleStep = 2 * Double.pi / Double(points.count)
-        let startAngle = -Double.pi / 2
 
         var gridLayer = layer
-        gridLayer.opacity *= min(progress * 1.8, 1)
+        gridLayer.opacity *= min(geometry.progress * 1.8, 1)
         for level in 1...style.resolvedGridLevels {
-            let levelRadius = radius * CGFloat(level) / CGFloat(style.resolvedGridLevels)
+            let levelRadius = geometry.radius * CGFloat(level) / CGFloat(style.resolvedGridLevels)
             var polygon = Path()
             for index in points.indices {
-                let point = LivelineMath.polarPoint(center: center, radius: levelRadius, angle: startAngle + Double(index) * angleStep)
+                let point = LivelineMath.polarPoint(
+                    center: geometry.center,
+                    radius: levelRadius,
+                    angle: geometry.startAngle + Double(index) * geometry.angleStep
+                )
                 index == points.startIndex ? polygon.move(to: point) : polygon.addLine(to: point)
             }
             polygon.closeSubpath()
@@ -399,29 +384,16 @@ extension LivelineRenderer {
         }
 
         for index in points.indices {
-            let angle = startAngle + Double(index) * angleStep
-            let endpoint = LivelineMath.polarPoint(center: center, radius: radius, angle: angle)
+            let angle = geometry.startAngle + Double(index) * geometry.angleStep
+            let endpoint = LivelineMath.polarPoint(center: geometry.center, radius: geometry.radius, angle: angle)
             var spoke = Path()
-            spoke.move(to: center)
+            spoke.move(to: geometry.center)
             spoke.addLine(to: endpoint)
             gridLayer.stroke(spoke, with: .color(palette.gridLine), lineWidth: 1)
         }
 
-        let valuePoints = points.enumerated().map { index, point -> CGPoint in
-            let progress = LivelineMath.clamp(
-                (point.value - style.resolvedRange.lowerBound) / (style.resolvedRange.upperBound - style.resolvedRange.lowerBound),
-                0,
-                1
-            )
-            return LivelineMath.polarPoint(
-                center: center,
-                radius: radius * CGFloat(progress * LivelineMath.easedReveal(reveal)),
-                angle: startAngle + Double(index) * angleStep
-            )
-        }
-
         var valuePath = Path()
-        for (index, point) in valuePoints.enumerated() {
+        for (index, point) in geometry.valuePoints.enumerated() {
             index == 0 ? valuePath.move(to: point) : valuePath.addLine(to: point)
         }
         valuePath.closeSubpath()
@@ -431,101 +403,118 @@ extension LivelineRenderer {
         }
 
         if style.resolvedPointSize > 0 {
-            for point in valuePoints {
+            for point in geometry.valuePoints {
                 let marker = Path(ellipseIn: CGRect(
-                    x: point.x - style.resolvedPointSize * CGFloat(progress) / 2,
-                    y: point.y - style.resolvedPointSize * CGFloat(progress) / 2,
-                    width: style.resolvedPointSize * CGFloat(progress),
-                    height: style.resolvedPointSize * CGFloat(progress)
+                    x: point.x - style.resolvedPointSize * CGFloat(geometry.progress) / 2,
+                    y: point.y - style.resolvedPointSize * CGFloat(geometry.progress) / 2,
+                    width: style.resolvedPointSize * CGFloat(geometry.progress),
+                    height: style.resolvedPointSize * CGFloat(geometry.progress)
                 ))
                 layer.fill(marker, with: .color(palette.line))
             }
         }
 
-        if style.showsLabels {
-            var labelLayer = layer
-            labelLayer.opacity *= LivelineMath.easedReveal((progress - 0.45) / 0.55)
-            for (index, point) in points.enumerated() {
-                let angle = startAngle + Double(index) * angleStep
-                let labelPoint = LivelineMath.polarPoint(center: center, radius: radius + 14, angle: angle)
-                drawText(
-                    point.label,
-                    context: &labelLayer,
-                    at: labelPoint,
-                    anchor: extendedRadialAnchor(angle: angle),
-                    color: palette.gridLabel,
-                    font: .system(size: 9, weight: .medium)
-                )
-            }
+        if drawLabels {
+            drawRadarLabels(context: &context, palette: palette, geometry: geometry, points: points, style: style)
+        }
+    }
+
+    static func drawRadarLabels(
+        context: inout GraphicsContext,
+        palette: LivelinePalette,
+        geometry: LivelineRadarGeometry,
+        points: [LivelineRadarPoint],
+        style: LivelineRadarStyle
+    ) {
+        guard style.showsLabels else { return }
+        var labelLayer = context
+        labelLayer.opacity *= LivelineMath.easedReveal((geometry.progress - 0.45) / 0.55)
+        for (index, point) in points.enumerated() {
+            let angle = geometry.startAngle + Double(index) * geometry.angleStep
+            let labelPoint = LivelineMath.polarPoint(center: geometry.center, radius: geometry.radius + 14, angle: angle)
+            drawText(
+                point.label,
+                context: &labelLayer,
+                at: labelPoint,
+                anchor: extendedRadialAnchor(angle: angle),
+                color: palette.gridLabel,
+                font: .system(size: 9, weight: .medium)
+            )
         }
     }
 
     static func drawDonut(
         context: inout GraphicsContext,
-        layout: LivelineLayout,
         palette: LivelinePalette,
-        data: [LivelineCategoryValue],
+        geometry: LivelineDonutGeometry,
         style: LivelineDonutStyle,
         formatValue: (Double) -> String,
-        reveal: Double
+        drawLabels: Bool = true
     ) {
-        let positive = data.filter { $0.value > 0 }
-        let total = positive.map(\.value).reduce(0, +)
-        let progress = LivelineMath.easedReveal(reveal)
-        guard !positive.isEmpty, total > 0, progress > 0.001 else { return }
+        guard !geometry.segments.isEmpty, geometry.total > 0, geometry.progress > 0.001 else { return }
         var layer = context
-        let center = CGPoint(x: (layout.plotLeftX + layout.rightX) / 2, y: layout.padding.top + layout.chartHeight / 2)
-        let outerRadius = max(12, min(layout.chartWidth, layout.chartHeight) * (style.showsLabels ? 0.34 : 0.43))
-        let innerRadius = outerRadius * style.resolvedInnerRadiusRatio
-        let ringWidth = max(2, outerRadius - innerRadius)
-        let pathRadius = innerRadius + ringWidth / 2
-        var cursor = -90.0
-        var consumedSweep = 0.0
-        let visibleSweep = 360 * progress
 
-        for (index, entry) in positive.enumerated() {
-            let sweep = entry.value / total * 360
-            let gap = min(style.resolvedGapDegrees, sweep * 0.7)
-            let revealedSweep = LivelineMath.clamp(visibleSweep - consumedSweep, 0, sweep)
-            let start = cursor + gap / 2
-            let end = cursor + revealedSweep - gap / 2
-            if end > start {
+        for segment in geometry.segments where segment.endDegrees > segment.startDegrees {
                 var arc = Path()
                 arc.addArc(
-                    center: center,
-                    radius: pathRadius,
-                    startAngle: .degrees(start),
-                    endAngle: .degrees(end),
+                    center: geometry.center,
+                    radius: geometry.pathRadius,
+                    startAngle: .degrees(segment.startDegrees),
+                    endAngle: .degrees(segment.endDegrees),
                     clockwise: false
                 )
-                let color = extendedSeriesColor(index: index, colors: style.colors, palette: palette)
-                layer.stroke(arc, with: .color(color), style: StrokeStyle(lineWidth: ringWidth, lineCap: .butt))
-            }
+                layer.stroke(
+                    arc,
+                    with: .color(segment.color),
+                    style: StrokeStyle(lineWidth: geometry.ringWidth, lineCap: .butt)
+                )
+        }
 
-            if style.showsLabels, revealedSweep >= sweep * 0.98 {
-                let finalEnd = cursor + sweep - gap / 2
-                let mid = (start + finalEnd) / 2 * Double.pi / 180
-                let labelPoint = LivelineMath.polarPoint(center: center, radius: outerRadius + 13, angle: mid)
-                let label = style.showsValues ? "\(entry.label) \(formatValue(entry.value))" : entry.label
+        if drawLabels {
+            drawDonutLabels(
+                context: &layer,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: formatValue
+            )
+        }
+    }
+
+    static func drawDonutLabels(
+        context: inout GraphicsContext,
+        palette: LivelinePalette,
+        geometry: LivelineDonutGeometry,
+        style: LivelineDonutStyle,
+        formatValue: (Double) -> String
+    ) {
+        if style.showsLabels {
+            for segment in geometry.segments where segment.isFullyRevealed {
+                let labelPoint = LivelineMath.polarPoint(
+                    center: geometry.center,
+                    radius: geometry.outerRadius + 13,
+                    angle: segment.middleAngle
+                )
+                let label = style.showsValues
+                    ? "\(segment.entry.label) \(formatValue(segment.entry.value))"
+                    : segment.entry.label
                 drawText(
                     label,
-                    context: &layer,
+                    context: &context,
                     at: labelPoint,
-                    anchor: extendedRadialAnchor(angle: mid),
+                    anchor: extendedRadialAnchor(angle: segment.middleAngle),
                     color: palette.gridLabel,
                     font: .system(size: 9, weight: .medium)
                 )
             }
-            cursor += sweep
-            consumedSweep += sweep
         }
 
-        var valueLayer = layer
-        valueLayer.opacity *= LivelineMath.easedReveal((progress - 0.55) / 0.45)
+        var valueLayer = context
+        valueLayer.opacity *= LivelineMath.easedReveal((geometry.progress - 0.55) / 0.45)
         drawText(
-            formatValue(total),
+            formatValue(geometry.total),
             context: &valueLayer,
-            at: center,
+            at: geometry.center,
             anchor: .center,
             color: palette.tooltipText,
             font: .system(size: 15, weight: .semibold, design: .rounded)
@@ -534,54 +523,43 @@ extension LivelineRenderer {
 
     static func drawGauge(
         context: inout GraphicsContext,
-        layout: LivelineLayout,
         palette: LivelinePalette,
-        value: Double,
-        range: ClosedRange<Double>,
+        geometry: LivelineGaugeRenderGeometry,
         style: LivelineGaugeStyle,
         formatValue: (Double) -> String,
-        reveal: Double
+        drawLabels: Bool = true
     ) {
-        let revealProgress = LivelineMath.easedReveal(reveal)
-        guard revealProgress > 0.001 else { return }
+        guard geometry.revealProgress > 0.001 else { return }
         let layer = context
-        let plotRect = CGRect(
-            x: layout.plotLeftX,
-            y: layout.padding.top,
-            width: layout.chartWidth,
-            height: layout.chartHeight
-        )
-        let geometry = LivelineMath.gaugeGeometry(
-            in: plotRect,
-            startAngleDegrees: style.resolvedStartAngleDegrees,
-            sweepDegrees: style.resolvedSweepDegrees,
-            lineWidth: style.resolvedLineWidth,
-            hasOuterMarks: style.showsTicks || style.resolvedTarget != nil,
-            showsValue: style.showsValue
-        )
-        let center = geometry.center
-        let radius = geometry.radius
-        let start = style.resolvedStartAngleDegrees
-        let end = start + style.resolvedSweepDegrees
-        let progress = LivelineMath.gaugeProgress(value: value, range: range)
+        let center = geometry.gauge.center
+        let radius = geometry.gauge.radius
 
         var trackLayer = layer
-        trackLayer.opacity *= min(revealProgress * 2, 1)
+        trackLayer.opacity *= min(geometry.revealProgress * 2, 1)
         var track = Path()
-        track.addArc(center: center, radius: radius, startAngle: .degrees(start), endAngle: .degrees(end), clockwise: false)
+        track.addArc(
+            center: center,
+            radius: radius,
+            startAngle: .degrees(geometry.startDegrees),
+            endAngle: .degrees(geometry.endDegrees),
+            clockwise: false
+        )
         trackLayer.stroke(
             track,
             with: .color(palette.tooltipText.opacity(style.resolvedTrackOpacity)),
             style: StrokeStyle(lineWidth: style.resolvedLineWidth, lineCap: .round)
         )
 
-        if progress > 0 {
+        if geometry.valueProgress > 0 {
             var progressPath = Path()
             progressPath.addArc(
                 center: center,
                 radius: radius,
-                startAngle: .degrees(start),
-                endAngle: .degrees(start + style.resolvedSweepDegrees * progress * revealProgress),
+                startAngle: .degrees(geometry.startDegrees),
+                endAngle: .degrees(
+                    geometry.startDegrees
+                        + style.resolvedSweepDegrees * geometry.valueProgress * geometry.revealProgress
+                ),
                 clockwise: false
             )
             layer.stroke(
@@ -594,9 +572,15 @@ extension LivelineRenderer {
         if style.showsTicks {
             let lastIndex = style.resolvedTickCount - 1
             for index in 0...lastIndex {
-                let tickReveal = LivelineMath.staggeredReveal(index: index, count: style.resolvedTickCount, reveal: reveal)
+                let tickReveal = LivelineMath.staggeredReveal(
+                    index: index,
+                    count: style.resolvedTickCount,
+                    reveal: geometry.reveal
+                )
                 guard tickReveal > 0.001 else { continue }
-                let angle = (start + style.resolvedSweepDegrees * Double(index) / Double(lastIndex)) * Double.pi / 180
+                let angle = (
+                    geometry.startDegrees + style.resolvedSweepDegrees * Double(index) / Double(lastIndex)
+                ) * Double.pi / 180
                 let isMajor = index == 0 || index == lastIndex || index * 2 == lastIndex
                 let innerRadius = radius + style.resolvedLineWidth / 2 + 5
                 let outerRadius = innerRadius + (isMajor ? 7 : 4)
@@ -615,10 +599,9 @@ extension LivelineRenderer {
             }
         }
 
-        if let target = style.resolvedTarget {
-            let targetReveal = LivelineMath.easedReveal((revealProgress - 0.72) / 0.28)
-            let targetProgress = LivelineMath.gaugeProgress(value: target, range: range)
-            let angle = (start + style.resolvedSweepDegrees * targetProgress) * Double.pi / 180
+        if let targetProgress = geometry.targetProgress {
+            let targetReveal = LivelineMath.easedReveal((geometry.revealProgress - 0.72) / 0.28)
+            let angle = (geometry.startDegrees + style.resolvedSweepDegrees * targetProgress) * Double.pi / 180
             let markerColor = style.targetColor ?? palette.tooltipText
             let markerCenter = LivelineMath.polarPoint(
                 center: center,
@@ -632,79 +615,101 @@ extension LivelineRenderer {
             targetLayer.stroke(targetPin, with: .color(palette.backgroundRGB.color), lineWidth: 1)
         }
 
-        if style.showsValue {
-            var valueLayer = layer
-            valueLayer.opacity *= LivelineMath.easedReveal((revealProgress - 0.35) / 0.65)
-            let displayedValue = range.lowerBound + (value - range.lowerBound) * revealProgress
-            drawText(
-                formatValue(displayedValue),
-                context: &valueLayer,
-                at: CGPoint(x: center.x, y: center.y + min(10, radius * 0.08)),
-                anchor: .center,
-                color: palette.tooltipText,
-                font: .system(size: 24, weight: .semibold, design: .rounded)
+        if drawLabels {
+            drawGaugeLabel(
+                context: &context,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: formatValue
             )
         }
+    }
+
+    static func drawGaugeLabel(
+        context: inout GraphicsContext,
+        palette: LivelinePalette,
+        geometry: LivelineGaugeRenderGeometry,
+        style: LivelineGaugeStyle,
+        formatValue: (Double) -> String
+    ) {
+        guard style.showsValue else { return }
+        var valueLayer = context
+        valueLayer.opacity *= LivelineMath.easedReveal((geometry.revealProgress - 0.35) / 0.65)
+        drawText(
+            formatValue(geometry.displayedValue),
+            context: &valueLayer,
+            at: CGPoint(
+                x: geometry.gauge.center.x,
+                y: geometry.gauge.center.y + min(10, geometry.gauge.radius * 0.08)
+            ),
+            anchor: .center,
+            color: palette.tooltipText,
+            font: .system(size: 24, weight: .semibold, design: .rounded)
+        )
     }
 
     static func drawFunnel(
         context: inout GraphicsContext,
-        layout: LivelineLayout,
-        palette: LivelinePalette,
-        data: [LivelineCategoryValue],
+        geometry: LivelineFunnelGeometry,
         style: LivelineFunnelStyle,
         formatValue: (Double) -> String,
-        reveal: Double
+        drawLabels: Bool = true
     ) {
-        let positive = data.filter { $0.value > 0 }
-        let progress = LivelineMath.easedReveal(reveal)
-        guard !positive.isEmpty, progress > 0.001 else { return }
+        guard !geometry.stages.isEmpty, geometry.progress > 0.001 else { return }
         let layer = context
-        let maximum = positive.map(\.value).max() ?? 1
-        let stageHeight = max(8, (layout.chartHeight - style.resolvedSpacing * CGFloat(max(positive.count - 1, 0))) / CGFloat(positive.count))
-        let maxWidth = layout.chartWidth * style.resolvedMaximumWidthRatio
-        let minWidth = layout.chartWidth * style.resolvedMinimumWidthRatio
-        let centerX = (layout.plotLeftX + layout.rightX) / 2
 
-        for (index, entry) in positive.enumerated() {
-            let localReveal = LivelineMath.staggeredReveal(index: index, count: positive.count, reveal: reveal, staggerFraction: 0.5)
-            guard localReveal > 0.001 else { continue }
-            let ratio = maximum > 0 ? entry.value / maximum : 0
-            let targetWidth = minWidth + CGFloat(ratio) * (maxWidth - minWidth)
-            let width = targetWidth * CGFloat(localReveal)
-            let y = layout.padding.top + CGFloat(index) * (stageHeight + style.resolvedSpacing)
-            let rect = CGRect(x: centerX - width / 2, y: y, width: width, height: stageHeight)
-            let color = extendedSeriesColor(index: index, colors: style.colors, palette: palette)
+        for stage in geometry.stages {
             layer.fill(
-                Path(roundedRect: rect, cornerRadius: min(style.resolvedCornerRadius, stageHeight / 2)),
-                with: .color(color.opacity(0.88))
+                Path(
+                    roundedRect: stage.rect,
+                    cornerRadius: min(style.resolvedCornerRadius, geometry.stageHeight / 2)
+                ),
+                with: .color(stage.color.opacity(0.88))
             )
+        }
 
-            if localReveal > 0.65, style.showsLabels || style.showsValues {
-                var labelLayer = layer
-                labelLayer.opacity *= LivelineMath.easedReveal((localReveal - 0.65) / 0.35)
-                let label: String
-                if style.showsLabels, style.showsValues {
-                    label = "\(entry.label) · \(formatValue(entry.value))"
-                } else if style.showsLabels {
-                    label = entry.label
-                } else {
-                    label = formatValue(entry.value)
-                }
-                drawText(
-                    label,
-                    context: &labelLayer,
-                    at: CGPoint(x: rect.midX, y: rect.midY),
-                    anchor: .center,
-                    color: .white.opacity(0.94),
-                    font: .system(size: 10, weight: .semibold)
-                )
+        if drawLabels {
+            drawFunnelLabels(
+                context: &context,
+                geometry: geometry,
+                style: style,
+                formatValue: formatValue
+            )
+        }
+    }
+
+    static func drawFunnelLabels(
+        context: inout GraphicsContext,
+        geometry: LivelineFunnelGeometry,
+        style: LivelineFunnelStyle,
+        formatValue: (Double) -> String
+    ) {
+        guard style.showsLabels || style.showsValues else { return }
+        for stage in geometry.stages where stage.reveal > 0.65 {
+            var labelLayer = context
+            labelLayer.opacity *= LivelineMath.easedReveal((stage.reveal - 0.65) / 0.35)
+            let label: String
+            if style.showsLabels, style.showsValues {
+                label = "\(stage.entry.label) · \(formatValue(stage.entry.value))"
+            } else if style.showsLabels {
+                label = stage.entry.label
+            } else {
+                label = formatValue(stage.entry.value)
             }
+            drawText(
+                label,
+                context: &labelLayer,
+                at: CGPoint(x: stage.rect.midX, y: stage.rect.midY),
+                anchor: .center,
+                color: .white.opacity(0.94),
+                font: .system(size: 10, weight: .semibold)
+            )
         }
     }
 }
 
-private extension LivelineRenderer {
+extension LivelineRenderer {
     static var extendedDefaultColors: [Color] {
         [
             Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),

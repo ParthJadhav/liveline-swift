@@ -232,6 +232,7 @@ initializer:
 let configuration = LivelineChartConfiguration(
     appearance: LivelineChartAppearance(
         theme: .dark,
+        style: .dither(),
         grid: true,
         fill: true,
         showValue: true
@@ -269,6 +270,13 @@ these groups:
 ```swift
 LivelineChartConfiguration(
     theme: .dark,
+    style: .dither(
+        LivelineDitherStyle(
+            variant: .gradient,
+            bloom: .low,
+            maximumFramesPerSecond: 30
+        )
+    ),
     window: 60,
     windows: [
         LivelineWindowOption(label: "30s", seconds: 30),
@@ -295,6 +303,7 @@ Important options:
 | Option | Default | Notes |
 | --- | --- | --- |
 | `theme` | `.dark` | Controls grid, label, tooltip, and badge colors. |
+| `style` | `.standard` | Applies `.dither(LivelineDitherStyle)` universally to line, cartesian, radial, categorical, and financial chart marks. |
 | `window` | `30` | Visible time span in seconds. |
 | `windows` | `[]` | Adds built-in time horizon buttons. |
 | `grid` | `true` | Draws horizontal grid lines and value labels. |
@@ -305,6 +314,7 @@ Important options:
 | `momentum` | `nil` | Use `.up`, `.down`, or `.flat` to override auto detection. |
 | `autoDetectMomentum` | `true` | Uses recent velocity to color momentum affordances. |
 | `scrub` | `true` | Enables drag scrubbing and tooltips. |
+| `tooltipY` | `14` | Adjusts structured tooltip placement vertically; values above or below the default shift the adaptive placement within the plot bounds. |
 | `exaggerate` | `false` | Uses a tighter Y range for small moves. |
 | `showValue` | `false` | Shows a live value label above the chart. |
 | `degen` | `nil` | Enables particle bursts and chart shake. |
@@ -317,6 +327,16 @@ Important options:
 | `lineMode` | `false` | Renders candle input as a line. |
 | `showsModeControls` | `false` | Explicitly shows line/candle mode controls when the content supports them. |
 | `showsSeriesControls` | `true` | Explicitly shows series visibility controls when the content supports them. |
+
+### Universal dither style
+
+`LivelineDitherStyle` exposes `variant` (`gradient`, `dotted`, `hatched`, or
+`solid`), `bloom` (`off`, `low`, `high`, or `aura`), `cellSize`, `intensity`,
+`sparkleDensity`, `animationSpeed`, `maximumFramesPerSecond`, and `animated`.
+The frame-rate limit accepts values from 1 through 120 and defaults to 30.
+Values are normalized at the rendering boundary. Bloom and sparkles opt static
+charts into frame scheduling only while animation is enabled; pausing or Reduce
+Motion keeps the pattern stable.
 
 `snapshotElapsedTime` remains only as a deprecated source-compatibility
 property. Screenshot infrastructure uses the testing SPI environment modifier

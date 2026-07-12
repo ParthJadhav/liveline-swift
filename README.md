@@ -73,7 +73,7 @@ In `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.2.0")
+    .package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.3.0")
 ],
 targets: [
     .target(
@@ -119,6 +119,60 @@ Each point uses Unix seconds:
 ```swift
 LivelinePoint(time: Date().timeIntervalSince1970, value: 42125.44)
 ```
+
+## Dither Style
+
+Every chart can opt into the same native ordered-dither effect through its
+configuration. The chart-specific `style` argument still controls geometry;
+`LivelineChartConfiguration.style` controls the universal rendering treatment.
+
+```swift
+let configuration = LivelineChartConfiguration(
+    theme: .dark,
+    style: .dither(
+        LivelineDitherStyle(
+            variant: .gradient,   // .gradient, .dotted, .hatched, .solid
+            bloom: .aura,         // .off, .low, .high, .aura
+            cellSize: 2,
+            intensity: 1,
+            sparkleDensity: 0.018,
+            animationSpeed: 1,
+            maximumFramesPerSecond: 30
+        )
+    )
+)
+
+LivelineChart(data: points, value: latest, configuration: configuration)
+LivelineChart(donut: categories, configuration: configuration)
+```
+
+To switch a whole hierarchy at once, apply the container override. Passing
+`nil` restores each chart's own configured style:
+
+```swift
+Dashboard()
+    .livelineChartStyle(isDithered ? .dither(LivelineDitherStyle()) : nil)
+```
+
+The effect uses a 4×4 Bayer texture, coloured bloom, and deterministic winking
+sparkles. It is clipped to chart marks so axes, labels, and tooltips stay crisp.
+Set `animated: false` for a static treatment. Reduce Motion freezes dither
+animation automatically.
+
+Animated dither defaults to 30 FPS to keep dashboards with several simultaneous
+charts responsive. Set `maximumFramesPerSecond` up to 120 when a higher refresh
+rate is worth the additional rendering cost. Standard-style realtime charts
+continue using their 60 FPS rendering policy.
+
+Scrubbing and tooltips work across every chart family. Cartesian charts select
+the nearest time bucket; timelines and heatmaps hit-test their cells; donut,
+radar, gauge, and funnel charts resolve the touched segment or axis. Compound
+marks show structured rows such as OHLC values, quartiles, ranges, and stacked
+series contributions.
+
+![Dither style across line, bar, donut, and radar charts](Media/dither/dither-showcase.png)
+
+![Animated Dither style](Media/dither/dither-showcase.gif)
 
 ## Chart Modes
 

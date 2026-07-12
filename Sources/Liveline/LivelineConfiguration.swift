@@ -3,6 +3,7 @@ import Foundation
 
 public struct LivelineChartAppearance {
     public var theme: LivelineThemeMode
+    public var style: LivelineChartStyle
     public var grid: Bool
     public var fill: Bool
     public var lineWidth: CGFloat
@@ -22,6 +23,29 @@ public struct LivelineChartAppearance {
         padding: LivelinePadding = LivelinePadding()
     ) {
         self.theme = theme
+        self.style = .standard
+        self.grid = grid
+        self.fill = fill
+        self.lineWidth = lineWidth
+        self.showValue = showValue
+        self.valueMomentumColor = valueMomentumColor
+        self.emptyText = emptyText
+        self.padding = padding
+    }
+
+    public init(
+        theme: LivelineThemeMode = .dark,
+        style: LivelineChartStyle,
+        grid: Bool = true,
+        fill: Bool = true,
+        lineWidth: CGFloat = 2,
+        showValue: Bool = false,
+        valueMomentumColor: Bool = false,
+        emptyText: String = "No data to display",
+        padding: LivelinePadding = LivelinePadding()
+    ) {
+        self.theme = theme
+        self.style = style
         self.grid = grid
         self.fill = fill
         self.lineWidth = lineWidth
@@ -218,6 +242,7 @@ public struct LivelineChartConfiguration {
 
     public init(
         theme: LivelineThemeMode = .dark,
+        style: LivelineChartStyle,
         window: TimeInterval = 30,
         windows: [LivelineWindowOption] = [],
         grid: Bool = true,
@@ -257,6 +282,7 @@ public struct LivelineChartConfiguration {
     ) {
         self.init(
             theme: theme,
+            style: style,
             window: window,
             windows: windows,
             grid: grid,
@@ -302,6 +328,7 @@ public struct LivelineChartConfiguration {
 
     public init(
         theme: LivelineThemeMode = .dark,
+        style: LivelineChartStyle,
         window: TimeInterval = 30,
         windows: [LivelineWindowOption] = [],
         grid: Bool = true,
@@ -345,6 +372,7 @@ public struct LivelineChartConfiguration {
     ) {
         self.appearance = LivelineChartAppearance(
             theme: theme,
+            style: style,
             grid: grid,
             fill: fill,
             lineWidth: lineWidth,
@@ -398,6 +426,7 @@ public struct LivelineChartConfiguration {
 
 extension LivelineChartConfiguration {
     public var theme: LivelineThemeMode { get { appearance.theme } set { appearance.theme = newValue } }
+    public var style: LivelineChartStyle { get { appearance.style } set { appearance.style = newValue } }
     public var window: TimeInterval { get { viewport.window } set { viewport.window = newValue } }
     public var windows: [LivelineWindowOption] { get { viewport.windows } set { viewport.windows = newValue } }
     public var grid: Bool { get { appearance.grid } set { appearance.grid = newValue } }
@@ -468,6 +497,7 @@ extension LivelineChartConfiguration {
             LivelineScalar.maximumDrawingMagnitude,
             fallback: 2
         )
+        configuration.style = configuration.style.normalizedForRendering()
         configuration.tooltipY = configuration.tooltipY.livelineClamped(
             -LivelineScalar.maximumDrawingMagnitude,
             LivelineScalar.maximumDrawingMagnitude,
@@ -511,6 +541,7 @@ extension LivelineChartConfiguration {
     func respectingReducedMotion(_ enabled: Bool) -> LivelineChartConfiguration {
         guard enabled else { return self }
         var configuration = self
+        configuration.style = configuration.style.respectingReducedMotion(true)
         configuration.fadeEffects = false
         configuration.pulse = false
         configuration.degen = nil

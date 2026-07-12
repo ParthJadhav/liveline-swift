@@ -59,7 +59,9 @@ extension LivelineRenderer {
         alpha: Double,
         showPulse: Bool,
         timestamp: TimeInterval,
-        legendSide: LivelineLegendSide
+        legendSide: LivelineLegendSide,
+        drawsDot: Bool = true,
+        drawsLabel: Bool = true
     ) {
         let dotAlpha = alpha < 0.3 ? 0 : (alpha - 0.3) / 0.7
         guard dotAlpha > 0.01 else { return }
@@ -67,15 +69,17 @@ extension LivelineRenderer {
         for endpoint in endpoints {
             var layer = context
             layer.opacity *= dotAlpha * endpoint.alpha
-            drawMultiEndpointDot(
-                context: &layer,
-                at: endpoint.point,
-                color: endpoint.palette.line,
-                showPulse: showPulse && endpoint.alpha > 0.5,
-                timestamp: timestamp
-            )
+            if drawsDot {
+                drawMultiEndpointDot(
+                    context: &layer,
+                    at: endpoint.point,
+                    color: endpoint.palette.line,
+                    showPulse: showPulse && endpoint.alpha > 0.5,
+                    timestamp: timestamp
+                )
+            }
 
-            if let label = endpoint.label {
+            if drawsLabel, let label = endpoint.label {
                 let labelOffset: CGFloat = legendSide == .trailing ? 6 : -6
                 let anchor: UnitPoint = legendSide == .trailing ? .leading : .trailing
                 drawText(
@@ -117,10 +121,7 @@ extension LivelineRenderer {
         context: inout GraphicsContext,
         layout: LivelineLayout,
         palette: LivelinePalette,
-        series: [LivelineSeries],
-        hiddenSeries: Set<String>,
         hover: LivelineHoverPoint?,
-        config: LivelineChartConfiguration,
         alpha: Double
     ) {
         guard let hover, alpha > 0.01 else { return }
@@ -130,27 +131,5 @@ extension LivelineRenderer {
         vertical.move(to: CGPoint(x: hover.x, y: layout.padding.top))
         vertical.addLine(to: CGPoint(x: hover.x, y: layout.bottomY))
         layer.stroke(vertical, with: .color(palette.crosshairLine), lineWidth: 1)
-
-        var rows: [String] = []
-        for entry in series where !hiddenSeries.contains(entry.id) {
-            if let value = LivelineMath.interpolateOrdered(points: entry.data, at: hover.time) {
-                rows.append("\(entry.label ?? entry.id) \(config.formatValue(value))")
-            }
-        }
-        guard !rows.isEmpty else { return }
-        let text = rows.prefix(4).joined(separator: "  ·  ")
-        let font = Font.system(size: 11, weight: .medium, design: .monospaced)
-        let measured = measureText(text, context: layer, font: font)
-        let rect = CGRect(
-            x: LivelineMath.clamp(hover.x - measured.width / 2 - 8, layout.plotLeftX + 4, layout.rightX - measured.width - 18),
-            y: layout.padding.top + config.tooltipY,
-            width: measured.width + 16,
-            height: measured.height + 8
-        )
-        layer.fill(Path(roundedRect: rect, cornerRadius: 6), with: .color(palette.tooltipBackground))
-        if config.tooltipOutline {
-            layer.stroke(Path(roundedRect: rect, cornerRadius: 6), with: .color(palette.tooltipBorder), lineWidth: 1)
-        }
-        drawText(text, context: &layer, at: CGPoint(x: rect.midX, y: rect.midY), anchor: .center, color: palette.tooltipText, font: font)
     }
 }

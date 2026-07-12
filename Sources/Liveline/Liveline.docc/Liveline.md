@@ -19,6 +19,7 @@ LivelineChart(data: points, value: latest)
 ### Chart View
 
 - ``LivelineChart``
+- ``SwiftUICore/View/livelineChartStyle(_:)``
 
 ### Data
 
@@ -39,6 +40,10 @@ LivelineChart(data: points, value: latest)
 ### Configuration
 
 - ``LivelineChartConfiguration``
+- ``LivelineChartStyle``
+- ``LivelineDitherStyle``
+- ``LivelineDitherVariant``
+- ``LivelineDitherBloom``
 - ``LivelineWindowOption``
 - ``LivelineReferenceLine``
 - ``LivelineOrderbookData``

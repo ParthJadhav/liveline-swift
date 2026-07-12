@@ -17,6 +17,7 @@ public struct LivelineChart: View {
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.livelineSnapshotElapsedTime) private var snapshotElapsedTime
+    @Environment(\.livelineChartStyleOverride) private var chartStyleOverride
     @StateObject private var renderState = LivelineRenderState()
     @State private var activeWindow: TimeInterval
     @State private var hoverLocation: CGPoint?
@@ -419,7 +420,7 @@ private extension LivelineChart {
         snapshotElapsedTime: TimeInterval?
     ) -> some View {
         if motion.requiresTimeline {
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+            TimelineView(.animation(minimumInterval: motion.minimumInterval)) { timeline in
                 chartCanvas(
                     wallTimestamp: timeline.date.timeIntervalSince1970,
                     configuration: configuration,
@@ -476,6 +477,9 @@ private extension LivelineChart {
     var effectiveConfiguration: LivelineChartConfiguration {
         var configuration = baseConfiguration
         configuration.lineMode = lineMode
+        if let chartStyleOverride {
+            configuration.style = chartStyleOverride.normalizedForRendering()
+        }
         return configuration.respectingReducedMotion(accessibilityReduceMotion)
     }
 

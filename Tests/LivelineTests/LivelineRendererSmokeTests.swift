@@ -21,8 +21,12 @@ final class LivelineRendererSmokeTests: XCTestCase {
             LivelineCategoryValue(id: "a", label: "Alpha", value: 6),
             LivelineCategoryValue(id: "b", label: "Beta", value: 4),
         ]
-        let config = configuration
-        let views: [(String, AnyView)] = [
+        var ditherConfiguration = configuration
+        ditherConfiguration.style = .dither(
+            LivelineDitherStyle(bloom: .low, sparkleDensity: 0.02, animated: false)
+        )
+        for config in [configuration, ditherConfiguration] {
+            let views: [(String, AnyView)] = [
             ("line", AnyView(LivelineChart(data: points, value: 5, configuration: config))),
             ("bars", AnyView(LivelineChart(bars: points, configuration: config))),
             ("range", AnyView(LivelineChart(range: [
@@ -94,20 +98,143 @@ final class LivelineRendererSmokeTests: XCTestCase {
             ], configuration: config))),
         ]
 
-        XCTAssertEqual(views.count, LivelineChartKind.allCases.count)
-        for (name, view) in views {
-            let renderer = ImageRenderer(
-                content: ZStack {
-                    Color.black
-                    view
-                }
-                .frame(width: 320, height: 220)
-            )
-            renderer.proposedSize = ProposedViewSize(width: 320, height: 220)
-            renderer.scale = 1
-            let image: NSImage = try XCTUnwrap(renderer.nsImage, "Failed to render \(name)")
-            XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000, name)
+            XCTAssertEqual(views.count, LivelineChartKind.allCases.count)
+            for (name, view) in views {
+                let renderer = ImageRenderer(
+                    content: ZStack {
+                        Color.black
+                        view
+                    }
+                    .frame(width: 320, height: 220)
+                )
+                renderer.proposedSize = ProposedViewSize(width: 320, height: 220)
+                renderer.scale = 1
+                let image: NSImage = try XCTUnwrap(renderer.nsImage, "Failed to render \(name)")
+                XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000, name)
+            }
         }
+    }
+
+    @MainActor
+    func testEveryDitherVariantRenders() throws {
+        let styles: [LivelineDitherVariant] = [.gradient, .dotted, .hatched, .solid]
+        for (index, variant) in styles.enumerated() {
+            var config = configuration
+            config.style = .dither(
+                LivelineDitherStyle(
+                    variant: variant,
+                    bloom: .off,
+                    sparkleDensity: 0.04,
+                    animated: false
+                )
+            )
+            let chart = LivelineChart(
+                bars: [
+                    LivelinePoint(time: 1, value: 4),
+                    LivelinePoint(time: 2, value: 7),
+                    LivelinePoint(time: 3, value: 5),
+                ],
+                configuration: config
+            )
+            let renderer = ImageRenderer(
+                content: chart.frame(width: 240, height: 160)
+            )
+            renderer.proposedSize = ProposedViewSize(width: 240, height: 160)
+            let image: NSImage = try XCTUnwrap(renderer.nsImage, "Failed to render dither variant \(index)")
+            XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
+        }
+    }
+
+    @MainActor
+    func testContainerStyleOverrideRendersNestedChart() throws {
+        let chart = LivelineChart(
+            bars: [
+                LivelinePoint(time: 1, value: 4),
+                LivelinePoint(time: 2, value: 7),
+                LivelinePoint(time: 3, value: 5),
+            ],
+            configuration: configuration
+        )
+        .livelineChartStyle(
+            .dither(
+                LivelineDitherStyle(
+                    variant: .hatched,
+                    bloom: .off,
+                    animated: false
+                )
+            )
+        )
+
+        let renderer = ImageRenderer(content: chart.frame(width: 240, height: 160))
+        renderer.proposedSize = ProposedViewSize(width: 240, height: 160)
+        let image: NSImage = try XCTUnwrap(renderer.nsImage)
+        XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
+    }
+
+    @MainActor
+    func testContainerStyleOverrideNormalizesInvalidDitherValues() throws {
+        let chart = LivelineChart(
+            bars: [
+                LivelinePoint(time: 1, value: 4),
+                LivelinePoint(time: 2, value: 7),
+            ],
+            configuration: configuration
+        )
+        .livelineChartStyle(
+            .dither(
+                LivelineDitherStyle(
+                    cellSize: 0,
+                    intensity: .infinity,
+                    sparkleDensity: -.infinity,
+                    animationSpeed: .nan,
+                    maximumFramesPerSecond: 0,
+                    animated: false
+                )
+            )
+        )
+
+        let renderer = ImageRenderer(content: chart.frame(width: 240, height: 160))
+        renderer.proposedSize = ProposedViewSize(width: 240, height: 160)
+        let image: NSImage = try XCTUnwrap(renderer.nsImage)
+        XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
+    }
+
+    @MainActor
+    func testStructuredTooltipOverlayRendersAboveChartContent() throws {
+        let renderer = ImageRenderer(
+            content: Canvas { context, size in
+                let layout = LivelineLayout(
+                    size: size,
+                    padding: LivelineResolvedPadding(top: 10, right: 10, bottom: 10, left: 10),
+                    minValue: 0,
+                    maxValue: 10,
+                    leftEdge: 0,
+                    rightEdge: 10
+                )
+                let palette = LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2)
+                LivelineRenderer.drawTooltipSelection(
+                    context: &context,
+                    layout: layout,
+                    palette: palette,
+                    selection: LivelineTooltipSelection(
+                        hover: LivelineHoverPoint(time: 5, value: 6, x: 120, y: 80),
+                        heading: "Jun",
+                        rows: [
+                            LivelineTooltipRow(label: "Desktop", value: "158", color: .blue),
+                            LivelineTooltipRow(label: "Mobile", value: "70", color: .purple),
+                        ],
+                        anchor: CGPoint(x: 120, y: 80)
+                    ),
+                    configuration: LivelineChartConfiguration(),
+                    alpha: 1
+                )
+            }
+            .frame(width: 240, height: 160)
+            .background(Color.black)
+        )
+        renderer.proposedSize = ProposedViewSize(width: 240, height: 160)
+        let image: NSImage = try XCTUnwrap(renderer.nsImage)
+        XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
     }
 
     @MainActor

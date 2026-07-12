@@ -207,38 +207,80 @@ enum LivelineRenderer {
             drawOrderbook(context: &layer, layout: layout, palette: palette, state: state, orderbook: orderbook, randomSeed: config.randomSeed, deltaTime: dt, swingMagnitude: swingMagnitude, alpha: state.chartReveal)
         }
 
-        let interactionSnapshot = LivelineInteractionSnapshot(
+        let interactionSnapshot = LivelineInteractionBuilder.snapshot(
+            content: input.content,
+            prepared: renderData,
             layout: layout,
-            points: renderData.primaryVisible,
+            palette: palette,
+            configuration: config,
+            hiddenSeries: input.hiddenSeries,
             behavior: capabilities.hoverBehavior,
-            isEnabled: config.scrub
+            // Structured targets format labels and values for every visible
+            // datum. Keep the idle snapshot lightweight and only pay that cost
+            // while a pointer or touch is actively inspecting the chart.
+            includeTargets: input.hoverLocation != nil,
+            targetLocation: input.hoverLocation
         )
         state.interactionSnapshot = interactionSnapshot
-        let hover = LivelineHoverResolver.resolve(location: input.hoverLocation, snapshot: interactionSnapshot)
+        let tooltipSelection = LivelineHoverResolver.resolveSelection(
+            location: input.hoverLocation,
+            snapshot: interactionSnapshot
+        )
+        let hover = tooltipSelection?.hover
         let scrubAmount = config.scrub && hover != nil ? 1.0 : 0.0
 
-        let contentOverlay = drawContent(
-            context: &layer,
-            state: state,
-            input: LivelineCompositorInput(
-                content: input.content,
-                configuration: config,
-                layout: layout,
-                palette: palette,
-                prepared: renderData,
-                hiddenSeries: input.hiddenSeries,
-                hover: hover,
-                scrubAmount: scrubAmount,
-                smoothValue: smoothValue,
-                swingMagnitude: swingMagnitude,
-                anchor: anchor,
-                leftEdge: leftEdge,
-                rightEdge: rightEdge,
-                reveal: state.chartReveal,
-                animationTimestamp: animationTimestamp,
-                deltaTime: dt
-            )
+        let compositorInput = LivelineCompositorInput(
+            content: input.content,
+            configuration: config,
+            layout: layout,
+            palette: palette,
+            prepared: renderData,
+            hiddenSeries: input.hiddenSeries,
+            hover: hover,
+            scrubAmount: scrubAmount,
+            smoothValue: smoothValue,
+            swingMagnitude: swingMagnitude,
+            anchor: anchor,
+            leftEdge: leftEdge,
+            rightEdge: rightEdge,
+            reveal: state.chartReveal,
+            animationTimestamp: animationTimestamp,
+            deltaTime: dt
         )
+        var contentOverlay = LivelineContentOverlay.standard
+        switch config.style {
+        case .standard:
+            contentOverlay = drawContent(context: &layer, state: state, input: compositorInput)
+        case let .dither(style):
+            layer.drawLayer { styledLayer in
+                if let bloom = ditherBloom(style: style, timestamp: animationTimestamp) {
+                    styledLayer.addFilter(
+                        .shadow(
+                            color: input.accent.opacity(bloom.opacity),
+                            radius: bloom.radius,
+                            x: 0,
+                            y: 0,
+                            blendMode: .plusLighter
+                        )
+                    )
+                }
+                contentOverlay = drawContent(
+                    context: &styledLayer,
+                    state: state,
+                    input: compositorInput,
+                    drawText: false
+                )
+                drawDitherTexture(
+                    context: &styledLayer,
+                    state: state,
+                    layout: layout,
+                    color: input.accent,
+                    style: style,
+                    timestamp: animationTimestamp
+                )
+            }
+            drawContentText(context: &layer, input: compositorInput, overlay: contentOverlay)
+        }
 
         if capabilities.usesTimeAxis {
             let axisRevealStart = isCandle ? 0.25 : 0.15
@@ -267,10 +309,10 @@ enum LivelineRenderer {
             layout: layout,
             palette: palette,
             prepared: renderData,
-            hiddenSeries: input.hiddenSeries,
             hover: hover,
             scrubAmount: scrubAmount,
             configuration: config,
+            tooltipSelection: tooltipSelection,
             reveal: state.chartReveal,
             animationTimestamp: animationTimestamp
         )

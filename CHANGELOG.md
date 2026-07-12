@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-07-12
+
+- Adds a universal, configurable ordered-dither chart style with gradient,
+  dotted, hatched, and solid variants; coloured bloom; animated sparkles; and
+  automatic Reduce Motion support across all chart renderers.
+- Adds a hierarchy-wide style override and a configurable 1–120 FPS animation
+  limit, with a dashboard-friendly 30 FPS default.
+- Adds structured, hit-tested tooltips for all twenty-one chart kinds and fixes
+  candlestick and candle-line tooltip geometry.
+- Reduces warm dither-frame and active-tooltip work through cached Bayer
+  geometry, preselected sparkle candidates, and targeted interaction snapshots.
+- Adds an opt-in release benchmark, performance methodology, an interactive
+  Storybook style switch, and reproducible dither showcase media.
+
+## 0.2.1 - 2026-07-12
+
+- Refactors the renderer and chart runtime, strengthens input normalization and
+  regression coverage, and preserves the existing public API surface.
+- Refreshes release and visual-parity documentation and moves maintainer-only
+  guidance out of the package README.
+
 ## 0.2.0 - 2026-07-10
 
 - Adds customizable time-based bar, range-band, and scatter charts with six deterministic Storybook variants.
