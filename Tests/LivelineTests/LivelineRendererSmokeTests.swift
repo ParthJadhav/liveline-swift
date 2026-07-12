@@ -172,6 +172,34 @@ final class LivelineRendererSmokeTests: XCTestCase {
     }
 
     @MainActor
+    func testContainerStyleOverrideNormalizesInvalidDitherValues() throws {
+        let chart = LivelineChart(
+            bars: [
+                LivelinePoint(time: 1, value: 4),
+                LivelinePoint(time: 2, value: 7),
+            ],
+            configuration: configuration
+        )
+        .livelineChartStyle(
+            .dither(
+                LivelineDitherStyle(
+                    cellSize: 0,
+                    intensity: .infinity,
+                    sparkleDensity: -.infinity,
+                    animationSpeed: .nan,
+                    maximumFramesPerSecond: 0,
+                    animated: false
+                )
+            )
+        )
+
+        let renderer = ImageRenderer(content: chart.frame(width: 240, height: 160))
+        renderer.proposedSize = ProposedViewSize(width: 240, height: 160)
+        let image: NSImage = try XCTUnwrap(renderer.nsImage)
+        XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
+    }
+
+    @MainActor
     func testStructuredTooltipOverlayRendersAboveChartContent() throws {
         let renderer = ImageRenderer(
             content: Canvas { context, size in
@@ -195,8 +223,7 @@ final class LivelineRendererSmokeTests: XCTestCase {
                             LivelineTooltipRow(label: "Desktop", value: "158", color: .blue),
                             LivelineTooltipRow(label: "Mobile", value: "70", color: .purple),
                         ],
-                        anchor: CGPoint(x: 120, y: 80),
-                        showsGuide: true
+                        anchor: CGPoint(x: 120, y: 80)
                     ),
                     configuration: LivelineChartConfiguration(),
                     alpha: 1

@@ -247,7 +247,7 @@ enum LivelineRenderer {
             animationTimestamp: animationTimestamp,
             deltaTime: dt
         )
-        var contentOverlay = LivelineContentOverlay.none
+        var contentOverlay = LivelineContentOverlay.standard
         switch config.style {
         case .standard:
             contentOverlay = drawContent(context: &layer, state: state, input: compositorInput)
@@ -309,7 +309,6 @@ enum LivelineRenderer {
             layout: layout,
             palette: palette,
             prepared: renderData,
-            hiddenSeries: input.hiddenSeries,
             hover: hover,
             scrubAmount: scrubAmount,
             configuration: config,

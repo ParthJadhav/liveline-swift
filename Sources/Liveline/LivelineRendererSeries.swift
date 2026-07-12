@@ -121,10 +121,7 @@ extension LivelineRenderer {
         context: inout GraphicsContext,
         layout: LivelineLayout,
         palette: LivelinePalette,
-        series: [LivelineSeries],
-        hiddenSeries: Set<String>,
         hover: LivelineHoverPoint?,
-        config: LivelineChartConfiguration,
         alpha: Double
     ) {
         guard let hover, alpha > 0.01 else { return }
@@ -134,8 +131,5 @@ extension LivelineRenderer {
         vertical.move(to: CGPoint(x: hover.x, y: layout.padding.top))
         vertical.addLine(to: CGPoint(x: hover.x, y: layout.bottomY))
         layer.stroke(vertical, with: .color(palette.crosshairLine), lineWidth: 1)
-        _ = series
-        _ = hiddenSeries
-        _ = config
     }
 }

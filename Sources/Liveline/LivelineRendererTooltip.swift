@@ -30,7 +30,8 @@ extension LivelineRenderer {
         let rect = tooltipRect(
             anchor: selection.anchor,
             size: CGSize(width: width, height: height),
-            layout: layout
+            layout: layout,
+            verticalOffset: configuration.tooltipY - 14
         )
 
         var layer = context
@@ -98,7 +99,12 @@ extension LivelineRenderer {
         }
     }
 
-    static func tooltipRect(anchor: CGPoint, size: CGSize, layout: LivelineLayout) -> CGRect {
+    static func tooltipRect(
+        anchor: CGPoint,
+        size: CGSize,
+        layout: LivelineLayout,
+        verticalOffset: CGFloat = 0
+    ) -> CGRect {
         let minimumX = layout.plotLeftX + 4
         let maximumX = max(minimumX, layout.rightX - size.width - 4)
         let minimumY = layout.padding.top + 4
@@ -132,6 +138,12 @@ extension LivelineRenderer {
             }
         }
 
-        return CGRect(origin: origin, size: size)
+        return CGRect(
+            origin: CGPoint(
+                x: origin.x,
+                y: LivelineMath.clamp(origin.y + verticalOffset, minimumY, maximumY)
+            ),
+            size: size
+        )
     }
 }

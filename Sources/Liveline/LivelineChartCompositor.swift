@@ -27,16 +27,19 @@ enum LivelineContentOverlay {
         entries: [LivelineSeries],
         endpoints: [(point: CGPoint, palette: LivelinePalette, label: String?, alpha: Double)]
     )
+    case timeline(LivelineTimelineGeometry, LivelineTimelineStyle)
+    case heatmap(LivelineHeatmapGeometry, LivelineHeatmapStyle)
+    case radar(LivelineRadarGeometry, [LivelineRadarPoint], LivelineRadarStyle)
+    case donut(LivelineDonutGeometry, LivelineDonutStyle)
+    case gauge(LivelineGaugeRenderGeometry, LivelineGaugeStyle)
+    case funnel(LivelineFunnelGeometry, LivelineFunnelStyle)
     case standard
-    case none
 }
 
 struct LivelineCandleOverlay {
     var lineModeProgress: Double
     var linePoints: [CGPoint]
     var smoothValue: Double
-    var candles: [LivelineCandle]
-    var candleWidth: TimeInterval
     var reveal: Double
 }
 
@@ -223,45 +226,61 @@ extension LivelineRenderer {
             return .standard
 
         case let .timeline(data, style):
+            let geometry = timelineGeometry(
+                items: data.filter { $0.end >= layout.leftEdge && $0.start <= layout.rightEdge },
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: reveal
+            )
             drawTimeline(
                 context: &context,
                 layout: layout,
                 palette: palette,
-                items: data.filter { $0.end >= layout.leftEdge && $0.start <= layout.rightEdge },
+                geometry: geometry,
                 style: style,
-                reveal: reveal,
                 drawLabels: drawText
             )
-            return .none
+            return .timeline(geometry, style)
 
         case let .heatmap(data, style):
+            let geometry = heatmapGeometry(
+                cells: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: reveal
+            )
             drawHeatmap(
                 context: &context,
                 layout: layout,
                 palette: palette,
-                cells: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                geometry: geometry,
                 style: style,
                 formatValue: config.formatValue,
-                reveal: reveal,
                 drawLabels: drawText
             )
-            return .none
+            return .heatmap(geometry, style)
 
         case let .radar(data, style):
-            drawRadar(context: &context, layout: layout, palette: palette, points: data, style: style, reveal: reveal, drawLabels: drawText)
-            return .none
+            let geometry = radarGeometry(points: data, style: style, layout: layout, reveal: reveal)
+            drawRadar(context: &context, palette: palette, geometry: geometry, points: data, style: style, drawLabels: drawText)
+            return .radar(geometry, data, style)
 
         case let .donut(data, style):
-            drawDonut(context: &context, layout: layout, palette: palette, data: data, style: style, formatValue: config.formatValue, reveal: reveal, drawLabels: drawText)
-            return .none
+            let geometry = donutGeometry(data: data, style: style, layout: layout, palette: palette, reveal: reveal)
+            drawDonut(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, drawLabels: drawText)
+            return .donut(geometry, style)
 
         case let .gauge(value, range, style):
-            drawGauge(context: &context, layout: layout, palette: palette, value: value, range: range, style: style, formatValue: config.formatValue, reveal: reveal, drawLabels: drawText)
-            return .none
+            let geometry = gaugeRenderGeometry(value: value, range: range, style: style, layout: layout, reveal: reveal)
+            drawGauge(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, drawLabels: drawText)
+            return .gauge(geometry, style)
 
         case let .funnel(data, style):
-            drawFunnel(context: &context, layout: layout, palette: palette, data: data, style: style, formatValue: config.formatValue, reveal: reveal, drawLabels: drawText)
-            return .none
+            let geometry = funnelGeometry(data: data, style: style, layout: layout, palette: palette, reveal: reveal)
+            drawFunnel(context: &context, geometry: geometry, style: style, formatValue: config.formatValue, drawLabels: drawText)
+            return .funnel(geometry, style)
 
         case let .candle(_, _, candles, candleWidth, liveCandle, lineData, lineValue):
             return .candle(
@@ -325,9 +344,9 @@ extension LivelineRenderer {
         let palette = input.palette
         let reveal = input.reveal
 
-        switch input.content {
-        case .line:
-            guard config.badge, case let .line(livePoint) = overlay, let livePoint else { return }
+        switch overlay {
+        case let .line(livePoint):
+            guard config.badge, let livePoint else { return }
             drawBadge(
                 context: &context,
                 layout: layout,
@@ -338,37 +357,30 @@ extension LivelineRenderer {
                 config: config,
                 alpha: reveal
             )
-        case let .timeline(data, style):
-            drawTimeline(
+        case let .timeline(geometry, style):
+            drawTimelineLabels(
+                context: &context,
+                geometry: geometry,
+                style: style
+            )
+        case let .heatmap(geometry, style):
+            drawHeatmapLabels(
                 context: &context,
                 layout: layout,
                 palette: palette,
-                items: data.filter { $0.end >= layout.leftEdge && $0.start <= layout.rightEdge },
+                geometry: geometry,
                 style: style,
-                reveal: reveal,
-                drawMarks: false
+                formatValue: config.formatValue
             )
-        case let .heatmap(data, style):
-            drawHeatmap(
-                context: &context,
-                layout: layout,
-                palette: palette,
-                cells: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
-                style: style,
-                formatValue: config.formatValue,
-                reveal: reveal,
-                drawMarks: false
-            )
-        case let .radar(data, style):
-            drawRadar(context: &context, layout: layout, palette: palette, points: data, style: style, reveal: reveal, drawMarks: false)
-        case let .donut(data, style):
-            drawDonut(context: &context, layout: layout, palette: palette, data: data, style: style, formatValue: config.formatValue, reveal: reveal, drawMarks: false)
-        case let .gauge(value, range, style):
-            drawGauge(context: &context, layout: layout, palette: palette, value: value, range: range, style: style, formatValue: config.formatValue, reveal: reveal, drawMarks: false)
-        case let .funnel(data, style):
-            drawFunnel(context: &context, layout: layout, palette: palette, data: data, style: style, formatValue: config.formatValue, reveal: reveal, drawMarks: false)
-        case .series:
-            guard case let .series(_, endpoints) = overlay else { return }
+        case let .radar(geometry, points, style):
+            drawRadarLabels(context: &context, palette: palette, geometry: geometry, points: points, style: style)
+        case let .donut(geometry, style):
+            drawDonutLabels(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue)
+        case let .gauge(geometry, style):
+            drawGaugeLabel(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue)
+        case let .funnel(geometry, style):
+            drawFunnelLabels(context: &context, geometry: geometry, style: style, formatValue: config.formatValue)
+        case let .series(_, endpoints):
             drawSeriesEndpoints(
                 context: &context,
                 endpoints: endpoints,
@@ -378,7 +390,7 @@ extension LivelineRenderer {
                 legendSide: config.seriesLegendSide,
                 drawsDot: false
             )
-        default:
+        case .candle, .standard:
             break
         }
     }
@@ -389,7 +401,6 @@ extension LivelineRenderer {
         layout: LivelineLayout,
         palette: LivelinePalette,
         prepared: LivelinePreparedChart,
-        hiddenSeries: Set<String>,
         hover: LivelineHoverPoint?,
         scrubAmount: Double,
         configuration: LivelineChartConfiguration,
@@ -431,22 +442,16 @@ extension LivelineRenderer {
                     layout: layout,
                     palette: palette,
                     hover: hover,
-                    candles: candle.candles,
-                    candleWidth: candle.candleWidth,
-                    config: configuration,
                     alpha: scrubAmount
                 )
             }
 
-        case let .series(series, _):
+        case .series:
             drawMultiCrosshair(
                 context: &context,
                 layout: layout,
                 palette: palette,
-                series: series,
-                hiddenSeries: hiddenSeries,
                 hover: hover,
-                config: configuration,
                 alpha: scrubAmount
             )
 
@@ -461,14 +466,14 @@ extension LivelineRenderer {
                 alpha: scrubAmount
             )
 
-        case .none:
+        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel:
             break
         }
 
-        if case .none = overlay {
-            // Radial, timeline, heatmap, and funnel charts have no endpoint
-            // overlay, but still participate in the shared tooltip layer.
-        } else {
+        switch overlay {
+        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel:
+            break
+        default:
             drawActivePoint(
                 context: &context,
                 layout: layout,

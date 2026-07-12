@@ -314,6 +314,7 @@ Important options:
 | `momentum` | `nil` | Use `.up`, `.down`, or `.flat` to override auto detection. |
 | `autoDetectMomentum` | `true` | Uses recent velocity to color momentum affordances. |
 | `scrub` | `true` | Enables drag scrubbing and tooltips. |
+| `tooltipY` | `14` | Adjusts structured tooltip placement vertically; values above or below the default shift the adaptive placement within the plot bounds. |
 | `exaggerate` | `false` | Uses a tighter Y range for small moves. |
 | `showValue` | `false` | Shows a live value label above the chart. |
 | `degen` | `nil` | Enables particle bursts and chart shake. |

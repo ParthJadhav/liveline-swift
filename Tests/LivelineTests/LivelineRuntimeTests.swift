@@ -340,6 +340,31 @@ final class LivelineRuntimeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(rect.minY, layout.padding.top + 4)
     }
 
+    func testTooltipVerticalOffsetRemainsConfigurable() {
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 220),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 10,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let anchor = CGPoint(x: 160, y: 150)
+        let base = LivelineRenderer.tooltipRect(
+            anchor: anchor,
+            size: CGSize(width: 120, height: 40),
+            layout: layout
+        )
+        let shifted = LivelineRenderer.tooltipRect(
+            anchor: anchor,
+            size: CGSize(width: 120, height: 40),
+            layout: layout,
+            verticalOffset: 18
+        )
+
+        XCTAssertEqual(shifted.minY, base.minY + 18, accuracy: 0.0001)
+    }
+
     func testCandleLineModeTooltipTracksDenseLineInsteadOfCandleHigh() {
         let linePoints = [
             LivelinePoint(time: 1.25, value: 4.25),
@@ -503,8 +528,7 @@ final class LivelineRuntimeTests: XCTestCase {
             hover: LivelineHoverPoint(time: 0, value: 0.65, x: 120, y: 90),
             heading: "Gauge",
             rows: [LivelineTooltipRow(label: "Value", value: "65%", color: .blue)],
-            anchor: CGPoint(x: 120, y: 90),
-            showsGuide: false
+            anchor: CGPoint(x: 120, y: 90)
         )
         let snapshot = LivelineInteractionSnapshot(
             layout: LivelineLayout(

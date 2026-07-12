@@ -478,7 +478,7 @@ private extension LivelineChart {
         var configuration = baseConfiguration
         configuration.lineMode = lineMode
         if let chartStyleOverride {
-            configuration.style = chartStyleOverride
+            configuration.style = chartStyleOverride.normalizedForRendering()
         }
         return configuration.respectingReducedMotion(accessibilityReduceMotion)
     }

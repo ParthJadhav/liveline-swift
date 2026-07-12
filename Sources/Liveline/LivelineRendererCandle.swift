@@ -226,8 +226,6 @@ extension LivelineRenderer {
             lineModeProgress: lineModeProgress,
             linePoints: linePoints,
             smoothValue: lineResult.smoothValue,
-            candles: candlesToDraw,
-            candleWidth: candleWidth,
             reveal: reveal
         )
     }
@@ -518,14 +516,9 @@ extension LivelineRenderer {
         layout: LivelineLayout,
         palette: LivelinePalette,
         hover: LivelineHoverPoint?,
-        candles: [LivelineCandle],
-        candleWidth: TimeInterval,
-        config: LivelineChartConfiguration,
         alpha: Double
     ) {
         guard let hover, alpha > 0.01 else { return }
-        let candleTime = floor(hover.time / candleWidth) * candleWidth
-        guard let candle = candles.min(by: { abs($0.time - candleTime) < abs($1.time - candleTime) }) else { return }
 
         var layer = context
         layer.opacity *= alpha
@@ -533,7 +526,5 @@ extension LivelineRenderer {
         vertical.move(to: CGPoint(x: hover.x, y: layout.padding.top))
         vertical.addLine(to: CGPoint(x: hover.x, y: layout.bottomY))
         layer.stroke(vertical, with: .color(palette.crosshairLine), lineWidth: 1)
-        _ = candle
-        _ = config
     }
 }

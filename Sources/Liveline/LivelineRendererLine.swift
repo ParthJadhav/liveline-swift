@@ -408,6 +408,5 @@ extension LivelineRenderer {
         layer.stroke(vertical, with: .color(palette.crosshairLine), lineWidth: 1)
 
         layer.fill(Path(ellipseIn: CGRect(x: hover.x - 3, y: hover.y - 3, width: 6, height: 6)), with: .color(palette.line))
-        _ = config
     }
 }

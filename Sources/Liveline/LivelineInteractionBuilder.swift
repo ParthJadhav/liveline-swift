@@ -174,117 +174,118 @@ enum LivelineInteractionBuilder {
 
         case let .timeline(items, style):
             let visible = items.filter { $0.end >= layout.leftEdge - 2 && $0.start <= layout.rightEdge }
-            let laneCount = max((items.map(\.lane).max() ?? 0) + 1, 1)
-            let laneHeight = layout.chartHeight / CGFloat(laneCount)
-            let barHeight = max(laneHeight * style.resolvedBarHeightRatio, 3)
-            return visible.enumerated().map { index, item in
-                let x1 = layout.x(for: item.start)
-                let x2 = layout.x(for: item.end)
-                let y = layout.padding.top + (CGFloat(item.lane) + 0.5) * laneHeight
-                let rect = CGRect(x: min(x1, x2), y: y - barHeight / 2, width: max(abs(x2 - x1), 2), height: barHeight)
-                let color = seriesColor(index: index, colors: style.colors, palette: palette)
+            let geometry = LivelineRenderer.timelineGeometry(
+                items: visible,
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: 1
+            )
+            return geometry.marks.map { mark in
                 return target(
-                    time: item.start,
-                    value: item.end - item.start,
-                    anchor: CGPoint(x: rect.midX, y: rect.minY),
-                    heading: item.label,
+                    time: mark.item.start,
+                    value: mark.item.end - mark.item.start,
+                    anchor: CGPoint(x: mark.rect.midX, y: mark.rect.minY),
+                    heading: mark.item.label,
                     rows: [
-                        row("Start", time(item.start), color.opacity(0.7)),
-                        row("End", time(item.end), color),
-                        row("Duration", value(item.end - item.start), color),
+                        row("Start", time(mark.item.start), mark.color.opacity(0.7)),
+                        row("End", time(mark.item.end), mark.color),
+                        row("Duration", value(mark.item.end - mark.item.start), mark.color),
                     ],
-                    region: .rect(rect),
-                    showsGuide: false
+                    region: .rect(mark.rect)
                 )
             }
 
         case let .heatmap(cells, style):
             let visible = cells.livelineVisible(in: visibleRange)
-            let rowCount = max((cells.map(\.row).max() ?? 0) + 1, style.rowLabels.count, 1)
-            let rowHeight = layout.chartHeight / CGFloat(rowCount)
-            let width = LivelineRenderer.bucketWidth(
-                times: Array(Set(cells.map(\.time))).sorted(),
+            let geometry = LivelineRenderer.heatmapGeometry(
+                cells: visible,
+                style: style,
                 layout: layout,
-                ratio: style.resolvedCellWidthRatio,
-                maximum: .greatestFiniteMagnitude
+                palette: palette,
+                reveal: 1
             )
-            let height = max(rowHeight * style.resolvedCellHeightRatio, 1)
-            return visible.map { cell in
-                let center = CGPoint(x: layout.x(for: cell.time), y: layout.padding.top + (CGFloat(cell.row) + 0.5) * rowHeight)
-                let label = style.rowLabels.indices.contains(cell.row) ? style.rowLabels[cell.row] : "Row \(cell.row + 1)"
+            return geometry.marks.map { mark in
+                let label = style.rowLabels.indices.contains(mark.cell.row)
+                    ? style.rowLabels[mark.cell.row]
+                    : "Row \(mark.cell.row + 1)"
                 return target(
-                    time: cell.time,
-                    value: cell.value,
-                    anchor: center,
-                    heading: time(cell.time),
-                    rows: [row(label, value(cell.value), style.color ?? palette.line)],
-                    region: .rect(CGRect(x: center.x - width / 2, y: center.y - height / 2, width: width, height: height)),
-                    showsGuide: false
+                    time: mark.cell.time,
+                    value: mark.cell.value,
+                    anchor: CGPoint(x: mark.rect.midX, y: mark.rect.midY),
+                    heading: time(mark.cell.time),
+                    rows: [row(label, value(mark.cell.value), mark.color)],
+                    region: .rect(mark.rect)
                 )
             }
 
         case let .radar(points, style):
             guard points.count >= 3 else { return [] }
-            let center = plotCenter(layout)
-            let radius = max(8, min(layout.chartWidth, layout.chartHeight) / 2 - (style.showsLabels ? 30 : 8))
-            let step = 2 * Double.pi / Double(points.count)
-            let start = -Double.pi / 2
+            let geometry = LivelineRenderer.radarGeometry(points: points, style: style, layout: layout, reveal: 1)
             return points.enumerated().map { index, point in
-                let angle = start + Double(index) * step
-                let progress = LivelineMath.clamp((point.value - style.resolvedRange.lowerBound) / (style.resolvedRange.upperBound - style.resolvedRange.lowerBound), 0, 1)
-                let anchor = LivelineMath.polarPoint(center: center, radius: radius * CGFloat(progress), angle: angle)
+                let angle = geometry.startAngle + Double(index) * geometry.angleStep
                 return target(
                     time: Double(index),
                     value: point.value,
-                    anchor: anchor,
+                    anchor: geometry.valuePoints[index],
                     heading: point.label,
                     rows: [row("Value", value(point.value), palette.line)],
-                    region: .sector(center: center, innerRadius: 0, outerRadius: radius + 22, startAngle: angle - step / 2, endAngle: angle + step / 2),
-                    showsGuide: false
+                    region: .sector(
+                        center: geometry.center,
+                        innerRadius: 0,
+                        outerRadius: geometry.radius + 22,
+                        startAngle: angle - geometry.angleStep / 2,
+                        endAngle: angle + geometry.angleStep / 2
+                    )
                 )
             }
 
         case let .donut(data, style):
-            let positive = data.filter { $0.value > 0 }
-            let total = positive.map(\.value).reduce(0, +)
-            guard total > 0 else { return [] }
-            let center = plotCenter(layout)
-            let outerRadius = max(12, min(layout.chartWidth, layout.chartHeight) * (style.showsLabels ? 0.34 : 0.43))
-            let innerRadius = outerRadius * style.resolvedInnerRadiusRatio
-            var cursor = -Double.pi / 2
-            return positive.enumerated().map { index, entry in
-                let sweep = entry.value / total * 2 * Double.pi
-                let start = cursor
-                let end = cursor + sweep
-                let middle = (start + end) / 2
-                cursor = end
-                let color = seriesColor(index: index, colors: style.colors, palette: palette)
+            let geometry = LivelineRenderer.donutGeometry(
+                data: data,
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: 1
+            )
+            guard geometry.total > 0 else { return [] }
+            return geometry.segments.enumerated().map { index, segment in
                 return target(
                     time: Double(index),
-                    value: entry.value,
-                    anchor: LivelineMath.polarPoint(center: center, radius: outerRadius, angle: middle),
-                    heading: entry.label,
+                    value: segment.entry.value,
+                    anchor: LivelineMath.polarPoint(
+                        center: geometry.center,
+                        radius: geometry.outerRadius,
+                        angle: segment.middleAngle
+                    ),
+                    heading: segment.entry.label,
                     rows: [
-                        row("Value", value(entry.value), color),
-                        row("Share", (entry.value / total * 100).formatted(.number.precision(.fractionLength(1))) + "%", color),
+                        row("Value", value(segment.entry.value), segment.color),
+                        row(
+                            "Share",
+                            (segment.entry.value / geometry.total * 100).formatted(.number.precision(.fractionLength(1))) + "%",
+                            segment.color
+                        ),
                     ],
-                    region: .sector(center: center, innerRadius: innerRadius - 8, outerRadius: outerRadius + 10, startAngle: start, endAngle: end),
-                    showsGuide: false
+                    region: .sector(
+                        center: geometry.center,
+                        innerRadius: geometry.innerRadius - 8,
+                        outerRadius: geometry.outerRadius + 10,
+                        startAngle: segment.fullStartAngle,
+                        endAngle: segment.fullEndAngle
+                    )
                 )
             }
 
         case let .gauge(gaugeValue, range, style):
-            let plotRect = CGRect(x: layout.plotLeftX, y: layout.padding.top, width: layout.chartWidth, height: layout.chartHeight)
-            let geometry = LivelineMath.gaugeGeometry(
-                in: plotRect,
-                startAngleDegrees: style.resolvedStartAngleDegrees,
-                sweepDegrees: style.resolvedSweepDegrees,
-                lineWidth: style.resolvedLineWidth,
-                hasOuterMarks: style.showsTicks || style.resolvedTarget != nil,
-                showsValue: style.showsValue
+            let geometry = LivelineRenderer.gaugeRenderGeometry(
+                value: gaugeValue,
+                range: range,
+                style: style,
+                layout: layout,
+                reveal: 1
             )
-            let progress = LivelineMath.gaugeProgress(value: gaugeValue, range: range)
-            let angle = (style.resolvedStartAngleDegrees + style.resolvedSweepDegrees * progress) * Double.pi / 180
+            let angle = (geometry.startDegrees + style.resolvedSweepDegrees * geometry.valueProgress) * Double.pi / 180
             var rows = [row("Value", value(gaugeValue), style.progressColor ?? palette.line)]
             if let targetValue = style.resolvedTarget {
                 rows.append(row("Target", value(targetValue), style.targetColor ?? palette.tooltipText))
@@ -292,38 +293,28 @@ enum LivelineInteractionBuilder {
             return [target(
                 time: 0,
                 value: gaugeValue,
-                anchor: LivelineMath.polarPoint(center: geometry.center, radius: geometry.radius, angle: angle),
+                anchor: LivelineMath.polarPoint(center: geometry.gauge.center, radius: geometry.gauge.radius, angle: angle),
                 heading: "Gauge",
                 rows: rows,
-                region: .rect(plotRect),
-                showsGuide: false
+                region: .rect(geometry.plotRect)
             )]
 
         case let .funnel(data, style):
-            let positive = data.filter { $0.value > 0 }
-            guard !positive.isEmpty else { return [] }
-            let maximum = positive.map(\.value).max() ?? 1
-            let stageHeight = max(8, (layout.chartHeight - style.resolvedSpacing * CGFloat(max(positive.count - 1, 0))) / CGFloat(positive.count))
-            let maxWidth = layout.chartWidth * style.resolvedMaximumWidthRatio
-            let minWidth = layout.chartWidth * style.resolvedMinimumWidthRatio
-            let centerX = (layout.plotLeftX + layout.rightX) / 2
-            return positive.enumerated().map { index, entry in
-                let width = minWidth + CGFloat(entry.value / maximum) * (maxWidth - minWidth)
-                let rect = CGRect(
-                    x: centerX - width / 2,
-                    y: layout.padding.top + CGFloat(index) * (stageHeight + style.resolvedSpacing),
-                    width: width,
-                    height: stageHeight
-                )
-                let color = seriesColor(index: index, colors: style.colors, palette: palette)
+            let geometry = LivelineRenderer.funnelGeometry(
+                data: data,
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: 1
+            )
+            return geometry.stages.enumerated().map { index, stage in
                 return target(
                     time: Double(index),
-                    value: entry.value,
-                    anchor: CGPoint(x: rect.midX, y: rect.minY),
-                    heading: entry.label,
-                    rows: [row("Value", value(entry.value), color)],
-                    region: .rect(rect),
-                    showsGuide: false
+                    value: stage.entry.value,
+                    anchor: CGPoint(x: stage.rect.midX, y: stage.rect.minY),
+                    heading: stage.entry.label,
+                    rows: [row("Value", value(stage.entry.value), stage.color)],
+                    region: .rect(stage.rect)
                 )
             }
 
@@ -420,7 +411,11 @@ enum LivelineInteractionBuilder {
         data.livelineVisible(in: (layout.leftEdge - 2)...layout.rightEdge).map { point in
             let segments = LivelineMath.stackedSegments(values: point.values, mode: mode)
             var rows = segments.enumerated().map { index, segment in
-                row("Series \(index + 1)", value(segment.upper - segment.lower), seriesColor(index: index, colors: colors, palette: palette))
+                row(
+                    "Series \(index + 1)",
+                    value(segment.upper - segment.lower),
+                    LivelineRenderer.extendedSeriesColor(index: index, colors: colors, palette: palette)
+                )
             }
             let total = segments.map { $0.upper - $0.lower }.reduce(0, +)
             rows.append(row("Total", value(total), palette.tooltipText))
@@ -456,8 +451,7 @@ enum LivelineInteractionBuilder {
                 ),
                 heading: heading,
                 rows: rows,
-                anchor: anchor,
-                showsGuide: true
+                anchor: anchor
             ),
             region: .x
         )
@@ -469,16 +463,14 @@ enum LivelineInteractionBuilder {
         anchor: CGPoint,
         heading: String?,
         rows: [LivelineTooltipRow],
-        region: LivelineInteractionRegion,
-        showsGuide: Bool
+        region: LivelineInteractionRegion
     ) -> LivelineInteractionTarget {
         LivelineInteractionTarget(
             selection: LivelineTooltipSelection(
                 hover: LivelineHoverPoint(time: time, value: value, x: anchor.x, y: anchor.y),
                 heading: heading,
                 rows: rows,
-                anchor: anchor,
-                showsGuide: showsGuide
+                anchor: anchor
             ),
             region: region
         )
@@ -488,20 +480,4 @@ enum LivelineInteractionBuilder {
         LivelineTooltipRow(label: label, value: value, color: color)
     }
 
-    private static func plotCenter(_ layout: LivelineLayout) -> CGPoint {
-        CGPoint(x: (layout.plotLeftX + layout.rightX) / 2, y: layout.padding.top + layout.chartHeight / 2)
-    }
-
-    private static func seriesColor(index: Int, colors: [Color], palette: LivelinePalette) -> Color {
-        if !colors.isEmpty { return colors[index % colors.count] }
-        let defaults: [Color] = [
-            palette.line,
-            Color(red: 139 / 255, green: 92 / 255, blue: 246 / 255),
-            Color(red: 6 / 255, green: 182 / 255, blue: 212 / 255),
-            Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255),
-            Color(red: 249 / 255, green: 115 / 255, blue: 22 / 255),
-            Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255),
-        ]
-        return defaults[index % defaults.count]
-    }
 }

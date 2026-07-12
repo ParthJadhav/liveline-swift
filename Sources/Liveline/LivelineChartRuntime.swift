@@ -106,7 +106,6 @@ struct LivelineTooltipSelection {
     var heading: String?
     var rows: [LivelineTooltipRow]
     var anchor: CGPoint
-    var showsGuide: Bool
 }
 
 struct LivelineInteractionTarget {
@@ -171,8 +170,7 @@ enum LivelineHoverResolver {
             hover: hover,
             heading: nil,
             rows: [],
-            anchor: CGPoint(x: hover.x, y: hover.y),
-            showsGuide: true
+            anchor: CGPoint(x: hover.x, y: hover.y)
         )
     }
 
