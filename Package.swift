@@ -17,6 +17,10 @@ let package = Package(
             name: "Liveline",
             targets: ["Liveline"]
         ),
+        .executable(
+            name: "liveline-render",
+            targets: ["LivelineRender"]
+        ),
     ],
     targets: [
         .target(
@@ -27,6 +31,10 @@ let package = Package(
         ),
         .testTarget(
             name: "LivelineTests",
+            dependencies: ["Liveline"]
+        ),
+        .executableTarget(
+            name: "LivelineRender",
             dependencies: ["Liveline"]
         ),
     ],

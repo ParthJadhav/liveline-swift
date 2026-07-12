@@ -588,16 +588,33 @@ enum LivelineInputNormalizer {
     }
 
     static func heatmap(_ source: [LivelineHeatmapCell]) -> [LivelineHeatmapCell] {
-        let normalized = timed(source) { cell in
+        let normalized = source.enumerated().compactMap { offset, cell -> (offset: Int, cell: LivelineHeatmapCell)? in
             guard let time = LivelineScalar.time(cell.time), cell.value.isFinite else { return nil }
-            return LivelineHeatmapCell(
-                time: time,
-                row: min(max(cell.row, 0), LivelineScalar.maximumDiscreteIndex),
-                value: value(cell.value, fallback: 0)
+            return (
+                offset,
+                LivelineHeatmapCell(
+                    time: time,
+                    row: min(max(cell.row, 0), LivelineScalar.maximumDiscreteIndex),
+                    value: value(cell.value, fallback: 0)
+                )
             )
         }
-        var seen = Set<String>()
-        return normalized.filter { seen.insert($0.id).inserted }
+        .sorted { lhs, rhs in
+            if lhs.cell.time != rhs.cell.time { return lhs.cell.time < rhs.cell.time }
+            if lhs.cell.row != rhs.cell.row { return lhs.cell.row < rhs.cell.row }
+            return lhs.offset < rhs.offset
+        }
+
+        var result: [LivelineHeatmapCell] = []
+        result.reserveCapacity(normalized.count)
+        for item in normalized {
+            if let last = result.last, last.time == item.cell.time, last.row == item.cell.row {
+                result[result.count - 1] = item.cell
+            } else {
+                result.append(item.cell)
+            }
+        }
+        return result
     }
 
     static func radar(_ source: [LivelineRadarPoint]) -> [LivelineRadarPoint] {

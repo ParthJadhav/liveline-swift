@@ -164,6 +164,50 @@ charts responsive. Set `maximumFramesPerSecond` up to 120 when a higher refresh
 rate is worth the additional rendering cost. Standard-style realtime charts
 continue using their 60 FPS rendering policy.
 
+## Direct MP4 Export
+
+On macOS 13 or newer, the package includes `liveline-render`, an offscreen
+renderer that writes H.264 MP4 files directly. It uses Liveline's native SwiftUI
+renderer and deterministic animation clock, so chart reveal, value interpolation,
+dither bloom, and sparkles are preserved without launching Simulator, screen
+recording, or cropping.
+
+```bash
+swift run -c release liveline-render \
+  --chart line \
+  --style dither \
+  --variant dotted \
+  --bloom aura \
+  --values 92,98,95,108,112,106,117 \
+  --value-motion stream \
+  --width 1920 \
+  --height 1080 \
+  --fps 30 \
+  --duration 5 \
+  --output Media/line-dotted.mp4
+```
+
+The command supports `line`, `bars`, `candle`, `multi`, `stacked-bar`,
+`stacked-area`, `timeline`, `heatmap`, `radar`, `donut`, `gauge`, and `funnel`.
+Use `--style standard` for regular vector rendering or configure dither with
+`--variant`, `--bloom`, `--cell-size`, `--sparkle-density`, and
+`--animation-speed`. `--value-motion static|pulse|stream` controls whether the
+supplied values remain fixed or update during the export.
+
+Categorical and radial charts accept labels alongside their values:
+
+```bash
+swift run liveline-render \
+  --chart donut \
+  --variant hatched \
+  --values 42,28,18,12 \
+  --labels Pro,Team,Starter,Other \
+  --output donut.mp4
+```
+
+Run `swift run liveline-render --help` for every video, theme, colour, value,
+and dither option.
+
 Scrubbing and tooltips work across every chart family. Cartesian charts select
 the nearest time bucket; timelines and heatmaps hit-test their cells; donut,
 radar, gauge, and funnel charts resolve the touched segment or axis. Compound

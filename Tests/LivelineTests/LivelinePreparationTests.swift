@@ -38,6 +38,19 @@ final class LivelinePreparationTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(LivelineMath.interpolate(points: points, at: 25)), 25, accuracy: 0.0001)
     }
 
+    func testHeatmapNormalizationPreservesRowsAtSharedTimes() {
+        let normalized = LivelineInputNormalizer.heatmap([
+            LivelineHeatmapCell(time: 20, row: 2, value: 30),
+            LivelineHeatmapCell(time: 10, row: 0, value: 10),
+            LivelineHeatmapCell(time: 10, row: 1, value: 20),
+            LivelineHeatmapCell(time: 10, row: 1, value: 21),
+            LivelineHeatmapCell(time: 20, row: 0, value: 40),
+        ])
+
+        XCTAssertEqual(normalized.map(\.id), ["10.0-0", "10.0-1", "20.0-0", "20.0-2"])
+        XCTAssertEqual(normalized.map(\.value), [10, 21, 40, 30])
+    }
+
     func testCandleNormalizationRepairsBoundsAndWidth() {
         let content = LivelineChartContent.candle(
             data: [],
