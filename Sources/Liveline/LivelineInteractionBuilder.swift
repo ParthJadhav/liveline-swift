@@ -9,21 +9,22 @@ enum LivelineInteractionBuilder {
         palette: LivelinePalette,
         configuration: LivelineChartConfiguration,
         hiddenSeries: Set<String>,
-        behavior: LivelineHoverBehavior
+        behavior: LivelineHoverBehavior,
+        includeTargets: Bool = true
     ) -> LivelineInteractionSnapshot {
         LivelineInteractionSnapshot(
             layout: layout,
             points: prepared.primaryVisible,
             behavior: behavior,
             isEnabled: configuration.scrub,
-            targets: targets(
+            targets: includeTargets ? targets(
                 content: content,
                 prepared: prepared,
                 layout: layout,
                 palette: palette,
                 configuration: configuration,
                 hiddenSeries: hiddenSeries
-            )
+            ) : []
         )
     }
 

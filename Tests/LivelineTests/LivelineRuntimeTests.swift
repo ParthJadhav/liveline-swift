@@ -358,6 +358,72 @@ final class LivelineRuntimeTests: XCTestCase {
         XCTAssertEqual(snapshot.targets[0].selection.rows.map(\.label), ["Value"])
     }
 
+    func testDitherGeometryIsBuiltOnceAcrossAnimationFrames() {
+        let state = LivelineRenderState()
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 220),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 10,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let style = LivelineDitherStyle(cellSize: 2, sparkleDensity: 0.018)
+
+        let first = LivelineRenderer.ditherGeometry(state: state, layout: layout, style: style)
+        for _ in 0..<120 {
+            _ = LivelineRenderer.ditherGeometry(state: state, layout: layout, style: style)
+        }
+
+        XCTAssertEqual(state.ditherGeometryBuildCount, 1)
+        XCTAssertGreaterThan(first.cellCount, 10_000)
+        XCTAssertLessThan(first.sparkles.count, first.cellCount / 10)
+
+        var changedStyle = style
+        changedStyle.cellSize = 3
+        _ = LivelineRenderer.ditherGeometry(state: state, layout: layout, style: changedStyle)
+        XCTAssertEqual(state.ditherGeometryBuildCount, 2)
+    }
+
+    func testIdleInteractionSnapshotSkipsFormattedTargetsButStillResolvesHover() {
+        let points = [LivelinePoint(time: 1, value: 3), LivelinePoint(time: 2, value: 5)]
+        let content = LivelineChartContent.line(data: points, value: 5)
+        let configuration = LivelineChartConfiguration(window: 10, scrub: true, paused: true)
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 220),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 10,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let prepared = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: layout.leftEdge,
+            rightEdge: layout.rightEdge,
+            config: configuration
+        )
+        let snapshot = LivelineInteractionBuilder.snapshot(
+            content: content,
+            prepared: prepared,
+            layout: layout,
+            palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
+            configuration: configuration,
+            hiddenSeries: [],
+            behavior: .interpolated,
+            includeTargets: false
+        )
+
+        XCTAssertTrue(snapshot.targets.isEmpty)
+        XCTAssertNotNil(
+            LivelineHoverResolver.resolve(
+                location: CGPoint(x: layout.x(for: 1.5), y: layout.y(for: 4)),
+                snapshot: snapshot
+            )
+        )
+    }
+
     func testAnimationClockAndInterpolationFreezeWhilePaused() {
         let state = LivelineRenderState()
         let first = state.frame(for: 100, isPaused: false)

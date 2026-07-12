@@ -43,6 +43,8 @@ final class LivelineRenderState: ObservableObject {
     var candleLineModeTransition: TimedTransition?
     var candleLineDensityProgress: Double = 0
     var candleLineDensityTransition: TimedTransition?
+    var ditherGeometryCache: LivelineDitherGeometry?
+    var ditherGeometryBuildCount = 0
 
     func frame(for timestamp: TimeInterval, isPaused: Bool) -> LivelineAnimationFrame {
         defer { lastTimestamp = timestamp }
@@ -137,6 +139,7 @@ final class LivelineRenderState: ObservableObject {
         candleLineModeTransition = nil
         candleLineDensityProgress = 0
         candleLineDensityTransition = nil
+        ditherGeometryCache = nil
     }
 
     func nextRandom(seed: UInt32) -> Double {

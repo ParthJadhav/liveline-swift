@@ -214,7 +214,11 @@ enum LivelineRenderer {
             palette: palette,
             configuration: config,
             hiddenSeries: input.hiddenSeries,
-            behavior: capabilities.hoverBehavior
+            behavior: capabilities.hoverBehavior,
+            // Structured targets format labels and values for every visible
+            // datum. Keep the idle snapshot lightweight and only pay that cost
+            // while a pointer or touch is actively inspecting the chart.
+            includeTargets: input.hoverLocation != nil
         )
         state.interactionSnapshot = interactionSnapshot
         let tooltipSelection = LivelineHoverResolver.resolveSelection(
@@ -267,6 +271,7 @@ enum LivelineRenderer {
                 )
                 drawDitherTexture(
                     context: &styledLayer,
+                    state: state,
                     layout: layout,
                     color: input.accent,
                     style: style,
