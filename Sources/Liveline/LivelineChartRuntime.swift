@@ -126,7 +126,12 @@ enum LivelineHoverResolver {
         location: CGPoint?,
         snapshot: LivelineInteractionSnapshot?
     ) -> LivelineHoverPoint? {
-        resolveSelection(location: location, snapshot: snapshot)?.hover
+        guard let location, let snapshot, snapshot.isEnabled else { return nil }
+        let direct = snapshot.targets
+            .filter { contains(location, region: $0.region) }
+            .min { distanceSquared(location, $0.selection.anchor) < distanceSquared(location, $1.selection.anchor) }
+        if let direct { return direct.selection.hover }
+        return resolveHover(location: location, snapshot: snapshot)
     }
 
     static func resolveSelection(
@@ -159,19 +164,32 @@ enum LivelineHoverResolver {
                 .selection
         }
 
+        guard let hover = resolveHover(location: location, snapshot: snapshot) else { return nil }
+        return LivelineTooltipSelection(
+            hover: hover,
+            heading: nil,
+            rows: [],
+            anchor: CGPoint(x: hover.x, y: hover.y),
+            showsGuide: true
+        )
+    }
+
+    private static func resolveHover(
+        location: CGPoint,
+        snapshot: LivelineInteractionSnapshot
+    ) -> LivelineHoverPoint? {
         guard snapshot.behavior != .none,
               location.x >= snapshot.layout.plotLeftX,
               location.x <= snapshot.layout.rightX
         else { return nil }
 
         let time = snapshot.layout.time(for: location.x)
-        let hover: LivelineHoverPoint?
         switch snapshot.behavior {
         case .none:
             return nil
         case .discrete:
             guard let nearest = nearestPoint(to: time, in: snapshot.points) else { return nil }
-            hover = LivelineHoverPoint(
+            return LivelineHoverPoint(
                 time: nearest.time,
                 value: nearest.value,
                 x: snapshot.layout.x(for: nearest.time),
@@ -181,21 +199,13 @@ enum LivelineHoverResolver {
             guard let value = LivelineMath.interpolateOrdered(points: snapshot.points, at: time) else {
                 return nil
             }
-            hover = LivelineHoverPoint(
+            return LivelineHoverPoint(
                 time: time,
                 value: value,
                 x: location.x,
                 y: snapshot.layout.y(for: value)
             )
         }
-        guard let hover else { return nil }
-        return LivelineTooltipSelection(
-            hover: hover,
-            heading: nil,
-            rows: [],
-            anchor: CGPoint(x: hover.x, y: hover.y),
-            showsGuide: true
-        )
     }
 
     private static func contains(_ location: CGPoint, region: LivelineInteractionRegion) -> Bool {

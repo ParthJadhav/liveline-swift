@@ -50,6 +50,19 @@ extension LivelineRenderer {
         }
 
         guard !geometry.sparkles.isEmpty else { return }
+        let paths = ditherSparklePaths(geometry: geometry, style: style, timestamp: timestamp)
+
+        context.blendMode = .sourceAtop
+        context.fill(paths.sparkles, with: .color(color.opacity(0.9)))
+        context.fill(paths.flares, with: .color(color.opacity(0.35)))
+        context.blendMode = .normal
+    }
+
+    static func ditherSparklePaths(
+        geometry: LivelineDitherGeometry,
+        style: LivelineDitherStyle,
+        timestamp: TimeInterval
+    ) -> (sparkles: Path, flares: Path) {
         var sparklePath = Path()
         var flarePath = Path()
         let motionTime = style.animated ? timestamp * style.animationSpeed : 0
@@ -63,11 +76,7 @@ extension LivelineRenderer {
                 flarePath.addRect(sparkle.rect.insetBy(dx: cell * 0.25, dy: -cell))
             }
         }
-
-        context.blendMode = .sourceAtop
-        context.fill(sparklePath, with: .color(color.opacity(0.9)))
-        context.fill(flarePath, with: .color(color.opacity(0.35)))
-        context.blendMode = .normal
+        return (sparklePath, flarePath)
     }
 
     static func ditherGeometry(

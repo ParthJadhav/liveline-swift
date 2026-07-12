@@ -10,7 +10,8 @@ enum LivelineInteractionBuilder {
         configuration: LivelineChartConfiguration,
         hiddenSeries: Set<String>,
         behavior: LivelineHoverBehavior,
-        includeTargets: Bool = true
+        includeTargets: Bool = true,
+        targetLocation: CGPoint? = nil
     ) -> LivelineInteractionSnapshot {
         LivelineInteractionSnapshot(
             layout: layout,
@@ -23,7 +24,8 @@ enum LivelineInteractionBuilder {
                 layout: layout,
                 palette: palette,
                 configuration: configuration,
-                hiddenSeries: hiddenSeries
+                hiddenSeries: hiddenSeries,
+                targetLocation: targetLocation
             ) : []
         )
     }
@@ -34,7 +36,8 @@ enum LivelineInteractionBuilder {
         layout: LivelineLayout,
         palette: LivelinePalette,
         configuration: LivelineChartConfiguration,
-        hiddenSeries: Set<String>
+        hiddenSeries: Set<String>,
+        targetLocation: CGPoint?
     ) -> [LivelineInteractionTarget] {
         let value = configuration.formatValue
         let time = configuration.formatTime
@@ -42,7 +45,7 @@ enum LivelineInteractionBuilder {
 
         switch content {
         case .line:
-            return prepared.primaryVisible.map {
+            return interactionSlice(prepared.primaryVisible, nearestTo: targetLocation, layout: layout).map {
                 xTarget(point: $0, anchorValue: $0.value, heading: time($0.time), rows: [
                     row("Value", value($0.value), palette.line),
                 ], layout: layout)
@@ -330,7 +333,8 @@ enum LivelineInteractionBuilder {
             // Build the interaction model from that same series so the marker,
             // guide, and tooltip remain attached to the rendered path.
             if configuration.lineMode, !lineData.isEmpty {
-                return lineData.livelineVisible(in: visibleRange).map { point in
+                let visible = lineData.livelineVisible(in: visibleRange)
+                return interactionSlice(visible, nearestTo: targetLocation, layout: layout).map { point in
                     xTarget(
                         point: point,
                         anchorValue: point.value,
@@ -369,7 +373,8 @@ enum LivelineInteractionBuilder {
         case let .series(series):
             let visibleSeries = series.filter { !hiddenSeries.contains($0.id) }
             guard let primary = visibleSeries.first else { return [] }
-            return primary.data.livelineVisible(in: visibleRange).map { point in
+            let visible = primary.data.livelineVisible(in: visibleRange)
+            return interactionSlice(visible, nearestTo: targetLocation, layout: layout).map { point in
                 let rows = visibleSeries.compactMap { entry -> LivelineTooltipRow? in
                     guard let interpolated = LivelineMath.interpolateOrdered(points: entry.data, at: point.time) else { return nil }
                     return row(entry.label ?? entry.id, value(interpolated), entry.color)
@@ -377,6 +382,30 @@ enum LivelineInteractionBuilder {
                 return xTarget(point: point, anchorValue: rows.isEmpty ? point.value : visibleSeries.compactMap { LivelineMath.interpolateOrdered(points: $0.data, at: point.time) }.max() ?? point.value, heading: time(point.time), rows: rows, layout: layout)
             }
         }
+    }
+
+    private static func interactionSlice<Element: LivelineTimedDatum>(
+        _ elements: [Element],
+        nearestTo location: CGPoint?,
+        layout: LivelineLayout
+    ) -> [Element] {
+        guard let location, !elements.isEmpty else { return elements }
+        let targetTime = layout.time(for: location.x)
+        var lower = 0
+        var upper = elements.count
+        while lower < upper {
+            let middle = (lower + upper) / 2
+            if elements[middle].time < targetTime {
+                lower = middle + 1
+            } else {
+                upper = middle
+            }
+        }
+        if lower == 0 { return [elements[0]] }
+        if lower == elements.count { return [elements[elements.count - 1]] }
+        let before = elements[lower - 1]
+        let after = elements[lower]
+        return [targetTime - before.time <= after.time - targetTime ? before : after]
     }
 
     private static func stackedTargets(

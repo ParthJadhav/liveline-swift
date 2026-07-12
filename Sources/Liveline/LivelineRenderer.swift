@@ -218,7 +218,8 @@ enum LivelineRenderer {
             // Structured targets format labels and values for every visible
             // datum. Keep the idle snapshot lightweight and only pay that cost
             // while a pointer or touch is actively inspecting the chart.
-            includeTargets: input.hoverLocation != nil
+            includeTargets: input.hoverLocation != nil,
+            targetLocation: input.hoverLocation
         )
         state.interactionSnapshot = interactionSnapshot
         let tooltipSelection = LivelineHoverResolver.resolveSelection(

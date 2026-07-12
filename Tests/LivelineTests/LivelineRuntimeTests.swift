@@ -424,6 +424,77 @@ final class LivelineRuntimeTests: XCTestCase {
         )
     }
 
+    func testTargetedDenseSnapshotFormatsOnlyTheNearestPoint() {
+        let points = (0..<100).map { LivelinePoint(time: Double($0), value: Double($0)) }
+        let content = LivelineChartContent.line(data: points, value: 99)
+        let configuration = LivelineChartConfiguration(window: 100, scrub: true, paused: true)
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 220),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 100,
+            leftEdge: 0,
+            rightEdge: 100
+        )
+        let prepared = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: layout.leftEdge,
+            rightEdge: layout.rightEdge,
+            config: configuration
+        )
+        let targetLocation = CGPoint(x: layout.x(for: 50.4), y: layout.y(for: 50.4))
+        let snapshot = LivelineInteractionBuilder.snapshot(
+            content: content,
+            prepared: prepared,
+            layout: layout,
+            palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
+            configuration: configuration,
+            hiddenSeries: [],
+            behavior: .interpolated,
+            targetLocation: targetLocation
+        )
+
+        XCTAssertEqual(snapshot.targets.count, 1)
+        XCTAssertEqual(snapshot.targets[0].selection.hover.time, 50)
+
+        let movedHover = LivelineHoverResolver.resolve(
+            location: CGPoint(x: layout.x(for: 72.5), y: layout.y(for: 72.5)),
+            snapshot: snapshot
+        )
+        XCTAssertEqual(movedHover?.time ?? 0, 72.5, accuracy: 0.0001)
+        XCTAssertEqual(movedHover?.value ?? 0, 72.5, accuracy: 0.0001)
+    }
+
+    func testDirectRegionHoverCallbackStillResolvesWithTargetedSnapshots() {
+        let selection = LivelineTooltipSelection(
+            hover: LivelineHoverPoint(time: 0, value: 0.65, x: 120, y: 90),
+            heading: "Gauge",
+            rows: [LivelineTooltipRow(label: "Value", value: "65%", color: .blue)],
+            anchor: CGPoint(x: 120, y: 90),
+            showsGuide: false
+        )
+        let snapshot = LivelineInteractionSnapshot(
+            layout: LivelineLayout(
+                size: CGSize(width: 240, height: 180),
+                padding: LivelineResolvedPadding(top: 10, right: 10, bottom: 10, left: 10),
+                minValue: 0,
+                maxValue: 1,
+                leftEdge: 0,
+                rightEdge: 1
+            ),
+            points: [],
+            behavior: .none,
+            isEnabled: true,
+            targets: [LivelineInteractionTarget(selection: selection, region: .circle(center: selection.anchor, radius: 20))]
+        )
+
+        XCTAssertEqual(
+            LivelineHoverResolver.resolve(location: selection.anchor, snapshot: snapshot)?.value,
+            0.65
+        )
+    }
+
     func testAnimationClockAndInterpolationFreezeWhilePaused() {
         let state = LivelineRenderState()
         let first = state.frame(for: 100, isPaused: false)
