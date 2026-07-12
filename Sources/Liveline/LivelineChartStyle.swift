@@ -46,6 +46,7 @@ public struct LivelineDitherStyle: Sendable {
     public var intensity: Double
     public var sparkleDensity: Double
     public var animationSpeed: Double
+    public var maximumFramesPerSecond: Double
     public var animated: Bool
 
     public init(
@@ -55,6 +56,7 @@ public struct LivelineDitherStyle: Sendable {
         intensity: Double = 1,
         sparkleDensity: Double = 0.018,
         animationSpeed: Double = 1,
+        maximumFramesPerSecond: Double = 30,
         animated: Bool = true
     ) {
         self.variant = variant
@@ -63,6 +65,7 @@ public struct LivelineDitherStyle: Sendable {
         self.intensity = intensity
         self.sparkleDensity = sparkleDensity
         self.animationSpeed = animationSpeed
+        self.maximumFramesPerSecond = maximumFramesPerSecond
         self.animated = animated
     }
 }
@@ -88,6 +91,9 @@ extension LivelineChartStyle {
         normalized.animationSpeed = style.animationSpeed.isFinite
             ? min(max(style.animationSpeed, 0), 8)
             : 1
+        normalized.maximumFramesPerSecond = style.maximumFramesPerSecond.isFinite
+            ? min(max(style.maximumFramesPerSecond, 1), 120)
+            : 30
         return .dither(normalized)
     }
 
@@ -96,5 +102,10 @@ extension LivelineChartStyle {
         var reduced = style
         reduced.animated = false
         return .dither(reduced)
+    }
+
+    var preferredFrameInterval: TimeInterval? {
+        guard case let .dither(style) = self, style.animated else { return nil }
+        return 1 / style.maximumFramesPerSecond
     }
 }

@@ -271,7 +271,11 @@ these groups:
 LivelineChartConfiguration(
     theme: .dark,
     style: .dither(
-        LivelineDitherStyle(variant: .gradient, bloom: .low)
+        LivelineDitherStyle(
+            variant: .gradient,
+            bloom: .low,
+            maximumFramesPerSecond: 30
+        )
     ),
     window: 60,
     windows: [

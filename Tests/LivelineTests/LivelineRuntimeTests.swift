@@ -107,6 +107,24 @@ final class LivelineRuntimeTests: XCTestCase {
             reduceMotion: false
         )
         XCTAssertTrue(ditherPolicy.requiresTimeline)
+        XCTAssertEqual(ditherPolicy.minimumInterval, 1.0 / 30.0, accuracy: 0.0001)
+        XCTAssertEqual(realtimePolicy.minimumInterval, 1.0 / 60.0, accuracy: 0.0001)
+
+        let realtimeDitherPolicy = LivelineMotionPolicy.resolve(
+            configuration: LivelineChartConfiguration(style: .dither()),
+            capabilities: realtimeCapabilities,
+            reduceMotion: false
+        )
+        XCTAssertEqual(realtimeDitherPolicy.minimumInterval, 1.0 / 30.0, accuracy: 0.0001)
+
+        let highFrameRateDitherPolicy = LivelineMotionPolicy.resolve(
+            configuration: LivelineChartConfiguration(
+                style: .dither(LivelineDitherStyle(maximumFramesPerSecond: 45))
+            ),
+            capabilities: staticCapabilities,
+            reduceMotion: false
+        )
+        XCTAssertEqual(highFrameRateDitherPolicy.minimumInterval, 1.0 / 45.0, accuracy: 0.0001)
 
         let staticDitherPolicy = LivelineMotionPolicy.resolve(
             configuration: LivelineChartConfiguration(
@@ -116,6 +134,20 @@ final class LivelineRuntimeTests: XCTestCase {
             reduceMotion: false
         )
         XCTAssertFalse(staticDitherPolicy.requiresTimeline)
+    }
+
+    func testDitherFrameRateIsNormalizedAtRenderingBoundary() {
+        func resolvedRate(_ rate: Double) -> Double {
+            let configuration = LivelineChartConfiguration(
+                style: .dither(LivelineDitherStyle(maximumFramesPerSecond: rate))
+            ).normalizedForRendering()
+            guard case let .dither(style) = configuration.style else { return 0 }
+            return style.maximumFramesPerSecond
+        }
+
+        XCTAssertEqual(resolvedRate(.nan), 30)
+        XCTAssertEqual(resolvedRate(0), 1)
+        XCTAssertEqual(resolvedRate(240), 120)
     }
 
     func testTypedConfigurationOwnsPoliciesAndCallbacksDoNotControlVisibility() {

@@ -50,3 +50,25 @@ Idle snapshots remain lightweight, while continuous hover callbacks still use
 the full prepared point series. End-to-end renderer timings are sampled with
 more iterations because `ImageRenderer` has substantially more run-to-run
 variance than the interaction microbenchmark.
+
+## Multi-chart Storybook workload
+
+The Storybook gallery is also sampled as a whole-process workload in the iOS
+Simulator. The gallery now flattens group headers and cards into direct
+`LazyVStack` children, allowing off-screen charts to leave the view hierarchy.
+Animated dither defaults to 30 FPS, and Storybook uses 20 FPS because several
+charts animate simultaneously. Standard-style realtime line and candle data
+retains its 60 FPS rendering policy.
+
+For the same five-card viewport, sampled with `top` after warm-up:
+
+| Dither schedule | Simulator process CPU |
+| --- | ---: |
+| 60 FPS | 37–40% |
+| 30 FPS | 28–35% |
+| Storybook 20 FPS | 21–29% |
+
+The 20 FPS gallery setting averages roughly one-third less CPU than 60 FPS.
+On iOS 18 and later, Storybook also suspends Dither animation while the scroll
+view is tracking or decelerating, retaining the current static texture until
+scrolling returns to idle.

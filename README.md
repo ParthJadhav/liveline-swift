@@ -136,7 +136,8 @@ let configuration = LivelineChartConfiguration(
             cellSize: 2,
             intensity: 1,
             sparkleDensity: 0.018,
-            animationSpeed: 1
+            animationSpeed: 1,
+            maximumFramesPerSecond: 30
         )
     )
 )
@@ -157,6 +158,11 @@ The effect uses a 4×4 Bayer texture, coloured bloom, and deterministic winking
 sparkles. It is clipped to chart marks so axes, labels, and tooltips stay crisp.
 Set `animated: false` for a static treatment. Reduce Motion freezes dither
 animation automatically.
+
+Animated dither defaults to 30 FPS to keep dashboards with several simultaneous
+charts responsive. Set `maximumFramesPerSecond` up to 120 when a higher refresh
+rate is worth the additional rendering cost. Standard-style realtime charts
+continue using their 60 FPS rendering policy.
 
 Scrubbing and tooltips work across every chart family. Cartesian charts select
 the nearest time bucket; timelines and heatmaps hit-test their cells; donut,

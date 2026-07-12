@@ -3,31 +3,11 @@ import SwiftUI
 
 struct StorybookGalleryView: View {
     @State private var showsDitherExamples = false
+    @State private var isScrolling = false
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 22) {
-                    ForEach(StorybookCatalog.groups, id: \.name) { group in
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(group.name)
-                                .font(.headline)
-                                .padding(.horizontal, 16)
-
-                            ForEach(group.scenarios) { scenario in
-                                NavigationLink {
-                                    StorybookScenarioScreen(scenario: scenario)
-                                } label: {
-                                    StorybookCard(scenario: scenario)
-                                }
-                                .buttonStyle(.plain)
-                                .padding(.horizontal, 16)
-                            }
-                        }
-                    }
-                }
-                .padding(.vertical, 16)
-            }
+            galleryScroll
             .navigationTitle("Storybook")
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -44,10 +24,67 @@ struct StorybookGalleryView: View {
         }
         .livelineChartStyle(
             showsDitherExamples
-                ? .dither(LivelineDitherStyle())
+                ? .dither(
+                    LivelineDitherStyle(
+                        maximumFramesPerSecond: 20,
+                        animated: !isScrolling
+                    )
+                )
                 : nil
         )
         .animation(.easeInOut(duration: 0.2), value: showsDitherExamples)
+    }
+
+    @ViewBuilder
+    private var galleryScroll: some View {
+        if #available(iOS 18.0, *) {
+            scrollContent
+                .onScrollPhaseChange { _, phase in
+                    isScrolling = phase.isScrolling
+                }
+        } else {
+            scrollContent
+        }
+    }
+
+    private var scrollContent: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 22) {
+                ForEach(StorybookGalleryItem.all) { item in
+                    switch item {
+                    case let .header(name):
+                        Text(name)
+                            .font(.headline)
+                            .padding(.horizontal, 16)
+                    case let .scenario(scenario):
+                        NavigationLink {
+                            StorybookScenarioScreen(scenario: scenario)
+                        } label: {
+                            StorybookCard(scenario: scenario)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 16)
+                    }
+                }
+            }
+            .padding(.vertical, 16)
+        }
+    }
+}
+
+private enum StorybookGalleryItem: Identifiable {
+    case header(String)
+    case scenario(StorybookScenario)
+
+    static let all: [StorybookGalleryItem] = StorybookCatalog.groups.flatMap { group in
+        [.header(group.name)] + group.scenarios.map(StorybookGalleryItem.scenario)
+    }
+
+    var id: String {
+        switch self {
+        case let .header(name): "header-\(name)"
+        case let .scenario(scenario): "scenario-\(scenario.id)"
+        }
     }
 }
 

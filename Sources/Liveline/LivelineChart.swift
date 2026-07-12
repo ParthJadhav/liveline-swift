@@ -420,7 +420,7 @@ private extension LivelineChart {
         snapshotElapsedTime: TimeInterval?
     ) -> some View {
         if motion.requiresTimeline {
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+            TimelineView(.animation(minimumInterval: motion.minimumInterval)) { timeline in
                 chartCanvas(
                     wallTimestamp: timeline.date.timeIntervalSince1970,
                     configuration: configuration,

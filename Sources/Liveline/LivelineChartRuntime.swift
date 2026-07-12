@@ -61,6 +61,7 @@ struct LivelineMotionPolicy: Equatable {
     var isPaused: Bool
     var requiresTimeline: Bool
     var settlesImmediately: Bool
+    var minimumInterval: TimeInterval = 1.0 / 60.0
 
     static func resolve(
         configuration: LivelineChartConfiguration,
@@ -80,7 +81,8 @@ struct LivelineMotionPolicy: Equatable {
         return LivelineMotionPolicy(
             isPaused: configuration.paused,
             requiresTimeline: requiresTimeline,
-            settlesImmediately: reduceMotion || (!requiresTimeline && !configuration.paused)
+            settlesImmediately: reduceMotion || (!requiresTimeline && !configuration.paused),
+            minimumInterval: configuration.style.preferredFrameInterval ?? 1.0 / 60.0
         )
     }
 }
