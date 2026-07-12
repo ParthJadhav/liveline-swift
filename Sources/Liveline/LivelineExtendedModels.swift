@@ -42,10 +42,10 @@ public struct LivelineErrorBarStyle {
         self.fillOpacity = fillOpacity
     }
 
-    var resolvedCapWidth: CGFloat { max(capWidth, 1) }
-    var resolvedLineWidth: CGFloat { max(lineWidth, 0) }
-    var resolvedPointSize: CGFloat { max(pointSize, 2) }
-    var resolvedFillOpacity: Double { min(max(fillOpacity, 0), 1) }
+    var resolvedCapWidth: CGFloat { capWidth.livelineAtLeast(1, fallback: 10) }
+    var resolvedLineWidth: CGFloat { lineWidth.livelineAtLeast(0, fallback: 1.5) }
+    var resolvedPointSize: CGFloat { pointSize.livelineAtLeast(2, fallback: 7) }
+    var resolvedFillOpacity: Double { fillOpacity.livelineClamped(0, 1, fallback: 1) }
 }
 
 /// A paired comparison observed at one point in time.
@@ -88,8 +88,8 @@ public struct LivelineDumbbellStyle {
         self.showsDirection = showsDirection
     }
 
-    var resolvedLineWidth: CGFloat { max(lineWidth, 0) }
-    var resolvedPointSize: CGFloat { max(pointSize, 2) }
+    var resolvedLineWidth: CGFloat { lineWidth.livelineAtLeast(0, fallback: 2) }
+    var resolvedPointSize: CGFloat { pointSize.livelineAtLeast(2, fallback: 9) }
 }
 
 /// Multiple segment values observed at one point in time.
@@ -137,9 +137,9 @@ public struct LivelineStackedBarStyle {
         self.showsBaseline = showsBaseline
     }
 
-    var resolvedWidthRatio: CGFloat { min(max(widthRatio, 0.05), 1) }
-    var resolvedCornerRadius: CGFloat { max(cornerRadius, 0) }
-    var resolvedSegmentSpacing: CGFloat { max(segmentSpacing, 0) }
+    var resolvedWidthRatio: CGFloat { widthRatio.livelineClamped(0.05, 1, fallback: 0.72) }
+    var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 2) }
+    var resolvedSegmentSpacing: CGFloat { segmentSpacing.livelineAtLeast(0, fallback: 1) }
 }
 
 /// Visual options for a stacked-area chart.
@@ -164,8 +164,8 @@ public struct LivelineStackedAreaStyle {
         self.showsBaseline = showsBaseline
     }
 
-    var resolvedFillOpacity: Double { min(max(fillOpacity, 0), 1) }
-    var resolvedBoundaryLineWidth: CGFloat { max(boundaryLineWidth, 0) }
+    var resolvedFillOpacity: Double { fillOpacity.livelineClamped(0, 1, fallback: 0.62) }
+    var resolvedBoundaryLineWidth: CGFloat { boundaryLineWidth.livelineAtLeast(0, fallback: 1) }
 }
 
 /// A labeled time interval assigned to a zero-based lane.
@@ -207,8 +207,8 @@ public struct LivelineTimelineStyle {
         self.showsLaneGuides = showsLaneGuides
     }
 
-    var resolvedBarHeightRatio: CGFloat { min(max(barHeightRatio, 0.08), 1) }
-    var resolvedCornerRadius: CGFloat { max(cornerRadius, 0) }
+    var resolvedBarHeightRatio: CGFloat { barHeightRatio.livelineClamped(0.08, 1, fallback: 0.62) }
+    var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 5) }
 }
 
 /// A heatmap cell observed at a point in time and a zero-based row.
@@ -257,11 +257,11 @@ public struct LivelineHeatmapStyle {
         self.showsValues = showsValues
     }
 
-    var resolvedMinimumOpacity: Double { min(max(minimumOpacity, 0), 1) }
-    var resolvedMaximumOpacity: Double { min(max(maximumOpacity, resolvedMinimumOpacity), 1) }
-    var resolvedCellWidthRatio: CGFloat { min(max(cellWidthRatio, 0.05), 1) }
-    var resolvedCellHeightRatio: CGFloat { min(max(cellHeightRatio, 0.05), 1) }
-    var resolvedCornerRadius: CGFloat { max(cornerRadius, 0) }
+    var resolvedMinimumOpacity: Double { minimumOpacity.livelineClamped(0, 1, fallback: 0.10) }
+    var resolvedMaximumOpacity: Double { maximumOpacity.livelineClamped(resolvedMinimumOpacity, 1, fallback: 0.95) }
+    var resolvedCellWidthRatio: CGFloat { cellWidthRatio.livelineClamped(0.05, 1, fallback: 0.90) }
+    var resolvedCellHeightRatio: CGFloat { cellHeightRatio.livelineClamped(0.05, 1, fallback: 0.82) }
+    var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 2) }
 }
 
 /// One labeled axis in a radar chart.
@@ -305,9 +305,16 @@ public struct LivelineRadarStyle {
     }
 
     var resolvedGridLevels: Int { min(max(gridLevels, 1), 10) }
-    var resolvedFillOpacity: Double { min(max(fillOpacity, 0), 1) }
-    var resolvedLineWidth: CGFloat { max(lineWidth, 0) }
-    var resolvedPointSize: CGFloat { max(pointSize, 0) }
+    var resolvedFillOpacity: Double { fillOpacity.livelineClamped(0, 1, fallback: 0.18) }
+    var resolvedLineWidth: CGFloat { lineWidth.livelineAtLeast(0, fallback: 2) }
+    var resolvedPointSize: CGFloat { pointSize.livelineAtLeast(0, fallback: 5) }
+    var resolvedRange: ClosedRange<Double> {
+        LivelineScalar.nondegenerateRange(
+            lower: range.lowerBound,
+            upper: range.upperBound,
+            fallback: 0...1
+        )
+    }
 }
 
 /// A labeled non-negative value used by composition and stage charts.
@@ -345,8 +352,8 @@ public struct LivelineDonutStyle {
         self.showsValues = showsValues
     }
 
-    var resolvedInnerRadiusRatio: CGFloat { min(max(innerRadiusRatio, 0), 0.92) }
-    var resolvedGapDegrees: Double { min(max(gapDegrees, 0), 20) }
+    var resolvedInnerRadiusRatio: CGFloat { innerRadiusRatio.livelineClamped(0, 0.92, fallback: 0.58) }
+    var resolvedGapDegrees: Double { gapDegrees.livelineClamped(0, 20, fallback: 2) }
 }
 
 /// Visual options for a radial gauge.
@@ -386,11 +393,15 @@ public struct LivelineGaugeStyle {
         self.showsValue = showsValue
     }
 
-    var resolvedStartAngleDegrees: Double { startAngleDegrees.isFinite ? startAngleDegrees : 150 }
-    var resolvedSweepDegrees: Double { min(max(abs(sweepDegrees), 1), 359.5) }
-    var resolvedLineWidth: CGFloat { max(lineWidth, 1) }
-    var resolvedTrackOpacity: Double { min(max(trackOpacity, 0), 1) }
+    var resolvedStartAngleDegrees: Double {
+        (startAngleDegrees.isFinite ? startAngleDegrees : 150)
+            .truncatingRemainder(dividingBy: 360)
+    }
+    var resolvedSweepDegrees: Double { abs(sweepDegrees.livelineFinite(or: 240)).livelineClamped(1, 359.5, fallback: 240) }
+    var resolvedLineWidth: CGFloat { lineWidth.livelineAtLeast(1, fallback: 18) }
+    var resolvedTrackOpacity: Double { trackOpacity.livelineClamped(0, 1, fallback: 0.12) }
     var resolvedTickCount: Int { min(max(tickCount, 2), 25) }
+    var resolvedTarget: Double? { target.flatMap { $0.isFinite ? LivelineScalar.value($0) : nil } }
 }
 
 /// Visual options for a funnel chart.
@@ -421,8 +432,8 @@ public struct LivelineFunnelStyle {
         self.showsValues = showsValues
     }
 
-    var resolvedMaximumWidthRatio: CGFloat { min(max(maximumWidthRatio, 0.1), 1) }
-    var resolvedMinimumWidthRatio: CGFloat { min(max(minimumWidthRatio, 0.02), resolvedMaximumWidthRatio) }
-    var resolvedSpacing: CGFloat { max(spacing, 0) }
-    var resolvedCornerRadius: CGFloat { max(cornerRadius, 0) }
+    var resolvedMaximumWidthRatio: CGFloat { maximumWidthRatio.livelineClamped(0.1, 1, fallback: 0.88) }
+    var resolvedMinimumWidthRatio: CGFloat { minimumWidthRatio.livelineClamped(0.02, resolvedMaximumWidthRatio, fallback: 0.18) }
+    var resolvedSpacing: CGFloat { spacing.livelineAtLeast(0, fallback: 4) }
+    var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 4) }
 }

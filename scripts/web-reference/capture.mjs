@@ -56,6 +56,7 @@ async function waitForHttp(url, timeoutMs = 30_000) {
 async function main() {
   const outDir = path.resolve(argValue('--out-dir', process.env.WEB_REFERENCE_OUT_DIR ?? defaultOutDir))
   const scenarioArg = argValue('--scenario', process.env.WEB_REFERENCE_SCENARIO ?? '')
+  const scenarioListArg = argValue('--scenarios', process.env.WEB_REFERENCE_SCENARIOS ?? '')
   const waitMs = Number(argValue('--wait-ms', process.env.WEB_REFERENCE_WAIT_MS ?? '2200'))
   const configuredPort = Number(argValue('--port', process.env.WEB_REFERENCE_PORT ?? '0'))
   const port = configuredPort > 0 ? configuredPort : await freePort()
@@ -99,10 +100,20 @@ async function main() {
     const page = await context.newPage()
     await page.goto(baseUrl, { waitUntil: 'networkidle' })
     const allScenarios = await page.evaluate(() => window.__LIVELINE_STORYBOOK_IDS__ ?? [])
-    const scenarios = scenarioArg ? [scenarioArg] : allScenarios
+    const requestedScenarios = scenarioListArg
+      .split(/[\s,]+/)
+      .map((scenario) => scenario.trim())
+      .filter(Boolean)
+    const scenarios = scenarioArg
+      ? [scenarioArg]
+      : (requestedScenarios.length > 0 ? requestedScenarios : allScenarios)
 
     if (scenarios.length === 0) {
       throw new Error('No scenarios were exposed by the reference app.')
+    }
+    const unknownScenarios = scenarios.filter((scenario) => !allScenarios.includes(scenario))
+    if (unknownScenarios.length > 0) {
+      throw new Error(`Unknown web reference scenarios: ${unknownScenarios.join(', ')}`)
     }
 
     for (const scenario of scenarios) {

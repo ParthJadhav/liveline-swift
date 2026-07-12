@@ -4,7 +4,9 @@ import SwiftUI
 
 final class LivelineRenderState: ObservableObject {
     var lastTimestamp: TimeInterval?
-    var animationStartTimestamp: TimeInterval?
+    var animationElapsed: TimeInterval = 0
+    var pausedPresentationTimestamp: TimeInterval?
+    var chartIdentity: LivelineChartIdentity?
     var smoothValue: Double?
     var displayMin: Double?
     var displayMax: Double?
@@ -19,18 +21,18 @@ final class LivelineRenderState: ObservableObject {
     var orderbookLabels: [OrderbookLabel] = []
     var orderbookSpawnTimer: TimeInterval = 0
     var orderbookSpeed: CGFloat = 60
-    var orderbookRandomSeed: UInt32?
-    var orderbookRandomState: UInt32?
+    var randomSeed: UInt32?
+    var randomState: UInt32?
     var snapshotStartTimestamp: TimeInterval?
     var snapshotElapsedCursor: TimeInterval = 0
     var previousBidTotal: Double = 0
     var previousAskTotal: Double = 0
     var churnRate: Double = 0
     var gridInterval: Double = 0
-    var gridLabelAlphas: [Int: Double] = [:]
-    var timeAxisLabels: [Int: TimeAxisLabelState] = [:]
+    var gridLabelAlphas: [Double: Double] = [:]
+    var timeAxisLabels: [TimeInterval: TimeAxisLabelState] = [:]
     var seriesAlpha: [String: Double] = [:]
-    var lastHover: LivelineHoverPoint?
+    var interactionSnapshot: LivelineInteractionSnapshot?
     var candleDisplayLive: LivelineCandle?
     var candleLiveBirthAlpha: Double = 1
     var candleLiveBullBlend: Double = 0.5
@@ -42,17 +44,28 @@ final class LivelineRenderState: ObservableObject {
     var candleLineDensityProgress: Double = 0
     var candleLineDensityTransition: TimedTransition?
 
-    func deltaTime(for timestamp: TimeInterval) -> TimeInterval {
+    func frame(for timestamp: TimeInterval, isPaused: Bool) -> LivelineAnimationFrame {
         defer { lastTimestamp = timestamp }
-        guard let lastTimestamp else { return 16.667 }
-        return min(max((timestamp - lastTimestamp) * 1000, 0), 50)
+        let deltaMilliseconds: TimeInterval
+        if let lastTimestamp {
+            deltaMilliseconds = min(max((timestamp - lastTimestamp) * 1000, 0), 50)
+        } else {
+            deltaMilliseconds = 16.667
+        }
+        let effectiveDelta = isPaused ? 0 : deltaMilliseconds
+        animationElapsed += effectiveDelta / 1000
+        return LivelineAnimationFrame(deltaMilliseconds: effectiveDelta, elapsed: animationElapsed)
     }
 
-    func animationTime(for timestamp: TimeInterval) -> TimeInterval {
-        if animationStartTimestamp == nil {
-            animationStartTimestamp = timestamp
+    func presentationTimestamp(for timestamp: TimeInterval, isPaused: Bool) -> TimeInterval {
+        if isPaused {
+            if pausedPresentationTimestamp == nil {
+                pausedPresentationTimestamp = timestamp
+            }
+            return pausedPresentationTimestamp ?? timestamp
         }
-        return timestamp - (animationStartTimestamp ?? timestamp)
+        pausedPresentationTimestamp = nil
+        return timestamp
     }
 
     func timestamp(for timestamp: TimeInterval, snapshotElapsedTime: TimeInterval?) -> TimeInterval {
@@ -78,14 +91,62 @@ final class LivelineRenderState: ObservableObject {
         if displayWindow == nil { displayWindow = window }
     }
 
-    func nextOrderbookRandom(seed: UInt32) -> Double {
-        if orderbookRandomSeed != seed || orderbookRandomState == nil {
-            orderbookRandomSeed = seed
-            orderbookRandomState = seed
+    func reconcile(identity: LivelineChartIdentity, anchorValue: Double, window: TimeInterval) {
+        guard chartIdentity != identity else {
+            resetIfNeeded(anchorValue: anchorValue, window: window)
+            return
         }
 
-        var state = (orderbookRandomState ?? seed) &+ 0x6D2B79F5
-        orderbookRandomState = state
+        chartIdentity = identity
+        lastTimestamp = nil
+        animationElapsed = 0
+        pausedPresentationTimestamp = nil
+        smoothValue = anchorValue
+        displayMin = nil
+        displayMax = nil
+        displayWindow = window
+        chartReveal = 0
+        pauseProgress = 0
+        previousMomentum = .flat
+        arrowUp = 0
+        arrowDown = 0
+        shakeAmplitude = 0
+        particles.removeAll(keepingCapacity: true)
+        orderbookLabels.removeAll(keepingCapacity: true)
+        orderbookSpawnTimer = 0
+        orderbookSpeed = 60
+        randomSeed = nil
+        randomState = nil
+        snapshotStartTimestamp = nil
+        snapshotElapsedCursor = 0
+        previousBidTotal = 0
+        previousAskTotal = 0
+        churnRate = 0
+        gridInterval = 0
+        gridLabelAlphas.removeAll(keepingCapacity: true)
+        timeAxisLabels.removeAll(keepingCapacity: true)
+        seriesAlpha.removeAll(keepingCapacity: true)
+        interactionSnapshot = nil
+        candleDisplayLive = nil
+        candleLiveBirthAlpha = 1
+        candleLiveBullBlend = 0.5
+        candleCloseLineSmooth = nil
+        candleLineSmoothClose = nil
+        candleLineTickSmooth = nil
+        candleLineModeProgress = 0
+        candleLineModeTransition = nil
+        candleLineDensityProgress = 0
+        candleLineDensityTransition = nil
+    }
+
+    func nextRandom(seed: UInt32) -> Double {
+        if randomSeed != seed || randomState == nil {
+            randomSeed = seed
+            randomState = seed
+        }
+
+        var state = (randomState ?? seed) &+ 0x6D2B79F5
+        randomState = state
         state = (state ^ (state >> 15)) &* (state | 1)
         state ^= state &+ ((state ^ (state >> 7)) &* (state | 61))
         return Double(state ^ (state >> 14)) / 4_294_967_296.0
@@ -118,6 +179,11 @@ final class LivelineRenderState: ObservableObject {
         self[keyPath: keyPath] = transition
         return transition.lastValue
     }
+}
+
+struct LivelineAnimationFrame: Equatable {
+    var deltaMilliseconds: TimeInterval
+    var elapsed: TimeInterval
 }
 
 struct Particle: Identifiable {

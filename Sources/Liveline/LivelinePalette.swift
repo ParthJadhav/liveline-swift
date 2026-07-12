@@ -35,7 +35,7 @@ struct LivelineRGBA: Hashable {
 
 struct LivelinePalette {
     var line: Color
-    var lineRGB: LivelineRGBA
+    var lineRGB: LivelineRGBA?
     var lineWidth: CGFloat
     var fillTop: Color
     var fillBottom: Color
@@ -73,8 +73,8 @@ extension LivelinePalette {
             line: accent,
             lineRGB: accentRGB,
             lineWidth: lineWidth,
-            fillTop: accentRGB.withAlpha(isDark ? 0.12 : 0.08),
-            fillBottom: accentRGB.withAlpha(0),
+            fillTop: accent.opacity(isDark ? 0.12 : 0.08),
+            fillBottom: accent.opacity(0),
             gridLine: isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.06),
             gridLabel: isDark ? Color.white.opacity(0.40) : Color.black.opacity(0.35),
             gridLabelRGB: isDark
@@ -86,12 +86,12 @@ extension LivelinePalette {
             dotFlat: accent,
             glowUp: Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255).opacity(0.18),
             glowDown: Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255).opacity(0.18),
-            glowFlat: accentRGB.withAlpha(0.12),
+            glowFlat: accent.opacity(0.12),
             badgeOuterBackground: isDark ? Color(red: 40 / 255, green: 40 / 255, blue: 40 / 255).opacity(0.95) : Color.white.opacity(0.95),
             badgeOuterShadow: isDark ? Color.black.opacity(0.40) : Color.black.opacity(0.15),
             badgeBackground: accent,
             badgeText: .white,
-            dashLine: accentRGB.withAlpha(0.40),
+            dashLine: accent.opacity(0.40),
             referenceLine: isDark ? Color.white.opacity(0.15) : Color.black.opacity(0.12),
             referenceLabel: isDark ? Color.white.opacity(0.45) : Color.black.opacity(0.40),
             timeLabel: isDark ? Color.white.opacity(0.35) : Color.black.opacity(0.30),
@@ -105,16 +105,20 @@ extension LivelinePalette {
 }
 
 extension Color {
-    func livelineRGBA() -> LivelineRGBA {
+    func livelineRGBA() -> LivelineRGBA? {
         #if canImport(UIKit)
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0
         var alpha: CGFloat = 0
-        LivelinePlatformColor(self).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        guard LivelinePlatformColor(self).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return nil
+        }
         return LivelineRGBA(red: Double(red), green: Double(green), blue: Double(blue), alpha: Double(alpha))
         #elseif canImport(AppKit)
-        let color = LivelinePlatformColor(self).usingColorSpace(.deviceRGB) ?? .systemBlue
+        guard let color = LivelinePlatformColor(self).usingColorSpace(.deviceRGB) else {
+            return nil
+        }
         return LivelineRGBA(
             red: Double(color.redComponent),
             green: Double(color.greenComponent),
@@ -122,7 +126,7 @@ extension Color {
             alpha: Double(color.alphaComponent)
         )
         #else
-        return LivelineRGBA(red: 59 / 255, green: 130 / 255, blue: 246 / 255, alpha: 1)
+        return nil
         #endif
     }
 }

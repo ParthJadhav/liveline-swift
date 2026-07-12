@@ -8,25 +8,35 @@
 
 /* Begin PBXBuildFile section */
 		1AC5CE3F0E2C47252A685C97 /* StorybookGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E651928AB3A68954224963 /* StorybookGalleryView.swift */; };
+		25D497588CC80BCD6CA09E4D /* StorybookData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51B67FE02F589DE3867E6458 /* StorybookData.swift */; };
+		279B18038DFC9FEE9D1663A4 /* StorybookCoreScenarios.swift in Sources */ = {isa = PBXBuildFile; fileRef = 889CEFAA18D45D1947DB0C04 /* StorybookCoreScenarios.swift */; };
 		2A6C8E2849152B698065293F /* StorybookScenarios.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE6E7B321C063866AE32FE6E /* StorybookScenarios.swift */; };
 		402DB5ED38210BA5A7C8156F /* ChartShowcaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C08F79D60A276EA7E755DCBB /* ChartShowcaseView.swift */; };
+		50A8196CDC4C6C75538429CB /* StorybookCartesianScenarios.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22812B815C9DEE80FFE9636 /* StorybookCartesianScenarios.swift */; };
 		550CD9098220F8C26D01D9F2 /* DemoMarket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AA3FB67FFD448A011D77A88 /* DemoMarket.swift */; };
 		68A08A355EFFCBDD35146C9D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DFE268FCCEBC5F770ED32D8 /* ContentView.swift */; };
 		94D6664348AAB53AECFF2A55 /* Liveline in Frameworks */ = {isa = PBXBuildFile; productRef = C8383F349455BB91EED4F17D /* Liveline */; };
 		A3E6F6D70F960CD515A8D53F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CA1E9C63A4EA1D37D3964204 /* Assets.xcassets */; };
+		B07782CE83159BF661FA5D07 /* StorybookScenarioIDs.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB25256E69DFEBC719FAC487 /* StorybookScenarioIDs.generated.swift */; };
+		C6E1FB567495E1643DA85F47 /* StorybookAdvancedScenarios.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BBE66DC9B5E7F4117C5FB4 /* StorybookAdvancedScenarios.swift */; };
 		EB0A4860FCC5B0E1D910DA93 /* LivelineDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96A0ED5BF8E02B2290577882 /* LivelineDemoApp.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		13316F5B9327791EC071BA54 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		2AA3FB67FFD448A011D77A88 /* DemoMarket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoMarket.swift; sourceTree = "<group>"; };
+		34BBE66DC9B5E7F4117C5FB4 /* StorybookAdvancedScenarios.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookAdvancedScenarios.swift; sourceTree = "<group>"; };
+		51B67FE02F589DE3867E6458 /* StorybookData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookData.swift; sourceTree = "<group>"; };
 		84B6019E4E542078710AA9DA /* LivelineDemo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LivelineDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		889CEFAA18D45D1947DB0C04 /* StorybookCoreScenarios.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookCoreScenarios.swift; sourceTree = "<group>"; };
 		8DFE268FCCEBC5F770ED32D8 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		96A0ED5BF8E02B2290577882 /* LivelineDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivelineDemoApp.swift; sourceTree = "<group>"; };
+		A22812B815C9DEE80FFE9636 /* StorybookCartesianScenarios.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookCartesianScenarios.swift; sourceTree = "<group>"; };
 		A843AD2626FDD50F119E1682 /* liveline-swift */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "liveline-swift"; path = ../..; sourceTree = SOURCE_ROOT; };
 		C08F79D60A276EA7E755DCBB /* ChartShowcaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartShowcaseView.swift; sourceTree = "<group>"; };
 		C4E651928AB3A68954224963 /* StorybookGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookGalleryView.swift; sourceTree = "<group>"; };
 		CA1E9C63A4EA1D37D3964204 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		CB25256E69DFEBC719FAC487 /* StorybookScenarioIDs.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookScenarioIDs.generated.swift; sourceTree = "<group>"; };
 		CE6E7B321C063866AE32FE6E /* StorybookScenarios.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookScenarios.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -51,7 +61,12 @@
 				2AA3FB67FFD448A011D77A88 /* DemoMarket.swift */,
 				13316F5B9327791EC071BA54 /* Info.plist */,
 				96A0ED5BF8E02B2290577882 /* LivelineDemoApp.swift */,
+				34BBE66DC9B5E7F4117C5FB4 /* StorybookAdvancedScenarios.swift */,
+				A22812B815C9DEE80FFE9636 /* StorybookCartesianScenarios.swift */,
+				889CEFAA18D45D1947DB0C04 /* StorybookCoreScenarios.swift */,
+				51B67FE02F589DE3867E6458 /* StorybookData.swift */,
 				C4E651928AB3A68954224963 /* StorybookGalleryView.swift */,
+				CB25256E69DFEBC719FAC487 /* StorybookScenarioIDs.generated.swift */,
 				CE6E7B321C063866AE32FE6E /* StorybookScenarios.swift */,
 			);
 			path = Sources;
@@ -158,7 +173,12 @@
 				68A08A355EFFCBDD35146C9D /* ContentView.swift in Sources */,
 				550CD9098220F8C26D01D9F2 /* DemoMarket.swift in Sources */,
 				EB0A4860FCC5B0E1D910DA93 /* LivelineDemoApp.swift in Sources */,
+				C6E1FB567495E1643DA85F47 /* StorybookAdvancedScenarios.swift in Sources */,
+				50A8196CDC4C6C75538429CB /* StorybookCartesianScenarios.swift in Sources */,
+				279B18038DFC9FEE9D1663A4 /* StorybookCoreScenarios.swift in Sources */,
+				25D497588CC80BCD6CA09E4D /* StorybookData.swift in Sources */,
 				1AC5CE3F0E2C47252A685C97 /* StorybookGalleryView.swift in Sources */,
+				B07782CE83159BF661FA5D07 /* StorybookScenarioIDs.generated.swift in Sources */,
 				2A6C8E2849152B698065293F /* StorybookScenarios.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

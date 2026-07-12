@@ -9,6 +9,8 @@ struct LivelineWaterfallSegment: Equatable {
     var delta: Double
 }
 
+extension LivelineWaterfallSegment: LivelineTimedDatum {}
+
 enum LivelineMath {
     static func barRangePoints(points: [LivelinePoint], baseline: Double) -> [LivelinePoint] {
         guard let last = points.last else { return [] }
@@ -36,11 +38,11 @@ enum LivelineMath {
         )
     }
 
-    static func uniqueFormattedGridLabelKeys(
-        candidates: [(key: Int, value: Double, priority: Double)],
+    static func uniqueFormattedGridLabelKeys<Key: Hashable & Comparable>(
+        candidates: [(key: Key, value: Double, priority: Double)],
         formatValue: (Double) -> String
-    ) -> Set<Int> {
-        var selections: [String: (key: Int, priority: Double)] = [:]
+    ) -> Set<Key> {
+        var selections: [String: (key: Key, priority: Double)] = [:]
 
         for candidate in candidates {
             let label = formatValue(candidate.value)
@@ -132,8 +134,10 @@ enum LivelineMath {
     }
 
     static func lerp(_ current: Double, _ target: Double, speed: Double, deltaTime: TimeInterval) -> Double {
+        guard deltaTime > 0 else { return current }
         if speed >= 1 { return target }
-        let normalized = 1 - pow(1 - speed, deltaTime / 16.667)
+        let clampedSpeed = min(max(speed, 0), 1)
+        let normalized = 1 - pow(1 - clampedSpeed, deltaTime / 16.667)
         return current + (target - current) * normalized
     }
 
@@ -184,7 +188,11 @@ enum LivelineMath {
             targetMax += margin
         }
 
-        return targetMin...targetMax
+        return LivelineScalar.nondegenerateRange(
+            lower: targetMin,
+            upper: targetMax,
+            fallback: -0.2...0.2
+        )
     }
 
     static func computeCandleRange(
@@ -211,6 +219,10 @@ enum LivelineMath {
     }
 
     static func interpolate(points: [LivelinePoint], at time: TimeInterval) -> Double? {
+        interpolateOrdered(points: LivelineInputNormalizer.points(points), at: time)
+    }
+
+    static func interpolateOrdered(points: [LivelinePoint], at time: TimeInterval) -> Double? {
         guard let first = points.first else { return nil }
         if time <= first.time { return first.value }
         guard let last = points.last else { return nil }

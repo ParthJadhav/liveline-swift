@@ -16,9 +16,11 @@ public struct LivelineChart: View {
     private let baseConfiguration: LivelineChartConfiguration
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.livelineSnapshotElapsedTime) private var snapshotElapsedTime
     @StateObject private var renderState = LivelineRenderState()
     @State private var activeWindow: TimeInterval
     @State private var hoverLocation: CGPoint?
+    @State private var lastReportedHover: LivelineHoverPoint?
     @State private var lineMode: Bool
     @State private var hiddenSeries: Set<String> = []
 
@@ -268,27 +270,38 @@ public struct LivelineChart: View {
         accent: Color,
         configuration: LivelineChartConfiguration
     ) {
+        let content = content.normalized()
+        let configuration = configuration.normalizedForRendering()
         self.content = content
         self.accent = accent
         self.baseConfiguration = configuration
-        _activeWindow = State(initialValue: configuration.windows.first?.seconds ?? configuration.window)
+        _activeWindow = State(initialValue: configuration.initialWindow)
         _lineMode = State(initialValue: configuration.lineMode)
     }
 
     public var body: some View {
         let configuration = effectiveConfiguration
+        let semantics = content.semantics(hiddenSeries: hiddenSeries)
+        let resolvedSnapshotElapsedTime = snapshotElapsedTime
+            ?? configuration.resolvedSnapshotElapsedTime
+        let motion = LivelineMotionPolicy.resolve(
+            configuration: configuration,
+            capabilities: semantics.capabilities,
+            reduceMotion: accessibilityReduceMotion,
+            snapshotElapsedTime: resolvedSnapshotElapsedTime
+        )
 
         GeometryReader { proxy in
             VStack(alignment: .leading, spacing: 6) {
                 if configuration.showValue {
-                    Text(configuration.formatValue(currentValue))
+                    Text(configuration.formatValue(semantics.currentValue))
                         .font(.system(size: 20, weight: .medium, design: .monospaced))
                         .tracking(-0.2)
-                        .foregroundColor(valueColor(configuration: configuration))
+                        .foregroundColor(valueColor(configuration: configuration, momentum: semantics.momentum))
                         .padding(.leading, resolvedLeftPadding(configuration))
                         .padding(.top, 4)
                         .padding(.bottom, 2)
-                        .animation(.easeOut(duration: 0.2), value: currentMomentum)
+                        .animation(.easeOut(duration: 0.2), value: semantics.momentum)
                 }
 
                 if hasControls(configuration) {
@@ -304,42 +317,46 @@ public struct LivelineChart: View {
                     .frame(height: controlRowHeight(configuration))
                 }
 
-                TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
-                    Canvas { context, size in
-                        let timestamp = renderState.timestamp(
-                            for: timeline.date.timeIntervalSince1970,
-                            snapshotElapsedTime: configuration.snapshotElapsedTime
-                        )
-                        LivelineRenderer.draw(
-                            context: &context,
-                            state: renderState,
-                            input: LivelineRenderInput(
-                                content: content,
-                                accent: accent,
-                                configuration: configuration,
-                                activeWindow: activeWindow,
-                                hiddenSeries: hiddenSeries,
-                                hoverLocation: hoverLocation,
-                                timestamp: timestamp,
-                                size: size
-                            )
-                        )
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .contentShape(Rectangle())
-                    .gesture(scrubGesture(configuration))
-                }
+                chartSurface(
+                    configuration: configuration,
+                    semantics: semantics,
+                    motion: motion,
+                    snapshotElapsedTime: resolvedSnapshotElapsedTime
+                )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
         }
         .onChange(of: baseConfiguration.window) { newValue in
-            if baseConfiguration.windows.isEmpty {
-                activeWindow = newValue
-            }
+            activeWindow = LivelineSelectionReconciler.window(
+                current: activeWindow,
+                preferred: newValue,
+                options: baseConfiguration.windows.map(\.seconds),
+                preferExternalValue: true
+            )
+        }
+        .onChange(of: baseConfiguration.windows.map(\.seconds)) { options in
+            activeWindow = LivelineSelectionReconciler.window(
+                current: activeWindow,
+                preferred: baseConfiguration.window,
+                options: options,
+                preferExternalValue: false
+            )
+        }
+        .onChange(of: baseConfiguration.lineMode) { newValue in
+            lineMode = newValue
+        }
+        .onChange(of: semantics.identity) { identity in
+            hiddenSeries = LivelineSelectionReconciler.hiddenSeries(
+                current: hiddenSeries,
+                availableIDs: identity.seriesIDs
+            )
+        }
+        .onChange(of: configuration.scrub) { isEnabled in
+            if !isEnabled { endHover(configuration: configuration) }
         }
         .onDisappear {
-            baseConfiguration.onHover?(nil)
+            endHover(configuration: baseConfiguration, forceNotification: true)
         }
     }
 }
@@ -394,108 +411,80 @@ private struct LivelineModeIcon: View {
 }
 
 private extension LivelineChart {
+    @ViewBuilder
+    func chartSurface(
+        configuration: LivelineChartConfiguration,
+        semantics: LivelineChartSemantics,
+        motion: LivelineMotionPolicy,
+        snapshotElapsedTime: TimeInterval?
+    ) -> some View {
+        if motion.requiresTimeline {
+            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
+                chartCanvas(
+                    wallTimestamp: timeline.date.timeIntervalSince1970,
+                    configuration: configuration,
+                    semantics: semantics,
+                    motion: motion,
+                    snapshotElapsedTime: snapshotElapsedTime
+                )
+            }
+        } else {
+            chartCanvas(
+                wallTimestamp: Date().timeIntervalSince1970,
+                configuration: configuration,
+                semantics: semantics,
+                motion: motion,
+                snapshotElapsedTime: snapshotElapsedTime
+            )
+        }
+    }
+
+    func chartCanvas(
+        wallTimestamp: TimeInterval,
+        configuration: LivelineChartConfiguration,
+        semantics: LivelineChartSemantics,
+        motion: LivelineMotionPolicy,
+        snapshotElapsedTime: TimeInterval?
+    ) -> some View {
+        Canvas { context, size in
+            let timestamp = renderState.timestamp(
+                for: wallTimestamp,
+                snapshotElapsedTime: snapshotElapsedTime
+            )
+            LivelineRenderer.draw(
+                context: &context,
+                state: renderState,
+                input: LivelineRenderInput(
+                    content: content,
+                    semantics: semantics,
+                    accent: accent,
+                    configuration: configuration,
+                    motion: motion,
+                    activeWindow: activeWindow,
+                    hiddenSeries: hiddenSeries,
+                    hoverLocation: hoverLocation,
+                    timestamp: timestamp,
+                    size: size
+                )
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .contentShape(Rectangle())
+        .gesture(scrubGesture(configuration))
+    }
+
     var effectiveConfiguration: LivelineChartConfiguration {
         var configuration = baseConfiguration
         configuration.lineMode = lineMode
         return configuration.respectingReducedMotion(accessibilityReduceMotion)
     }
 
-    var currentValue: Double {
-        switch content {
-        case let .line(_, value):
-            return value
-        case let .candle(_, value, _, _, liveCandle, _, lineValue):
-            return lineValue ?? liveCandle?.close ?? value
-        case let .series(series):
-            return series.first(where: { !hiddenSeries.contains($0.id) })?.value ?? series.first?.value ?? 0
-        case let .bars(data, _):
-            return data.last?.value ?? 0
-        case let .range(data, _):
-            return data.last?.midpoint ?? 0
-        case let .scatter(_, value, _):
-            return value
-        case let .steps(_, value, _):
-            return value
-        case let .lollipops(data, _):
-            return data.last?.value ?? 0
-        case let .bubbles(data, _):
-            return data.last?.value ?? 0
-        case let .boxPlots(data, _):
-            return data.last?.median ?? 0
-        case let .waterfall(data, style):
-            return LivelineMath.waterfallSegments(points: data, initialValue: style.initialValue).last?.end ?? style.initialValue
-        case let .errorBars(data, _):
-            return data.last?.value ?? 0
-        case let .dumbbells(data, _):
-            return data.last?.end ?? 0
-        case let .stackedBars(data, _), let .stackedAreas(data, _):
-            return data.last?.total ?? 0
-        case let .timeline(data, _):
-            guard let last = data.last else { return 0 }
-            return last.end - last.start
-        case let .heatmap(data, _):
-            return data.last?.value ?? 0
-        case let .radar(data, _):
-            guard !data.isEmpty else { return 0 }
-            return data.map(\.value).reduce(0, +) / Double(data.count)
-        case let .donut(data, _):
-            return data.map(\.value).reduce(0, +)
-        case let .gauge(value, _, _):
-            return value
-        case let .funnel(data, _):
-            return data.last?.value ?? 0
-        }
-    }
-
-    var currentMomentum: LivelineMomentum {
-        switch content {
-        case let .line(data, _):
-            return LivelineMath.detectMomentum(points: data)
-        case let .candle(data, _, _, _, _, lineData, _):
-            return LivelineMath.detectMomentum(points: lineData.isEmpty ? data : lineData)
-        case let .series(series):
-            return LivelineMath.detectMomentum(points: series.first(where: { !hiddenSeries.contains($0.id) })?.data ?? [])
-        case let .bars(data, _):
-            return LivelineMath.detectMomentum(points: data)
-        case let .range(data, _):
-            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.midpoint) })
-        case let .scatter(data, _, _):
-            return LivelineMath.detectMomentum(points: data)
-        case let .steps(data, _, _):
-            return LivelineMath.detectMomentum(points: data)
-        case let .lollipops(data, _):
-            return LivelineMath.detectMomentum(points: data)
-        case let .bubbles(data, _):
-            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.value) })
-        case let .boxPlots(data, _):
-            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.median) })
-        case let .waterfall(data, style):
-            let points = LivelineMath.waterfallSegments(points: data, initialValue: style.initialValue)
-                .map { LivelinePoint(time: $0.time, value: $0.end) }
-            return LivelineMath.detectMomentum(points: points)
-        case let .errorBars(data, _):
-            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.value) })
-        case let .dumbbells(data, _):
-            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.end) })
-        case let .stackedBars(data, _), let .stackedAreas(data, _):
-            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.total) })
-        case let .timeline(data, _):
-            return LivelineMath.detectMomentum(points: data.enumerated().map {
-                LivelinePoint(time: Double($0.offset), value: $0.element.end - $0.element.start)
-            })
-        case let .heatmap(data, _):
-            return LivelineMath.detectMomentum(points: data.map { LivelinePoint(time: $0.time, value: $0.value) })
-        case .radar, .donut, .gauge, .funnel:
-            return .flat
-        }
-    }
-
-    func valueColor(configuration: LivelineChartConfiguration) -> Color {
+    func valueColor(configuration: LivelineChartConfiguration, momentum: LivelineMomentum) -> Color {
         guard configuration.valueMomentumColor else {
             return configuration.theme == .dark ? Color.white.opacity(0.85) : Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255)
         }
 
-        switch currentMomentum {
+        switch momentum {
         case .up:
             return Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255)
         case .down:
@@ -510,17 +499,20 @@ private extension LivelineChart {
     }
 
     func hasControls(_ configuration: LivelineChartConfiguration) -> Bool {
-        !configuration.windows.isEmpty || shouldShowModeControls(configuration) || shouldShowSeriesControls
+        !configuration.windows.isEmpty
+            || shouldShowModeControls(configuration)
+            || shouldShowSeriesControls(configuration)
     }
 
     func shouldShowModeControls(_ configuration: LivelineChartConfiguration) -> Bool {
         if case .candle = content {
-            return configuration.onModeChange != nil
+            return configuration.showsModeControls
         }
         return false
     }
 
-    var shouldShowSeriesControls: Bool {
+    func shouldShowSeriesControls(_ configuration: LivelineChartConfiguration) -> Bool {
+        guard configuration.showsSeriesControls else { return false }
         if case let .series(series) = content {
             return series.count > 1
         }
@@ -585,7 +577,9 @@ private extension LivelineChart {
 
     @ViewBuilder
     func seriesControls(_ configuration: LivelineChartConfiguration) -> some View {
-        if case let .series(series) = content, series.count > 1 {
+        if configuration.showsSeriesControls,
+           case let .series(series) = content,
+           series.count > 1 {
             HStack(spacing: configuration.windowStyle == .text ? 4 : 2) {
                 ForEach(series) { entry in
                     let visible = !hiddenSeries.contains(entry.id)
@@ -619,15 +613,13 @@ private extension LivelineChart {
     }
 
     func toggleSeries(_ id: String, series: [LivelineSeries], configuration: LivelineChartConfiguration) {
-        if hiddenSeries.contains(id) {
-            hiddenSeries.remove(id)
-            configuration.onSeriesToggle?(id, true)
-        } else {
-            let visibleCount = series.filter { !hiddenSeries.contains($0.id) }.count
-            guard visibleCount > 1 else { return }
-            hiddenSeries.insert(id)
-            configuration.onSeriesToggle?(id, false)
-        }
+        guard let selection = LivelineSelectionReconciler.toggledSeries(
+            id,
+            hidden: hiddenSeries,
+            availableIDs: series.map(\.id)
+        ) else { return }
+        hiddenSeries = selection.hidden
+        configuration.onSeriesToggle?(id, selection.isVisible)
     }
 
     func activeControlColor(_ configuration: LivelineChartConfiguration) -> Color {
@@ -681,7 +673,7 @@ private extension LivelineChart {
         if shouldShowModeControls(configuration) {
             buttonHeight = max(buttonHeight, controlButtonHeight(configuration))
         }
-        if shouldShowSeriesControls {
+        if shouldShowSeriesControls(configuration) {
             buttonHeight = max(buttonHeight, seriesButtonHeight(configuration))
         }
         return buttonHeight + controlGroupPadding(configuration) * 2
@@ -713,11 +705,32 @@ private extension LivelineChart {
             .onChanged { value in
                 guard configuration.scrub else { return }
                 hoverLocation = value.location
+                reportHover(
+                    LivelineHoverResolver.resolve(
+                        location: value.location,
+                        snapshot: renderState.interactionSnapshot
+                    ),
+                    configuration: configuration
+                )
             }
             .onEnded { _ in
-                hoverLocation = nil
-                configuration.onHover?(nil)
+                endHover(configuration: configuration)
             }
         #endif
+    }
+
+    func reportHover(_ hover: LivelineHoverPoint?, configuration: LivelineChartConfiguration) {
+        guard hover != lastReportedHover else { return }
+        lastReportedHover = hover
+        configuration.onHover?(hover)
+    }
+
+    func endHover(configuration: LivelineChartConfiguration, forceNotification: Bool = false) {
+        hoverLocation = nil
+        let hadHover = lastReportedHover != nil
+        lastReportedHover = nil
+        if hadHover || forceNotification {
+            configuration.onHover?(nil)
+        }
     }
 }

@@ -21,6 +21,9 @@ jobs:
           swift --version
           xcodebuild -version
 
+      - name: Validate generated project metadata
+        run: python3 scripts/storybook_manifest.py validate
+
       - name: Test package
         run: swift test
 
@@ -58,8 +61,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install pinned XcodeGen
+        run: |
+          scripts/install-xcodegen.sh "$RUNNER_TEMP/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
 
       - name: Generate demo project
         run: xcodegen generate

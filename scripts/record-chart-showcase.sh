@@ -14,6 +14,11 @@ TRIM_START="${SHOWCASE_TRIM_START:-1.0}"
 
 mkdir -p "$BUILD_DIR" "$MEDIA_DIR"
 
+if ! command -v xcodegen >/dev/null 2>&1 \
+  && [[ -x "$ROOT_DIR/.build/tools/xcodegen/bin/xcodegen" ]]; then
+  export PATH="$ROOT_DIR/.build/tools/xcodegen/bin:$PATH"
+fi
+
 for command in xcodegen ffmpeg ffprobe; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "$command is required to record the chart showcase." >&2

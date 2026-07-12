@@ -224,7 +224,47 @@ Default padding is content-aware: value-axis space is reserved only when value l
 
 ## Configuration
 
-`LivelineChartConfiguration` controls appearance and behavior.
+`LivelineChartConfiguration` controls appearance and behavior. New code can use
+the typed policy groups so unrelated settings do not accumulate in one flat
+initializer:
+
+```swift
+let configuration = LivelineChartConfiguration(
+    appearance: LivelineChartAppearance(
+        theme: .dark,
+        grid: true,
+        fill: true,
+        showValue: true
+    ),
+    effects: LivelineChartEffects(
+        badge: true,
+        pulse: true,
+        fadeEffects: false
+    ),
+    viewport: LivelineChartViewport(
+        window: 60,
+        windows: [
+            LivelineWindowOption(label: "30s", seconds: 30),
+            LivelineWindowOption(label: "1m", seconds: 60)
+        ]
+    ),
+    interaction: LivelineChartInteraction(
+        scrub: true,
+        showsModeControls: false,
+        showsSeriesControls: true
+    ),
+    motion: LivelineChartMotion(paused: false),
+    annotations: LivelineChartAnnotations(
+        referenceLine: LivelineReferenceLine(value: 42, label: "Open")
+    ),
+    formatting: LivelineChartFormatting(
+        value: { $0.formatted(.number.precision(.fractionLength(2))) }
+    )
+)
+```
+
+The flat initializer and properties remain source-compatible projections over
+these groups:
 
 ```swift
 LivelineChartConfiguration(
@@ -274,8 +314,13 @@ Important options:
 | `referenceLine` | `nil` | Keeps a horizontal reference value visible. |
 | `activePoint` | `nil` | Draws a pulsing dot at an arbitrary active time/value. If `value` is nil, Liveline interpolates the value from the visible data. |
 | `seriesLegendSide` | `.trailing` | Places multi-series endpoint labels to the trailing or leading side of their points. |
-| `snapshotElapsedTime` | `nil` | Runs animations on a fixed 60fps cursor until this elapsed time, then freezes for deterministic screenshots and tests. |
 | `lineMode` | `false` | Renders candle input as a line. |
+| `showsModeControls` | `false` | Explicitly shows line/candle mode controls when the content supports them. |
+| `showsSeriesControls` | `true` | Explicitly shows series visibility controls when the content supports them. |
+
+`snapshotElapsedTime` remains only as a deprecated source-compatibility
+property. Screenshot infrastructure uses the testing SPI environment modifier
+instead of putting deterministic time into ordinary application configuration.
 
 ## Callbacks
 
@@ -296,4 +341,6 @@ LivelineChartConfiguration(
 )
 ```
 
-Callbacks are optional. The built-in UI only appears when relevant data or callbacks are present.
+Callbacks are optional event sinks and never act as feature flags. Built-in
+controls are governed explicitly by `showsModeControls`,
+`showsSeriesControls`, and the available chart data.

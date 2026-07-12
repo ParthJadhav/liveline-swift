@@ -14,7 +14,7 @@ For chart-only comparison screenshots without the scenario heading copy:
 scripts/capture-storybook.sh --chart-only
 ```
 
-Chart-only screenshots are written to `Media/storybook-chart-only`. The capture script supports `STORYBOOK_SCENARIOS` for partial runs, `STORYBOOK_CAPTURE_WAIT_SECONDS` for one global snapshot elapsed time, `STORYBOOK_SCENARIO_WAIT_OVERRIDES` for entries like `line-orderbook=3.40 line-loading=2.80`, and `STORYBOOK_ORDERBOOK_RANDOM_SEED` for local orderbook stream tuning. Native captures pass the elapsed time into `snapshotElapsedTime`, advance animations with a fixed 60fps snapshot cursor, then wait an extra 0.60 seconds before taking the simulator screenshot.
+Chart-only screenshots are written to `Media/storybook-chart-only`. The capture script supports `STORYBOOK_SCENARIOS` for partial runs, `STORYBOOK_CAPTURE_WAIT_SECONDS` for one global snapshot elapsed time, `STORYBOOK_SCENARIO_WAIT_OVERRIDES` for entries like `line-orderbook=3.40 line-loading=2.80`, `STORYBOOK_ORDERBOOK_RANDOM_SEED` for local orderbook stream tuning, and `STORYBOOK_OUT_DIR` for disposable output. It defaults to the iPhone 17 Pro simulator so the fixed comparison crop cannot silently change with whichever device happens to be booted; `STORYBOOK_DEVICE_ID` or `STORYBOOK_DEVICE_NAME` can select an explicit alternative. Native captures inject elapsed time through the testing SPI environment, advance animations with a fixed 60fps snapshot cursor, then wait an extra 0.60 seconds before taking the simulator screenshot.
 
 To capture the matching upstream React/canvas references:
 
@@ -34,6 +34,9 @@ Diff panels are written to `Media/storybook-diff` as reference/native/heatmap tr
 
 ## Scenarios
 
+The machine-readable manifest at `Examples/LivelineDemo/Resources/storybook-scenarios.json` is authoritative. The table below is generated with `python3 scripts/storybook_manifest.py markdown`; the demo uses `StorybookScenarioIDs.generated.swift`, generated with the same tool's `swift` command. CI verifies both derived artifacts and requires every typed ID to be used by exactly one scenario definition.
+
+<!-- BEGIN GENERATED SCENARIO TABLE -->
 | ID | Area | Coverage |
 | --- | --- | --- |
 | `line-basic-dark` | Line | Default dark line with grid, fill, and badge. |
@@ -100,6 +103,7 @@ Diff panels are written to `Media/storybook-diff` as reference/native/heatmap tr
 | `gauge-target` | Gauge | Half-circle SLA gauge with target marker. |
 | `funnel-basic` | Funnel | Labeled conversion stages with values. |
 | `funnel-compact` | Funnel | Tight square stages with labels only. |
+<!-- END GENERATED SCENARIO TABLE -->
 
 ## Parity Notes
 

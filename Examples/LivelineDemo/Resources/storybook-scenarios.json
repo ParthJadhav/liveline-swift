@@ -1,0 +1,322 @@
+[
+  {
+    "id": "line-basic-dark",
+    "area": "Line",
+    "coverage": "Default dark line with grid, fill, and badge."
+  },
+  {
+    "id": "line-basic-light",
+    "area": "Line",
+    "coverage": "Default light theme."
+  },
+  {
+    "id": "line-no-grid-no-fill",
+    "area": "Line",
+    "coverage": "Minimal chart with no grid and no fill."
+  },
+  {
+    "id": "line-minimal-badge",
+    "area": "Line",
+    "coverage": "Minimal badge variant."
+  },
+  {
+    "id": "line-no-badge",
+    "area": "Line",
+    "coverage": "Badge disabled and compact right padding."
+  },
+  {
+    "id": "line-momentum-up",
+    "area": "Line",
+    "coverage": "Forced up momentum."
+  },
+  {
+    "id": "line-momentum-down",
+    "area": "Line",
+    "coverage": "Forced down momentum."
+  },
+  {
+    "id": "line-exaggerated",
+    "area": "Line",
+    "coverage": "Tight Y-axis."
+  },
+  {
+    "id": "line-show-value-windows",
+    "area": "Line",
+    "coverage": "Live value display and window controls."
+  },
+  {
+    "id": "line-rounded-windows",
+    "area": "Line",
+    "coverage": "Rounded window controls."
+  },
+  {
+    "id": "line-text-windows",
+    "area": "Line",
+    "coverage": "Text-only window controls."
+  },
+  {
+    "id": "line-reference",
+    "area": "Line",
+    "coverage": "Reference line and label."
+  },
+  {
+    "id": "line-orderbook",
+    "area": "Line",
+    "coverage": "Orderbook stream labels with static pulse suppressed for diff stability."
+  },
+  {
+    "id": "line-degen",
+    "area": "Line",
+    "coverage": "Particle/shake mode."
+  },
+  {
+    "id": "line-loading",
+    "area": "State",
+    "coverage": "Loading line."
+  },
+  {
+    "id": "line-empty",
+    "area": "State",
+    "coverage": "Empty state."
+  },
+  {
+    "id": "line-empty-controls",
+    "area": "State",
+    "coverage": "Empty state centered below value and window controls."
+  },
+  {
+    "id": "candle-basic",
+    "area": "Candles",
+    "coverage": "OHLC bars with live candle."
+  },
+  {
+    "id": "candle-light",
+    "area": "Candles",
+    "coverage": "Light theme candles."
+  },
+  {
+    "id": "candle-line-mode",
+    "area": "Candles",
+    "coverage": "Candle data rendered as line."
+  },
+  {
+    "id": "candle-mode-controls",
+    "area": "Candles",
+    "coverage": "Built-in line/candle icon mode controls."
+  },
+  {
+    "id": "candle-no-live",
+    "area": "Candles",
+    "coverage": "Committed bars only."
+  },
+  {
+    "id": "candle-wide-window",
+    "area": "Candles",
+    "coverage": "Wider time range and smaller candles."
+  },
+  {
+    "id": "candle-loading",
+    "area": "State",
+    "coverage": "Candle loading setup."
+  },
+  {
+    "id": "multi-basic",
+    "area": "Multi-series",
+    "coverage": "Three lines and series chips."
+  },
+  {
+    "id": "multi-light",
+    "area": "Multi-series",
+    "coverage": "Light theme multi-series."
+  },
+  {
+    "id": "multi-compact",
+    "area": "Multi-series",
+    "coverage": "Dot-only series chips."
+  },
+  {
+    "id": "multi-two-series",
+    "area": "Multi-series",
+    "coverage": "Two series."
+  },
+  {
+    "id": "bar-basic",
+    "area": "Bars",
+    "coverage": "Rounded positive time buckets."
+  },
+  {
+    "id": "bar-signed",
+    "area": "Bars",
+    "coverage": "Narrow square bars diverging from a custom target baseline."
+  },
+  {
+    "id": "range-basic",
+    "area": "Range bands",
+    "coverage": "Filled forecast interval with emphasized boundaries."
+  },
+  {
+    "id": "range-center-line",
+    "area": "Range bands",
+    "coverage": "Light interval with a dashed center estimate."
+  },
+  {
+    "id": "scatter-basic",
+    "area": "Scatter",
+    "coverage": "Independent circular observations."
+  },
+  {
+    "id": "scatter-connected",
+    "area": "Scatter",
+    "coverage": "Diamond observations with a curved connection."
+  },
+  {
+    "id": "step-basic",
+    "area": "Step",
+    "coverage": "Trailing transitions with a subtle fill."
+  },
+  {
+    "id": "step-centered",
+    "area": "Step",
+    "coverage": "Centered transitions with an unfilled heavy line."
+  },
+  {
+    "id": "lollipop-basic",
+    "area": "Lollipop",
+    "coverage": "Signed circular heads around zero."
+  },
+  {
+    "id": "lollipop-diamond",
+    "area": "Lollipop",
+    "coverage": "Diamond heads around a custom target."
+  },
+  {
+    "id": "bubble-basic",
+    "area": "Bubble",
+    "coverage": "Request volume mapped to visible area."
+  },
+  {
+    "id": "bubble-diameter",
+    "area": "Bubble",
+    "coverage": "Linear diameter scaling with bold outlines."
+  },
+  {
+    "id": "boxplot-basic",
+    "area": "Box plot",
+    "coverage": "Filled rolling five-number summaries."
+  },
+  {
+    "id": "boxplot-minimal",
+    "area": "Box plot",
+    "coverage": "Narrow outlined summaries with heavy medians."
+  },
+  {
+    "id": "waterfall-basic",
+    "area": "Waterfall",
+    "coverage": "Connected cumulative gains and losses."
+  },
+  {
+    "id": "waterfall-no-connectors",
+    "area": "Waterfall",
+    "coverage": "Wide square changes without connectors."
+  },
+  {
+    "id": "errorbar-basic",
+    "area": "Error bar",
+    "coverage": "Circular estimates with capped uncertainty intervals."
+  },
+  {
+    "id": "errorbar-diamond",
+    "area": "Error bar",
+    "coverage": "Diamond estimates with wider caps and translucent centers."
+  },
+  {
+    "id": "dumbbell-basic",
+    "area": "Dumbbell",
+    "coverage": "Paired before/after values with gradient connectors."
+  },
+  {
+    "id": "dumbbell-directional",
+    "area": "Dumbbell",
+    "coverage": "Square endpoints with direction chevrons."
+  },
+  {
+    "id": "stackedbar-basic",
+    "area": "Stacked bar",
+    "coverage": "Absolute multi-segment time buckets."
+  },
+  {
+    "id": "stackedbar-normalized",
+    "area": "Stacked bar",
+    "coverage": "Segment shares normalized to 100 percent."
+  },
+  {
+    "id": "stackedarea-basic",
+    "area": "Stacked area",
+    "coverage": "Layered absolute volumes with boundaries."
+  },
+  {
+    "id": "stackedarea-normalized",
+    "area": "Stacked area",
+    "coverage": "Layered composition normalized to 100 percent."
+  },
+  {
+    "id": "timeline-basic",
+    "area": "Timeline",
+    "coverage": "Labeled overlapping intervals across three lanes."
+  },
+  {
+    "id": "timeline-compact",
+    "area": "Timeline",
+    "coverage": "Slim square intervals without guides or labels."
+  },
+  {
+    "id": "heatmap-basic",
+    "area": "Heatmap",
+    "coverage": "Regional load intensity across four labeled rows."
+  },
+  {
+    "id": "heatmap-values",
+    "area": "Heatmap",
+    "coverage": "Wide rounded cells with embedded values."
+  },
+  {
+    "id": "radar-basic",
+    "area": "Radar",
+    "coverage": "Six labeled axes, five grid levels, fill, and markers."
+  },
+  {
+    "id": "radar-minimal",
+    "area": "Radar",
+    "coverage": "Unlabeled three-level outline with no markers."
+  },
+  {
+    "id": "donut-basic",
+    "area": "Donut",
+    "coverage": "Composition ring with outside labels and center total."
+  },
+  {
+    "id": "donut-thin",
+    "area": "Donut",
+    "coverage": "Thin ring with value-bearing labels."
+  },
+  {
+    "id": "gauge-basic",
+    "area": "Gauge",
+    "coverage": "Tick-marked 240-degree capacity gauge."
+  },
+  {
+    "id": "gauge-target",
+    "area": "Gauge",
+    "coverage": "Half-circle SLA gauge with target marker."
+  },
+  {
+    "id": "funnel-basic",
+    "area": "Funnel",
+    "coverage": "Labeled conversion stages with values."
+  },
+  {
+    "id": "funnel-compact",
+    "area": "Funnel",
+    "coverage": "Tight square stages with labels only."
+  }
+]

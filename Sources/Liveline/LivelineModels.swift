@@ -56,8 +56,9 @@ public struct LivelineBarStyle {
         self.showsBaseline = showsBaseline
     }
 
-    var resolvedWidthRatio: CGFloat { min(max(widthRatio, 0.05), 1) }
-    var resolvedCornerRadius: CGFloat { max(cornerRadius, 0) }
+    var resolvedWidthRatio: CGFloat { widthRatio.livelineClamped(0.05, 1, fallback: 0.7) }
+    var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 2) }
+    var resolvedBaseline: Double { LivelineScalar.value(baseline) }
 }
 
 /// Visual options for a range-band chart.
@@ -79,9 +80,9 @@ public struct LivelineRangeStyle {
         self.centerLineWidth = centerLineWidth
     }
 
-    var resolvedFillOpacity: Double { min(max(fillOpacity, 0), 1) }
-    var resolvedBoundaryLineWidth: CGFloat { max(boundaryLineWidth, 0) }
-    var resolvedCenterLineWidth: CGFloat { max(centerLineWidth, 0) }
+    var resolvedFillOpacity: Double { fillOpacity.livelineClamped(0, 1, fallback: 0.16) }
+    var resolvedBoundaryLineWidth: CGFloat { boundaryLineWidth.livelineAtLeast(0, fallback: 1.25) }
+    var resolvedCenterLineWidth: CGFloat { centerLineWidth.livelineAtLeast(0, fallback: 1) }
 }
 
 public enum LivelineScatterSymbol: String, CaseIterable, Sendable {
@@ -118,9 +119,9 @@ public struct LivelineScatterStyle {
         self.connectionLineWidth = connectionLineWidth
     }
 
-    var resolvedPointSize: CGFloat { max(pointSize, 2) }
-    var resolvedOutlineWidth: CGFloat { max(outlineWidth, 0) }
-    var resolvedConnectionLineWidth: CGFloat { max(connectionLineWidth, 0) }
+    var resolvedPointSize: CGFloat { pointSize.livelineAtLeast(2, fallback: 7) }
+    var resolvedOutlineWidth: CGFloat { outlineWidth.livelineAtLeast(0, fallback: 1.5) }
+    var resolvedConnectionLineWidth: CGFloat { connectionLineWidth.livelineAtLeast(0, fallback: 1.5) }
 }
 
 /// Where a step transition occurs between two adjacent samples.
@@ -146,8 +147,8 @@ public struct LivelineStepStyle {
         self.fillOpacity = fillOpacity
     }
 
-    var resolvedLineWidth: CGFloat { max(lineWidth, 0) }
-    var resolvedFillOpacity: Double { min(max(fillOpacity, 0), 1) }
+    var resolvedLineWidth: CGFloat { lineWidth.livelineAtLeast(0, fallback: 2) }
+    var resolvedFillOpacity: Double { fillOpacity.livelineClamped(0, 1, fallback: 0.10) }
 }
 
 /// Visual options for a lollipop chart.
@@ -181,9 +182,10 @@ public struct LivelineLollipopStyle {
         self.showsBaseline = showsBaseline
     }
 
-    var resolvedStemWidth: CGFloat { max(stemWidth, 0) }
-    var resolvedHeadSize: CGFloat { max(headSize, 2) }
-    var resolvedOutlineWidth: CGFloat { max(outlineWidth, 0) }
+    var resolvedStemWidth: CGFloat { stemWidth.livelineAtLeast(0, fallback: 1.5) }
+    var resolvedHeadSize: CGFloat { headSize.livelineAtLeast(2, fallback: 8) }
+    var resolvedOutlineWidth: CGFloat { outlineWidth.livelineAtLeast(0, fallback: 1) }
+    var resolvedBaseline: Double { LivelineScalar.value(baseline) }
 }
 
 /// A time/value observation with a third magnitude dimension.
@@ -229,10 +231,16 @@ public struct LivelineBubbleStyle {
         self.scale = scale
     }
 
-    var resolvedMinimumSize: CGFloat { max(min(minimumSize, maximumSize), 2) }
-    var resolvedMaximumSize: CGFloat { max(max(minimumSize, maximumSize), resolvedMinimumSize) }
-    var resolvedFillOpacity: Double { min(max(fillOpacity, 0), 1) }
-    var resolvedOutlineWidth: CGFloat { max(outlineWidth, 0) }
+    var resolvedMinimumSize: CGFloat {
+        min(minimumSize.livelineFinite(or: 5), maximumSize.livelineFinite(or: 24))
+            .livelineAtLeast(2, fallback: 5)
+    }
+    var resolvedMaximumSize: CGFloat {
+        max(minimumSize.livelineFinite(or: 5), maximumSize.livelineFinite(or: 24))
+            .livelineAtLeast(resolvedMinimumSize, fallback: 24)
+    }
+    var resolvedFillOpacity: Double { fillOpacity.livelineClamped(0, 1, fallback: 0.30) }
+    var resolvedOutlineWidth: CGFloat { outlineWidth.livelineAtLeast(0, fallback: 1.5) }
 }
 
 /// A five-number statistical summary observed at one point in time.
@@ -286,11 +294,11 @@ public struct LivelineBoxPlotStyle {
         self.whiskerWidthRatio = whiskerWidthRatio
     }
 
-    var resolvedWidthRatio: CGFloat { min(max(widthRatio, 0.05), 1) }
-    var resolvedFillOpacity: Double { min(max(fillOpacity, 0), 1) }
-    var resolvedOutlineWidth: CGFloat { max(outlineWidth, 0) }
-    var resolvedMedianLineWidth: CGFloat { max(medianLineWidth, 0) }
-    var resolvedWhiskerWidthRatio: CGFloat { min(max(whiskerWidthRatio, 0.05), 1) }
+    var resolvedWidthRatio: CGFloat { widthRatio.livelineClamped(0.05, 1, fallback: 0.55) }
+    var resolvedFillOpacity: Double { fillOpacity.livelineClamped(0, 1, fallback: 0.16) }
+    var resolvedOutlineWidth: CGFloat { outlineWidth.livelineAtLeast(0, fallback: 1.25) }
+    var resolvedMedianLineWidth: CGFloat { medianLineWidth.livelineAtLeast(0, fallback: 2) }
+    var resolvedWhiskerWidthRatio: CGFloat { whiskerWidthRatio.livelineClamped(0.05, 1, fallback: 0.55) }
 }
 
 /// Visual options for a cumulative waterfall chart.
@@ -324,9 +332,10 @@ public struct LivelineWaterfallStyle {
         self.showsBaseline = showsBaseline
     }
 
-    var resolvedWidthRatio: CGFloat { min(max(widthRatio, 0.05), 1) }
-    var resolvedCornerRadius: CGFloat { max(cornerRadius, 0) }
-    var resolvedConnectorLineWidth: CGFloat { max(connectorLineWidth, 0) }
+    var resolvedWidthRatio: CGFloat { widthRatio.livelineClamped(0.05, 1, fallback: 0.62) }
+    var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 2) }
+    var resolvedConnectorLineWidth: CGFloat { connectorLineWidth.livelineAtLeast(0, fallback: 1) }
+    var resolvedInitialValue: Double { LivelineScalar.value(initialValue) }
 }
 
 /// One OHLC candle. `time` is the candle open time in Unix seconds.
@@ -510,242 +519,21 @@ public struct LivelineDegenOptions: Hashable, Sendable {
     }
 }
 
-/// Behavioral and visual configuration for ``LivelineChart``.
-public struct LivelineChartConfiguration {
-    public var theme: LivelineThemeMode
-    public var window: TimeInterval
-    public var windows: [LivelineWindowOption]
-    public var grid: Bool
-    public var badge: Bool
-    public var badgeVariant: LivelineBadgeVariant
-    public var badgeTail: Bool
-    public var fill: Bool
-    public var pulse: Bool
-    public var endpointDecorations: Bool
-    public var fadeEffects: Bool
-    public var lineWidth: CGFloat
-    public var momentum: LivelineMomentum?
-    public var autoDetectMomentum: Bool
-    public var scrub: Bool
-    public var exaggerate: Bool
-    public var showValue: Bool
-    public var valueMomentumColor: Bool
-    public var degen: LivelineDegenOptions?
-    public var loading: Bool
-    public var paused: Bool
-    public var emptyText: String
-    public var windowStyle: LivelineWindowStyle
-    public var tooltipY: CGFloat
-    public var tooltipOutline: Bool
-    public var orderbook: LivelineOrderbookData?
-    public var referenceLine: LivelineReferenceLine?
-    public var activePoint: LivelineActivePoint?
-    public var formatValue: (Double) -> String
-    public var formatTime: (TimeInterval) -> String
-    public var lerpSpeed: Double
-    public var randomSeed: UInt32?
-    public var snapshotElapsedTime: TimeInterval?
-    public var padding: LivelinePadding
-    public var lineMode: Bool
-    public var seriesToggleCompact: Bool
-    public var seriesLegendSide: LivelineLegendSide
-    public var onHover: ((LivelineHoverPoint?) -> Void)?
-    public var onWindowChange: ((TimeInterval) -> Void)?
-    public var onModeChange: ((LivelineChartMode) -> Void)?
-    public var onSeriesToggle: ((String, Bool) -> Void)?
-
-    public init(
-        theme: LivelineThemeMode = .dark,
-        window: TimeInterval = 30,
-        windows: [LivelineWindowOption] = [],
-        grid: Bool = true,
-        badge: Bool = true,
-        badgeVariant: LivelineBadgeVariant = .default,
-        badgeTail: Bool = true,
-        fill: Bool = true,
-        pulse: Bool = true,
-        lineWidth: CGFloat = 2,
-        momentum: LivelineMomentum? = nil,
-        autoDetectMomentum: Bool = true,
-        scrub: Bool = true,
-        exaggerate: Bool = false,
-        showValue: Bool = false,
-        valueMomentumColor: Bool = false,
-        degen: LivelineDegenOptions? = nil,
-        loading: Bool = false,
-        paused: Bool = false,
-        emptyText: String = "No data to display",
-        windowStyle: LivelineWindowStyle = .default,
-        tooltipY: CGFloat = 14,
-        tooltipOutline: Bool = true,
-        orderbook: LivelineOrderbookData? = nil,
-        referenceLine: LivelineReferenceLine? = nil,
-        formatValue: @escaping (Double) -> String = LivelineFormatters.value,
-        formatTime: @escaping (TimeInterval) -> String = LivelineFormatters.time,
-        lerpSpeed: Double = 0.08,
-        randomSeed: UInt32? = nil,
-        snapshotElapsedTime: TimeInterval? = nil,
-        padding: LivelinePadding = LivelinePadding(),
-        lineMode: Bool = false,
-        seriesToggleCompact: Bool = false,
-        onHover: ((LivelineHoverPoint?) -> Void)? = nil,
-        onWindowChange: ((TimeInterval) -> Void)? = nil,
-        onModeChange: ((LivelineChartMode) -> Void)? = nil,
-        onSeriesToggle: ((String, Bool) -> Void)? = nil
-    ) {
-        self.init(
-            theme: theme,
-            window: window,
-            windows: windows,
-            grid: grid,
-            badge: badge,
-            badgeVariant: badgeVariant,
-            badgeTail: badgeTail,
-            fill: fill,
-            pulse: pulse,
-            endpointDecorations: true,
-            fadeEffects: false,
-            lineWidth: lineWidth,
-            momentum: momentum,
-            autoDetectMomentum: autoDetectMomentum,
-            scrub: scrub,
-            exaggerate: exaggerate,
-            showValue: showValue,
-            valueMomentumColor: valueMomentumColor,
-            degen: degen,
-            loading: loading,
-            paused: paused,
-            emptyText: emptyText,
-            windowStyle: windowStyle,
-            tooltipY: tooltipY,
-            tooltipOutline: tooltipOutline,
-            orderbook: orderbook,
-            referenceLine: referenceLine,
-            activePoint: nil,
-            formatValue: formatValue,
-            formatTime: formatTime,
-            lerpSpeed: lerpSpeed,
-            randomSeed: randomSeed,
-            snapshotElapsedTime: snapshotElapsedTime,
-            padding: padding,
-            lineMode: lineMode,
-            seriesToggleCompact: seriesToggleCompact,
-            seriesLegendSide: .trailing,
-            onHover: onHover,
-            onWindowChange: onWindowChange,
-            onModeChange: onModeChange,
-            onSeriesToggle: onSeriesToggle
-        )
-    }
-
-    public init(
-        theme: LivelineThemeMode = .dark,
-        window: TimeInterval = 30,
-        windows: [LivelineWindowOption] = [],
-        grid: Bool = true,
-        badge: Bool = true,
-        badgeVariant: LivelineBadgeVariant = .default,
-        badgeTail: Bool = true,
-        fill: Bool = true,
-        pulse: Bool = true,
-        endpointDecorations: Bool = true,
-        fadeEffects: Bool = false,
-        lineWidth: CGFloat = 2,
-        momentum: LivelineMomentum? = nil,
-        autoDetectMomentum: Bool = true,
-        scrub: Bool = true,
-        exaggerate: Bool = false,
-        showValue: Bool = false,
-        valueMomentumColor: Bool = false,
-        degen: LivelineDegenOptions? = nil,
-        loading: Bool = false,
-        paused: Bool = false,
-        emptyText: String = "No data to display",
-        windowStyle: LivelineWindowStyle = .default,
-        tooltipY: CGFloat = 14,
-        tooltipOutline: Bool = true,
-        orderbook: LivelineOrderbookData? = nil,
-        referenceLine: LivelineReferenceLine? = nil,
-        activePoint: LivelineActivePoint? = nil,
-        formatValue: @escaping (Double) -> String = LivelineFormatters.value,
-        formatTime: @escaping (TimeInterval) -> String = LivelineFormatters.time,
-        lerpSpeed: Double = 0.08,
-        randomSeed: UInt32? = nil,
-        snapshotElapsedTime: TimeInterval? = nil,
-        padding: LivelinePadding = LivelinePadding(),
-        lineMode: Bool = false,
-        seriesToggleCompact: Bool = false,
-        seriesLegendSide: LivelineLegendSide = .trailing,
-        onHover: ((LivelineHoverPoint?) -> Void)? = nil,
-        onWindowChange: ((TimeInterval) -> Void)? = nil,
-        onModeChange: ((LivelineChartMode) -> Void)? = nil,
-        onSeriesToggle: ((String, Bool) -> Void)? = nil
-    ) {
-        self.theme = theme
-        self.window = window
-        self.windows = windows
-        self.grid = grid
-        self.badge = badge
-        self.badgeVariant = badgeVariant
-        self.badgeTail = badgeTail
-        self.fill = fill
-        self.pulse = pulse
-        self.endpointDecorations = endpointDecorations
-        self.fadeEffects = fadeEffects
-        self.lineWidth = lineWidth
-        self.momentum = momentum
-        self.autoDetectMomentum = autoDetectMomentum
-        self.scrub = scrub
-        self.exaggerate = exaggerate
-        self.showValue = showValue
-        self.valueMomentumColor = valueMomentumColor
-        self.degen = degen
-        self.loading = loading
-        self.paused = paused
-        self.emptyText = emptyText
-        self.windowStyle = windowStyle
-        self.tooltipY = tooltipY
-        self.tooltipOutline = tooltipOutline
-        self.orderbook = orderbook
-        self.referenceLine = referenceLine
-        self.activePoint = activePoint
-        self.formatValue = formatValue
-        self.formatTime = formatTime
-        self.lerpSpeed = lerpSpeed
-        self.randomSeed = randomSeed
-        self.snapshotElapsedTime = snapshotElapsedTime
-        self.padding = padding
-        self.lineMode = lineMode
-        self.seriesToggleCompact = seriesToggleCompact
-        self.seriesLegendSide = seriesLegendSide
-        self.onHover = onHover
-        self.onWindowChange = onWindowChange
-        self.onModeChange = onModeChange
-        self.onSeriesToggle = onSeriesToggle
-    }
-}
-
-extension LivelineChartConfiguration {
-    func respectingReducedMotion(_ enabled: Bool) -> LivelineChartConfiguration {
-        guard enabled else { return self }
-        var configuration = self
-        configuration.fadeEffects = false
-        configuration.pulse = false
-        configuration.degen = nil
-        return configuration
-    }
-}
 
 public enum LivelineFormatters {
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
+
     public static func value(_ value: Double) -> String {
         String(format: "%.2f", value)
     }
 
     public static func time(_ time: TimeInterval) -> String {
         let date = Date(timeIntervalSince1970: time)
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "HH:mm:ss"
-        return formatter.string(from: date)
+        return timeFormatter.string(from: date)
     }
 }

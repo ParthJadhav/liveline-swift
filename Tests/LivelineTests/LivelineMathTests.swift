@@ -73,8 +73,8 @@ final class LivelineMathTests: XCTestCase {
         let dark = LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2)
         let light = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
 
-        XCTAssertGreaterThanOrEqual(dark.emptyText.livelineRGBA().alpha, 0.55)
-        XCTAssertGreaterThanOrEqual(light.emptyText.livelineRGBA().alpha, 0.55)
+        XCTAssertGreaterThanOrEqual(dark.emptyText.livelineRGBA()?.alpha ?? 0, 0.55)
+        XCTAssertGreaterThanOrEqual(light.emptyText.livelineRGBA()?.alpha ?? 0, 0.55)
     }
 
     func testStepStylesClampAndGenerateEachTransitionPosition() {
@@ -208,6 +208,7 @@ final class LivelineMathTests: XCTestCase {
         ])
     }
 
+    @MainActor
     func testAdditionalChartInitializersConstructViews() {
         let points = [
             LivelinePoint(time: 10, value: 4),
@@ -340,13 +341,13 @@ final class LivelineMathTests: XCTestCase {
             lineValue: nil
         )
 
-        XCTAssertTrue(candleContent.usesValueAxis)
+        XCTAssertTrue(candleContent.semantics().capabilities.usesValueAxis)
         XCTAssertFalse(
             LivelineChartContent.gauge(
                 value: 0.5,
                 range: 0...1,
                 style: LivelineGaugeStyle()
-            ).usesValueAxis
+            ).semantics().capabilities.usesValueAxis
         )
     }
 
@@ -469,6 +470,7 @@ final class LivelineMathTests: XCTestCase {
         XCTAssertEqual(heatmapStyle.resolvedCornerRadius, 0)
     }
 
+    @MainActor
     func testExtendedChartInitializersConstructViews() {
         let error = [LivelineErrorBarPoint(time: 10, value: 5, lower: 3, upper: 7)]
         let dumbbell = [LivelineDumbbellPoint(time: 10, start: 3, end: 7)]

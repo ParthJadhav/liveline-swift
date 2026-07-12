@@ -4,80 +4,26 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEMO_DIR="$ROOT_DIR/Examples/LivelineDemo"
 DERIVED_DATA="$ROOT_DIR/.build/LivelineDemoStorybookDerivedData"
-MEDIA_DIR="$ROOT_DIR/Media/storybook"
+DEFAULT_MEDIA_DIR="$ROOT_DIR/Media/storybook"
 CHART_ONLY=false
+MANIFEST_TOOL="$ROOT_DIR/scripts/storybook_manifest.py"
 
 if [[ "${1:-}" == "--chart-only" ]]; then
   CHART_ONLY=true
-  MEDIA_DIR="$ROOT_DIR/Media/storybook-chart-only"
+  DEFAULT_MEDIA_DIR="$ROOT_DIR/Media/storybook-chart-only"
 fi
 
-SCENARIOS=(
-  line-basic-dark
-  line-basic-light
-  line-no-grid-no-fill
-  line-minimal-badge
-  line-no-badge
-  line-momentum-up
-  line-momentum-down
-  line-exaggerated
-  line-show-value-windows
-  line-rounded-windows
-  line-text-windows
-  line-reference
-  line-orderbook
-  line-degen
-  line-loading
-  line-empty
-  line-empty-controls
-  candle-basic
-  candle-light
-  candle-line-mode
-  candle-mode-controls
-  candle-no-live
-  candle-wide-window
-  candle-loading
-  multi-basic
-  multi-light
-  multi-compact
-  multi-two-series
-  bar-basic
-  bar-signed
-  range-basic
-  range-center-line
-  scatter-basic
-  scatter-connected
-  step-basic
-  step-centered
-  lollipop-basic
-  lollipop-diamond
-  bubble-basic
-  bubble-diameter
-  boxplot-basic
-  boxplot-minimal
-  waterfall-basic
-  waterfall-no-connectors
-  errorbar-basic
-  errorbar-diamond
-  dumbbell-basic
-  dumbbell-directional
-  stackedbar-basic
-  stackedbar-normalized
-  stackedarea-basic
-  stackedarea-normalized
-  timeline-basic
-  timeline-compact
-  heatmap-basic
-  heatmap-values
-  radar-basic
-  radar-minimal
-  donut-basic
-  donut-thin
-  gauge-basic
-  gauge-target
-  funnel-basic
-  funnel-compact
-)
+MEDIA_DIR="${STORYBOOK_OUT_DIR:-$DEFAULT_MEDIA_DIR}"
+
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "python3 is required to read the Storybook manifest." >&2
+  exit 1
+fi
+
+SCENARIOS=()
+while IFS= read -r scenario; do
+  SCENARIOS+=("$scenario")
+done < <(python3 "$MANIFEST_TOOL" ids)
 
 if [[ -n "${STORYBOOK_SCENARIOS:-}" ]]; then
   read -r -a SCENARIOS <<< "$STORYBOOK_SCENARIOS"
@@ -106,15 +52,20 @@ wait_seconds_for() {
 
 mkdir -p "$MEDIA_DIR"
 
+if ! command -v xcodegen >/dev/null 2>&1 \
+  && [[ -x "$ROOT_DIR/.build/tools/xcodegen/bin/xcodegen" ]]; then
+  export PATH="$ROOT_DIR/.build/tools/xcodegen/bin:$PATH"
+fi
+
 if ! command -v xcodegen >/dev/null 2>&1; then
-  echo "xcodegen is required. Install it with: brew install xcodegen" >&2
+  echo "xcodegen is required. Install the pinned version with: scripts/install-xcodegen.sh .build/tools/xcodegen" >&2
   exit 1
 fi
 
 cd "$DEMO_DIR"
 xcodegen generate
 
-xcodebuild \
+xcodebuild -quiet \
   -project "$DEMO_DIR/LivelineDemo.xcodeproj" \
   -scheme LivelineDemo \
   -destination 'generic/platform=iOS Simulator' \
@@ -123,14 +74,30 @@ xcodebuild \
 
 DEVICE_ID="${STORYBOOK_DEVICE_ID:-}"
 if [[ -z "${DEVICE_ID:-}" ]]; then
-  DEVICE_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && /Booted/ { print $2; exit }')"
-fi
-if [[ -z "${DEVICE_ID:-}" ]]; then
-  DEVICE_ID="$(xcrun simctl list devices available | awk -F '[()]' '/iPhone/ && /Shutdown/ { print $2; exit }')"
+  DEVICE_NAME="${STORYBOOK_DEVICE_NAME:-iPhone 17 Pro}"
+  DEVICE_ID="$(xcrun simctl list devices available | awk -F '[()]' -v name="$DEVICE_NAME" '
+    {
+      candidate = $1
+      sub(/^[[:space:]]+/, "", candidate)
+      sub(/[[:space:]]+$/, "", candidate)
+      if (candidate == name) {
+        print $2
+        exit
+      }
+    }
+  ')"
   if [[ -z "${DEVICE_ID:-}" ]]; then
-    echo "No available iPhone simulator found." >&2
+    echo "Required Storybook simulator '$DEVICE_NAME' is unavailable. Set STORYBOOK_DEVICE_ID or STORYBOOK_DEVICE_NAME explicitly." >&2
     exit 1
   fi
+fi
+
+if ! xcrun simctl list devices available | grep -Fq "$DEVICE_ID"; then
+  echo "Storybook simulator '$DEVICE_ID' is unavailable." >&2
+  exit 1
+fi
+
+if ! xcrun simctl list devices booted | grep -Fq "$DEVICE_ID"; then
   xcrun simctl boot "$DEVICE_ID"
 fi
 xcrun simctl bootstatus "$DEVICE_ID" -b

@@ -85,8 +85,12 @@ def main():
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    reference_paths = sorted(web_dir.glob("*.png"))
+    if not reference_paths:
+        raise SystemExit(f"No web reference PNGs found in: {web_dir}")
+
     rows = []
-    for reference_path in sorted(web_dir.glob("*.png")):
+    for reference_path in reference_paths:
         if reference_path.stem in excluded_scenarios:
             rows.append({
                 "scenario": reference_path.stem,
@@ -174,7 +178,11 @@ def main():
         if row["status"] != "ok":
             print(f"{row['scenario']},{row['status']},,,,")
 
-    failed = []
+    failed = [
+        row["scenario"]
+        for row in rows
+        if row["status"] not in {"ok", "excluded-intentional-layout"}
+    ]
     for row in sortable:
         if args.fail_changed_pct is not None and row["changed_pct"] > args.fail_changed_pct:
             failed.append(row["scenario"])

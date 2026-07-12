@@ -1,3 +1,4 @@
+@_spi(LivelineSnapshotTesting) import Liveline
 import SwiftUI
 
 struct StorybookGalleryView: View {
@@ -109,6 +110,7 @@ struct StorybookScenarioScreen: View {
 
     private var chart: some View {
         scenario.makeView()
+            .livelineSnapshotElapsedTime(StorybookLaunch.snapshotElapsedTimeFromArguments())
             .frame(height: scenario.height)
             .padding(.horizontal, 4)
             .padding(.bottom, 8)

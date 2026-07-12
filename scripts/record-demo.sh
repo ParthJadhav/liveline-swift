@@ -9,8 +9,13 @@ VIDEO_PATH="$MEDIA_DIR/liveline-demo.mp4"
 
 mkdir -p "$MEDIA_DIR"
 
+if ! command -v xcodegen >/dev/null 2>&1 \
+  && [[ -x "$ROOT_DIR/.build/tools/xcodegen/bin/xcodegen" ]]; then
+  export PATH="$ROOT_DIR/.build/tools/xcodegen/bin:$PATH"
+fi
+
 if ! command -v xcodegen >/dev/null 2>&1; then
-  echo "xcodegen is required. Install it with: brew install xcodegen" >&2
+  echo "xcodegen is required. Install the pinned version with: scripts/install-xcodegen.sh .build/tools/xcodegen" >&2
   exit 1
 fi
 

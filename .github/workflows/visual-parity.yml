@@ -1,7 +1,25 @@
 name: Visual Parity
 
 on:
+  pull_request:
+    paths:
+      - "Sources/Liveline/**"
+      - "Examples/LivelineDemo/**"
+      - "scripts/capture-storybook.sh"
+      - "scripts/capture-web-references.sh"
+      - "scripts/storybook_diff.py"
+      - "scripts/web-reference/**"
+      - ".github/workflows/visual-parity.yml"
   workflow_dispatch:
+    inputs:
+      scope:
+        description: "Visual suite to run"
+        required: true
+        default: "full"
+        type: choice
+        options:
+          - full
+          - smoke
 
 jobs:
   storybook-diff:
@@ -11,8 +29,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Select visual suite
+        shell: bash
+        run: |
+          echo "WEB_REFERENCE_OUT_DIR=$RUNNER_TEMP/liveline-parity/web" >> "$GITHUB_ENV"
+          echo "STORYBOOK_OUT_DIR=$RUNNER_TEMP/liveline-parity/native" >> "$GITHUB_ENV"
+          echo "VISUAL_DIFF_OUT_DIR=$RUNNER_TEMP/liveline-parity/diff" >> "$GITHUB_ENV"
+          smoke="line-basic-dark line-basic-light line-no-grid-no-fill line-minimal-badge line-reference line-loading candle-basic candle-line-mode"
+          if [[ "${{ github.event_name }}" == "pull_request" || "${{ inputs.scope }}" == "smoke" ]]; then
+            echo "STORYBOOK_SCENARIOS=$smoke" >> "$GITHUB_ENV"
+            echo "WEB_REFERENCE_SCENARIOS=$smoke" >> "$GITHUB_ENV"
+          fi
+
+      - name: Validate scenario manifest
+        run: python3 scripts/storybook_manifest.py validate
+
+      - name: Install pinned XcodeGen
+        run: |
+          scripts/install-xcodegen.sh "$RUNNER_TEMP/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Use pinned Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.15.0"
+          cache: npm
+          cache-dependency-path: scripts/web-reference/package-lock.json
 
       - name: Capture upstream web references
         run: scripts/capture-web-references.sh
@@ -23,7 +65,7 @@ jobs:
       - name: Diff screenshots
         env:
           VISUAL_PARITY_EXCLUSIONS: line-show-value-windows,line-rounded-windows,line-text-windows,candle-mode-controls,multi-basic,multi-light,multi-compact,multi-two-series
-        run: scripts/diff-storybook.sh --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12
+        run: scripts/diff-storybook.sh --web-dir "$WEB_REFERENCE_OUT_DIR" --native-dir "$STORYBOOK_OUT_DIR" --out-dir "$VISUAL_DIFF_OUT_DIR" --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12
 
       - name: Upload parity artifacts
         uses: actions/upload-artifact@v4
@@ -31,6 +73,6 @@ jobs:
         with:
           name: visual-parity
           path: |
-            Media/web-reference
-            Media/storybook-chart-only
-            Media/storybook-diff
+            ${{ env.WEB_REFERENCE_OUT_DIR }}
+            ${{ env.STORYBOOK_OUT_DIR }}
+            ${{ env.VISUAL_DIFF_OUT_DIR }}
