@@ -70,6 +70,7 @@ struct LivelineMotionPolicy: Equatable {
     ) -> LivelineMotionPolicy {
         let wantsContinuousFrames = capabilities.isRealtime
             || configuration.fadeEffects
+            || configuration.style.requiresContinuousFrames
             || configuration.loading
             || configuration.degen != nil
             || configuration.orderbook != nil

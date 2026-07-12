@@ -217,28 +217,51 @@ enum LivelineRenderer {
         let hover = LivelineHoverResolver.resolve(location: input.hoverLocation, snapshot: interactionSnapshot)
         let scrubAmount = config.scrub && hover != nil ? 1.0 : 0.0
 
-        let contentOverlay = drawContent(
-            context: &layer,
-            state: state,
-            input: LivelineCompositorInput(
-                content: input.content,
-                configuration: config,
-                layout: layout,
-                palette: palette,
-                prepared: renderData,
-                hiddenSeries: input.hiddenSeries,
-                hover: hover,
-                scrubAmount: scrubAmount,
-                smoothValue: smoothValue,
-                swingMagnitude: swingMagnitude,
-                anchor: anchor,
-                leftEdge: leftEdge,
-                rightEdge: rightEdge,
-                reveal: state.chartReveal,
-                animationTimestamp: animationTimestamp,
-                deltaTime: dt
-            )
+        let compositorInput = LivelineCompositorInput(
+            content: input.content,
+            configuration: config,
+            layout: layout,
+            palette: palette,
+            prepared: renderData,
+            hiddenSeries: input.hiddenSeries,
+            hover: hover,
+            scrubAmount: scrubAmount,
+            smoothValue: smoothValue,
+            swingMagnitude: swingMagnitude,
+            anchor: anchor,
+            leftEdge: leftEdge,
+            rightEdge: rightEdge,
+            reveal: state.chartReveal,
+            animationTimestamp: animationTimestamp,
+            deltaTime: dt
         )
+        var contentOverlay = LivelineContentOverlay.none
+        switch config.style {
+        case .standard:
+            contentOverlay = drawContent(context: &layer, state: state, input: compositorInput)
+        case let .dither(style):
+            layer.drawLayer { styledLayer in
+                if let bloom = ditherBloom(style: style, timestamp: animationTimestamp) {
+                    styledLayer.addFilter(
+                        .shadow(
+                            color: input.accent.opacity(bloom.opacity),
+                            radius: bloom.radius,
+                            x: 0,
+                            y: 0,
+                            blendMode: .plusLighter
+                        )
+                    )
+                }
+                contentOverlay = drawContent(context: &styledLayer, state: state, input: compositorInput)
+                drawDitherTexture(
+                    context: &styledLayer,
+                    layout: layout,
+                    color: input.accent,
+                    style: style,
+                    timestamp: animationTimestamp
+                )
+            }
+        }
 
         if capabilities.usesTimeAxis {
             let axisRevealStart = isCandle ? 0.25 : 0.15

@@ -120,6 +120,40 @@ Each point uses Unix seconds:
 LivelinePoint(time: Date().timeIntervalSince1970, value: 42125.44)
 ```
 
+## Dither Style
+
+Every chart can opt into the same native ordered-dither effect through its
+configuration. The chart-specific `style` argument still controls geometry;
+`LivelineChartConfiguration.style` controls the universal rendering treatment.
+
+```swift
+let configuration = LivelineChartConfiguration(
+    theme: .dark,
+    style: .dither(
+        LivelineDitherStyle(
+            variant: .gradient,   // .gradient, .dotted, .hatched, .solid
+            bloom: .aura,         // .off, .low, .high, .aura
+            cellSize: 2,
+            intensity: 1,
+            sparkleDensity: 0.018,
+            animationSpeed: 1
+        )
+    )
+)
+
+LivelineChart(data: points, value: latest, configuration: configuration)
+LivelineChart(donut: categories, configuration: configuration)
+```
+
+The effect uses a 4×4 Bayer texture, coloured bloom, and deterministic winking
+sparkles. It is clipped to chart marks so axes, labels, and tooltips stay crisp.
+Set `animated: false` for a static treatment. Reduce Motion freezes dither
+animation automatically.
+
+![Dither style across line, bar, donut, and radar charts](Media/dither/dither-showcase.png)
+
+![Animated Dither style](Media/dither/dither-showcase.gif)
+
 ## Chart Modes
 
 Line:

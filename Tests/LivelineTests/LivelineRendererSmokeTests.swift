@@ -21,8 +21,12 @@ final class LivelineRendererSmokeTests: XCTestCase {
             LivelineCategoryValue(id: "a", label: "Alpha", value: 6),
             LivelineCategoryValue(id: "b", label: "Beta", value: 4),
         ]
-        let config = configuration
-        let views: [(String, AnyView)] = [
+        var ditherConfiguration = configuration
+        ditherConfiguration.style = .dither(
+            LivelineDitherStyle(bloom: .low, sparkleDensity: 0.02, animated: false)
+        )
+        for config in [configuration, ditherConfiguration] {
+            let views: [(String, AnyView)] = [
             ("line", AnyView(LivelineChart(data: points, value: 5, configuration: config))),
             ("bars", AnyView(LivelineChart(bars: points, configuration: config))),
             ("range", AnyView(LivelineChart(range: [
@@ -94,19 +98,50 @@ final class LivelineRendererSmokeTests: XCTestCase {
             ], configuration: config))),
         ]
 
-        XCTAssertEqual(views.count, LivelineChartKind.allCases.count)
-        for (name, view) in views {
-            let renderer = ImageRenderer(
-                content: ZStack {
-                    Color.black
-                    view
-                }
-                .frame(width: 320, height: 220)
+            XCTAssertEqual(views.count, LivelineChartKind.allCases.count)
+            for (name, view) in views {
+                let renderer = ImageRenderer(
+                    content: ZStack {
+                        Color.black
+                        view
+                    }
+                    .frame(width: 320, height: 220)
+                )
+                renderer.proposedSize = ProposedViewSize(width: 320, height: 220)
+                renderer.scale = 1
+                let image: NSImage = try XCTUnwrap(renderer.nsImage, "Failed to render \(name)")
+                XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000, name)
+            }
+        }
+    }
+
+    @MainActor
+    func testEveryDitherVariantRenders() throws {
+        let styles: [LivelineDitherVariant] = [.gradient, .dotted, .hatched, .solid]
+        for (index, variant) in styles.enumerated() {
+            var config = configuration
+            config.style = .dither(
+                LivelineDitherStyle(
+                    variant: variant,
+                    bloom: .off,
+                    sparkleDensity: 0.04,
+                    animated: false
+                )
             )
-            renderer.proposedSize = ProposedViewSize(width: 320, height: 220)
-            renderer.scale = 1
-            let image: NSImage = try XCTUnwrap(renderer.nsImage, "Failed to render \(name)")
-            XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000, name)
+            let chart = LivelineChart(
+                bars: [
+                    LivelinePoint(time: 1, value: 4),
+                    LivelinePoint(time: 2, value: 7),
+                    LivelinePoint(time: 3, value: 5),
+                ],
+                configuration: config
+            )
+            let renderer = ImageRenderer(
+                content: chart.frame(width: 240, height: 160)
+            )
+            renderer.proposedSize = ProposedViewSize(width: 240, height: 160)
+            let image: NSImage = try XCTUnwrap(renderer.nsImage, "Failed to render dither variant \(index)")
+            XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
         }
     }
 

@@ -43,6 +43,15 @@ Drag scrubbing converts the pointer location to a chart time, interpolates a val
 
 Momentum is detected from recent points, not the total visible range. The live dot and arrows use semantic green/red for up/down movement. Passing `momentum` in the configuration overrides automatic detection.
 
+## Dither Style
+
+`LivelineChartConfiguration.style = .dither(...)` renders chart marks into an
+isolated Canvas layer, applies a shared 4×4 ordered Bayer texture, and adds
+colour bloom plus deterministic winking sparkles. Because the treatment happens
+at the compositor boundary, the same implementation covers every chart kind
+without softening axes, labels, crosshairs, or tooltips. Static charts request a
+timeline only when animated bloom or sparkles are enabled.
+
 ## Candle Line Mode
 
 Candlestick charts animate between OHLC bars and line mode with the same staged transition as the web implementation. Candle bodies collapse toward their close values, the line fades in with accent-color blending, tick-level line density ramps in after the first part of the morph, and the candle close-price dash crossfades into the line dash.
@@ -59,4 +68,4 @@ shake, pulses, or interpolation advancing behind the pause.
 
 ## Reduced Motion
 
-Liveline follows the system Reduce Motion setting automatically. Renderer reveals complete immediately, continuous pulses stop, and opt-in particle or shake effects are suppressed while static chart state and color feedback remain available.
+Liveline follows the system Reduce Motion setting automatically. Renderer reveals complete immediately, dither bloom and sparkles freeze, continuous pulses stop, and opt-in particle or shake effects are suppressed while static chart state and color feedback remain available.

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Adds a universal, configurable ordered-dither chart style with gradient,
+  dotted, hatched, and solid variants; coloured bloom; animated sparkles; and
+  automatic Reduce Motion support across all chart renderers.
+
 ## 0.2.0 - 2026-07-10
 
 - Adds customizable time-based bar, range-band, and scatter charts with six deterministic Storybook variants.

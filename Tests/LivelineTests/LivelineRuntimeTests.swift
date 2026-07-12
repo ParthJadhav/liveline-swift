@@ -100,6 +100,22 @@ final class LivelineRuntimeTests: XCTestCase {
         )
         XCTAssertFalse(reducedPolicy.requiresTimeline)
         XCTAssertTrue(reducedPolicy.settlesImmediately)
+
+        let ditherPolicy = LivelineMotionPolicy.resolve(
+            configuration: LivelineChartConfiguration(style: .dither()),
+            capabilities: staticCapabilities,
+            reduceMotion: false
+        )
+        XCTAssertTrue(ditherPolicy.requiresTimeline)
+
+        let staticDitherPolicy = LivelineMotionPolicy.resolve(
+            configuration: LivelineChartConfiguration(
+                style: .dither(LivelineDitherStyle(bloom: .off, sparkleDensity: 0))
+            ),
+            capabilities: staticCapabilities,
+            reduceMotion: false
+        )
+        XCTAssertFalse(staticDitherPolicy.requiresTimeline)
     }
 
     func testTypedConfigurationOwnsPoliciesAndCallbacksDoNotControlVisibility() {

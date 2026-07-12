@@ -2,6 +2,10 @@ import Liveline
 import SwiftUI
 
 struct StorybookLaunch {
+    static func ditherShowcaseFromArguments() -> Bool {
+        ProcessInfo.processInfo.arguments.contains("--dither-showcase")
+    }
+
     static func chartShowcaseFromArguments() -> Bool {
         ProcessInfo.processInfo.arguments.contains("--chart-showcase")
     }

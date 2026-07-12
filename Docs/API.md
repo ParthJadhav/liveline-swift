@@ -232,6 +232,7 @@ initializer:
 let configuration = LivelineChartConfiguration(
     appearance: LivelineChartAppearance(
         theme: .dark,
+        style: .dither(),
         grid: true,
         fill: true,
         showValue: true
@@ -269,6 +270,9 @@ these groups:
 ```swift
 LivelineChartConfiguration(
     theme: .dark,
+    style: .dither(
+        LivelineDitherStyle(variant: .gradient, bloom: .low)
+    ),
     window: 60,
     windows: [
         LivelineWindowOption(label: "30s", seconds: 30),
@@ -295,6 +299,7 @@ Important options:
 | Option | Default | Notes |
 | --- | --- | --- |
 | `theme` | `.dark` | Controls grid, label, tooltip, and badge colors. |
+| `style` | `.standard` | Applies `.dither(LivelineDitherStyle)` universally to line, cartesian, radial, categorical, and financial chart marks. |
 | `window` | `30` | Visible time span in seconds. |
 | `windows` | `[]` | Adds built-in time horizon buttons. |
 | `grid` | `true` | Draws horizontal grid lines and value labels. |
@@ -317,6 +322,15 @@ Important options:
 | `lineMode` | `false` | Renders candle input as a line. |
 | `showsModeControls` | `false` | Explicitly shows line/candle mode controls when the content supports them. |
 | `showsSeriesControls` | `true` | Explicitly shows series visibility controls when the content supports them. |
+
+### Universal dither style
+
+`LivelineDitherStyle` exposes `variant` (`gradient`, `dotted`, `hatched`, or
+`solid`), `bloom` (`off`, `low`, `high`, or `aura`), `cellSize`, `intensity`,
+`sparkleDensity`, `animationSpeed`, and `animated`. Values are normalized at the
+rendering boundary. Bloom and sparkles opt static charts into frame scheduling
+only while animation is enabled; pausing or Reduce Motion keeps the pattern
+stable.
 
 `snapshotElapsedTime` remains only as a deprecated source-compatibility
 property. Screenshot infrastructure uses the testing SPI environment modifier
