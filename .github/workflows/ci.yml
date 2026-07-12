@@ -35,6 +35,9 @@ jobs:
           BASELINE_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*')
           swift package diagnose-api-breaking-changes "$BASELINE_TAG" --products Liveline
 
+      - name: Build DocC documentation
+        run: xcodebuild docbuild -scheme Liveline -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO OTHER_DOCC_FLAGS='--warnings-as-errors'
+
   apple-platforms:
     name: Apple Platform (${{ matrix.platform }})
     runs-on: macos-latest

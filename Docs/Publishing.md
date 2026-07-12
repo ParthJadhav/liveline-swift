@@ -21,6 +21,7 @@ swift test
 swift build -c release
 BASELINE_TAG=$(git describe --tags --abbrev=0 --match '[0-9]*')
 swift package diagnose-api-breaking-changes "$BASELINE_TAG" --products Liveline
+xcodebuild docbuild -scheme Liveline -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO OTHER_DOCC_FLAGS='--warnings-as-errors'
 scripts/install-xcodegen.sh .build/tools/xcodegen
 .build/tools/xcodegen/bin/xcodegen generate --spec Examples/LivelineDemo/project.yml
 xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
@@ -45,7 +46,7 @@ xcodebuild -scheme Liveline -destination 'generic/platform=visionOS' build
 SwiftPM can consume a branch, but app teams usually prefer version tags.
 
 ```bash
-VERSION=0.2.1
+VERSION=0.3.0
 git tag "$VERSION"
 git push origin "$VERSION"
 ```
@@ -59,7 +60,7 @@ git show --stat --oneline "$VERSION"
 Then depend on:
 
 ```swift
-.package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.2.1")
+.package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.3.0")
 ```
 
 ## GitHub Release

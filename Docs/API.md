@@ -332,10 +332,11 @@ Important options:
 
 `LivelineDitherStyle` exposes `variant` (`gradient`, `dotted`, `hatched`, or
 `solid`), `bloom` (`off`, `low`, `high`, or `aura`), `cellSize`, `intensity`,
-`sparkleDensity`, `animationSpeed`, and `animated`. Values are normalized at the
-rendering boundary. Bloom and sparkles opt static charts into frame scheduling
-only while animation is enabled; pausing or Reduce Motion keeps the pattern
-stable.
+`sparkleDensity`, `animationSpeed`, `maximumFramesPerSecond`, and `animated`.
+The frame-rate limit accepts values from 1 through 120 and defaults to 30.
+Values are normalized at the rendering boundary. Bloom and sparkles opt static
+charts into frame scheduling only while animation is enabled; pausing or Reduce
+Motion keeps the pattern stable.
 
 `snapshotElapsedTime` remains only as a deprecated source-compatibility
 property. Screenshot infrastructure uses the testing SPI environment modifier

@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 /// A chart-wide rendering style applied uniformly to every Liveline chart kind.
-public enum LivelineChartStyle {
+public enum LivelineChartStyle: Sendable {
     /// Liveline's regular vector rendering.
     case standard
 
@@ -27,9 +27,16 @@ public enum LivelineDitherVariant: Sendable {
 
 /// The coloured glow drawn behind a dithered chart.
 public enum LivelineDitherBloom: Sendable {
+    /// Disables the coloured glow.
     case off
+
+    /// Draws a subtle glow close to chart marks.
     case low
+
+    /// Draws a stronger, wider glow around chart marks.
     case high
+
+    /// Draws the widest atmospheric glow.
     case aura
 }
 
@@ -40,15 +47,41 @@ public enum LivelineDitherBloom: Sendable {
 /// texture; Liveline also disables dither motion automatically when Reduce
 /// Motion is enabled.
 public struct LivelineDitherStyle: Sendable {
+    /// The ordered-pixel texture applied to chart marks.
     public var variant: LivelineDitherVariant
+
+    /// The strength and spread of the coloured glow behind chart marks.
     public var bloom: LivelineDitherBloom
+
+    /// The dither cell size in points. Rendering normalizes this to 1...16.
     public var cellSize: CGFloat
+
+    /// The texture opacity. Rendering normalizes this to 0...1.
     public var intensity: Double
+
+    /// The share of eligible cells that may sparkle. Rendering normalizes this to 0...0.2.
     public var sparkleDensity: Double
+
+    /// A multiplier for bloom and sparkle motion. Rendering normalizes this to 0...8.
     public var animationSpeed: Double
+
+    /// The animation frame-rate limit. Rendering normalizes this to 1...120.
     public var maximumFramesPerSecond: Double
+
+    /// Whether bloom and sparkle motion may animate.
     public var animated: Bool
 
+    /// Creates an ordered-dither style.
+    ///
+    /// - Parameters:
+    ///   - variant: The ordered-pixel texture applied to chart marks.
+    ///   - bloom: The strength and spread of the coloured glow.
+    ///   - cellSize: The dither cell size in points.
+    ///   - intensity: The texture opacity.
+    ///   - sparkleDensity: The share of eligible cells that may sparkle.
+    ///   - animationSpeed: A multiplier for bloom and sparkle motion.
+    ///   - maximumFramesPerSecond: The animation frame-rate limit.
+    ///   - animated: Whether bloom and sparkle motion may animate.
     public init(
         variant: LivelineDitherVariant = .gradient,
         bloom: LivelineDitherBloom = .low,
