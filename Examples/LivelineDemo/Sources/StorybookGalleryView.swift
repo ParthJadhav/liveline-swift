@@ -6,41 +6,33 @@ struct StorybookGalleryView: View {
 
     var body: some View {
         NavigationStack {
-            Group {
-                if showsDitherExamples {
-                    DitherShowcaseView()
-                        .transition(.opacity)
-                } else {
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 22) {
-                            ForEach(StorybookCatalog.groups, id: \.name) { group in
-                                VStack(alignment: .leading, spacing: 10) {
-                                    Text(group.name)
-                                        .font(.headline)
-                                        .padding(.horizontal, 16)
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 22) {
+                    ForEach(StorybookCatalog.groups, id: \.name) { group in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(group.name)
+                                .font(.headline)
+                                .padding(.horizontal, 16)
 
-                                    ForEach(group.scenarios) { scenario in
-                                        NavigationLink {
-                                            StorybookScenarioScreen(scenario: scenario)
-                                        } label: {
-                                            StorybookCard(scenario: scenario)
-                                        }
-                                        .buttonStyle(.plain)
-                                        .padding(.horizontal, 16)
-                                    }
+                            ForEach(group.scenarios) { scenario in
+                                NavigationLink {
+                                    StorybookScenarioScreen(scenario: scenario)
+                                } label: {
+                                    StorybookCard(scenario: scenario)
                                 }
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 16)
                             }
                         }
-                        .padding(.vertical, 16)
                     }
                 }
+                .padding(.vertical, 16)
             }
-            .animation(.easeInOut(duration: 0.2), value: showsDitherExamples)
             .navigationTitle("Storybook")
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top, spacing: 0) {
                 Toggle(isOn: $showsDitherExamples) {
-                    Label("Dither showcase", systemImage: "sparkles")
+                    Label("Dither style", systemImage: "sparkles")
                         .font(.subheadline.weight(.medium))
                 }
                 .toggleStyle(.switch)
@@ -50,6 +42,12 @@ struct StorybookGalleryView: View {
                 .accessibilityIdentifier("storybook-dither-toggle")
             }
         }
+        .livelineChartStyle(
+            showsDitherExamples
+                ? .dither(LivelineDitherStyle())
+                : nil
+        )
+        .animation(.easeInOut(duration: 0.2), value: showsDitherExamples)
     }
 }
 

@@ -145,6 +145,14 @@ LivelineChart(data: points, value: latest, configuration: configuration)
 LivelineChart(donut: categories, configuration: configuration)
 ```
 
+To switch a whole hierarchy at once, apply the container override. Passing
+`nil` restores each chart's own configured style:
+
+```swift
+Dashboard()
+    .livelineChartStyle(isDithered ? .dither(LivelineDitherStyle()) : nil)
+```
+
 The effect uses a 4×4 Bayer texture, coloured bloom, and deterministic winking
 sparkles. It is clipped to chart marks so axes, labels, and tooltips stay crisp.
 Set `animated: false` for a static treatment. Reduce Motion freezes dither

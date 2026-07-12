@@ -17,6 +17,7 @@ public struct LivelineChart: View {
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.livelineSnapshotElapsedTime) private var snapshotElapsedTime
+    @Environment(\.livelineChartStyleOverride) private var chartStyleOverride
     @StateObject private var renderState = LivelineRenderState()
     @State private var activeWindow: TimeInterval
     @State private var hoverLocation: CGPoint?
@@ -476,6 +477,9 @@ private extension LivelineChart {
     var effectiveConfiguration: LivelineChartConfiguration {
         var configuration = baseConfiguration
         configuration.lineMode = lineMode
+        if let chartStyleOverride {
+            configuration.style = chartStyleOverride
+        }
         return configuration.respectingReducedMotion(accessibilityReduceMotion)
     }
 

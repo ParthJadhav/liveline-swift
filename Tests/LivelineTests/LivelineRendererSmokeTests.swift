@@ -146,6 +146,32 @@ final class LivelineRendererSmokeTests: XCTestCase {
     }
 
     @MainActor
+    func testContainerStyleOverrideRendersNestedChart() throws {
+        let chart = LivelineChart(
+            bars: [
+                LivelinePoint(time: 1, value: 4),
+                LivelinePoint(time: 2, value: 7),
+                LivelinePoint(time: 3, value: 5),
+            ],
+            configuration: configuration
+        )
+        .livelineChartStyle(
+            .dither(
+                LivelineDitherStyle(
+                    variant: .hatched,
+                    bloom: .off,
+                    animated: false
+                )
+            )
+        )
+
+        let renderer = ImageRenderer(content: chart.frame(width: 240, height: 160))
+        renderer.proposedSize = ProposedViewSize(width: 240, height: 160)
+        let image: NSImage = try XCTUnwrap(renderer.nsImage)
+        XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
+    }
+
+    @MainActor
     func testExtremeFiniteValuesRenderWithoutOverflow() throws {
         let chart = LivelineChart(
             data: [
