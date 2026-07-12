@@ -38,14 +38,16 @@ struct StorybookGalleryView: View {
             .animation(.easeInOut(duration: 0.2), value: showsDitherExamples)
             .navigationTitle("Storybook")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Toggle("Dither", isOn: $showsDitherExamples)
-                        .toggleStyle(.switch)
-                        .font(.caption.weight(.medium))
-                        .accessibilityLabel("Dither examples")
-                        .accessibilityIdentifier("storybook-dither-toggle")
+            .safeAreaInset(edge: .top, spacing: 0) {
+                Toggle(isOn: $showsDitherExamples) {
+                    Label("Dither showcase", systemImage: "sparkles")
+                        .font(.subheadline.weight(.medium))
                 }
+                .toggleStyle(.switch)
+                .padding(.horizontal, 16)
+                .frame(height: 44)
+                .background(.thinMaterial)
+                .accessibilityIdentifier("storybook-dither-toggle")
             }
         }
     }
