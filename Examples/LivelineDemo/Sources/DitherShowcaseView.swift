@@ -80,7 +80,7 @@ struct DitherShowcaseView: View {
             pulse: false,
             endpointDecorations: false,
             fadeEffects: true,
-            scrub: false,
+            scrub: true,
             padding: LivelinePadding(top: 7, right: 7, bottom: 7, left: 7)
         )
     }
