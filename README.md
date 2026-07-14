@@ -46,12 +46,6 @@ Each cell is captured from the included deterministic iOS Storybook.
   </tr>
 </table>
 
-### Animated chart showcase
-
-[![Watch the Liveline Swift animated chart showcase](Media/liveline-chart-showcase-poster.png)](Media/liveline-chart-showcase.mp4)
-
-The 1080p showcase renders all eighteen additional chart families with renderer-driven geometry animation in the included iOS demo. Regenerate it with `scripts/record-chart-showcase.sh`.
-
 ## Requirements
 
 - iOS 16+
