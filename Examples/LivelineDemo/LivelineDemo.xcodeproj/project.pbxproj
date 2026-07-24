@@ -8,12 +8,14 @@
 
 /* Begin PBXBuildFile section */
 		1AC5CE3F0E2C47252A685C97 /* StorybookGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E651928AB3A68954224963 /* StorybookGalleryView.swift */; };
+		1B6A3B44BF8405A57AF0EC83 /* StackedChartGestureUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A23CFBA9A5D81260A49B7021 /* StackedChartGestureUITests.swift */; };
 		25D497588CC80BCD6CA09E4D /* StorybookData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51B67FE02F589DE3867E6458 /* StorybookData.swift */; };
 		279B18038DFC9FEE9D1663A4 /* StorybookCoreScenarios.swift in Sources */ = {isa = PBXBuildFile; fileRef = 889CEFAA18D45D1947DB0C04 /* StorybookCoreScenarios.swift */; };
 		2A6C8E2849152B698065293F /* StorybookScenarios.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE6E7B321C063866AE32FE6E /* StorybookScenarios.swift */; };
 		402DB5ED38210BA5A7C8156F /* ChartShowcaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C08F79D60A276EA7E755DCBB /* ChartShowcaseView.swift */; };
 		50A8196CDC4C6C75538429CB /* StorybookCartesianScenarios.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22812B815C9DEE80FFE9636 /* StorybookCartesianScenarios.swift */; };
 		550CD9098220F8C26D01D9F2 /* DemoMarket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AA3FB67FFD448A011D77A88 /* DemoMarket.swift */; };
+		5DE6529AD9834DAC0525CB7C /* StackedChartGestureTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3FBA6E02F6D0E95537C2066 /* StackedChartGestureTestView.swift */; };
 		68A08A355EFFCBDD35146C9D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DFE268FCCEBC5F770ED32D8 /* ContentView.swift */; };
 		94D6664348AAB53AECFF2A55 /* Liveline in Frameworks */ = {isa = PBXBuildFile; productRef = C8383F349455BB91EED4F17D /* Liveline */; };
 		A3E6F6D70F960CD515A8D53F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = CA1E9C63A4EA1D37D3964204 /* Assets.xcassets */; };
@@ -22,6 +24,16 @@
 		C6E1FB567495E1643DA85F47 /* StorybookAdvancedScenarios.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BBE66DC9B5E7F4117C5FB4 /* StorybookAdvancedScenarios.swift */; };
 		EB0A4860FCC5B0E1D910DA93 /* LivelineDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96A0ED5BF8E02B2290577882 /* LivelineDemoApp.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		877AE13246379834352CF187 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 66EC7D9CDE8216DF6CF20DEF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3A102E2F22DC1565F9947A21;
+			remoteInfo = LivelineDemo;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		13316F5B9327791EC071BA54 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -33,13 +45,16 @@
 		8DFE268FCCEBC5F770ED32D8 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		96A0ED5BF8E02B2290577882 /* LivelineDemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LivelineDemoApp.swift; sourceTree = "<group>"; };
 		A22812B815C9DEE80FFE9636 /* StorybookCartesianScenarios.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookCartesianScenarios.swift; sourceTree = "<group>"; };
+		A23CFBA9A5D81260A49B7021 /* StackedChartGestureUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackedChartGestureUITests.swift; sourceTree = "<group>"; };
 		A843AD2626FDD50F119E1682 /* liveline-swift */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "liveline-swift"; path = ../..; sourceTree = SOURCE_ROOT; };
+		B75DAAF387BFA5BC15FA4A15 /* LivelineDemoUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = LivelineDemoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C08F79D60A276EA7E755DCBB /* ChartShowcaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartShowcaseView.swift; sourceTree = "<group>"; };
 		C4E651928AB3A68954224963 /* StorybookGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookGalleryView.swift; sourceTree = "<group>"; };
 		C521DD5BF06518FF39FCCBED /* DitherShowcaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DitherShowcaseView.swift; sourceTree = "<group>"; };
 		CA1E9C63A4EA1D37D3964204 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		CB25256E69DFEBC719FAC487 /* StorybookScenarioIDs.generated.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookScenarioIDs.generated.swift; sourceTree = "<group>"; };
 		CE6E7B321C063866AE32FE6E /* StorybookScenarios.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookScenarios.swift; sourceTree = "<group>"; };
+		E3FBA6E02F6D0E95537C2066 /* StackedChartGestureTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StackedChartGestureTestView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -54,6 +69,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		496E6E2FDA66AF62DE3EA167 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				A23CFBA9A5D81260A49B7021 /* StackedChartGestureUITests.swift */,
+			);
+			path = UITests;
+			sourceTree = "<group>";
+		};
 		4FB53437E4F6A6757B96D27A /* Sources */ = {
 			isa = PBXGroup;
 			children = (
@@ -64,6 +87,7 @@
 				C521DD5BF06518FF39FCCBED /* DitherShowcaseView.swift */,
 				13316F5B9327791EC071BA54 /* Info.plist */,
 				96A0ED5BF8E02B2290577882 /* LivelineDemoApp.swift */,
+				E3FBA6E02F6D0E95537C2066 /* StackedChartGestureTestView.swift */,
 				34BBE66DC9B5E7F4117C5FB4 /* StorybookAdvancedScenarios.swift */,
 				A22812B815C9DEE80FFE9636 /* StorybookCartesianScenarios.swift */,
 				889CEFAA18D45D1947DB0C04 /* StorybookCoreScenarios.swift */,
@@ -79,6 +103,7 @@
 			isa = PBXGroup;
 			children = (
 				84B6019E4E542078710AA9DA /* LivelineDemo.app */,
+				B75DAAF387BFA5BC15FA4A15 /* LivelineDemoUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -88,6 +113,7 @@
 			children = (
 				E43F3F9C1C286A9C948CDE1F /* Packages */,
 				4FB53437E4F6A6757B96D27A /* Sources */,
+				496E6E2FDA66AF62DE3EA167 /* UITests */,
 				58FD617EEE1E3D433344C0F3 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -123,6 +149,24 @@
 			productReference = 84B6019E4E542078710AA9DA /* LivelineDemo.app */;
 			productType = "com.apple.product-type.application";
 		};
+		B6811C7F99EE6C5D8E40E957 /* LivelineDemoUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = E860D29A49379E9DAE5B261F /* Build configuration list for PBXNativeTarget "LivelineDemoUITests" */;
+			buildPhases = (
+				B7964310BD378C5E27FB8013 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				70D07282E2AA93291264BE28 /* PBXTargetDependency */,
+			);
+			name = LivelineDemoUITests;
+			packageProductDependencies = (
+			);
+			productName = LivelineDemoUITests;
+			productReference = B75DAAF387BFA5BC15FA4A15 /* LivelineDemoUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -132,6 +176,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					B6811C7F99EE6C5D8E40E957 = {
+						TestTargetID = 3A102E2F22DC1565F9947A21;
+					};
 				};
 			};
 			buildConfigurationList = DE3BB9E5656C72019E811EAF /* Build configuration list for PBXProject "LivelineDemo" */;
@@ -152,6 +199,7 @@
 			projectRoot = "";
 			targets = (
 				3A102E2F22DC1565F9947A21 /* LivelineDemo */,
+				B6811C7F99EE6C5D8E40E957 /* LivelineDemoUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -168,6 +216,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		B7964310BD378C5E27FB8013 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1B6A3B44BF8405A57AF0EC83 /* StackedChartGestureUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		F3FE2FA863DCD990532F408D /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -177,6 +233,7 @@
 				550CD9098220F8C26D01D9F2 /* DemoMarket.swift in Sources */,
 				BB882DD4DCA03EADAEC24883 /* DitherShowcaseView.swift in Sources */,
 				EB0A4860FCC5B0E1D910DA93 /* LivelineDemoApp.swift in Sources */,
+				5DE6529AD9834DAC0525CB7C /* StackedChartGestureTestView.swift in Sources */,
 				C6E1FB567495E1643DA85F47 /* StorybookAdvancedScenarios.swift in Sources */,
 				50A8196CDC4C6C75538429CB /* StorybookCartesianScenarios.swift in Sources */,
 				279B18038DFC9FEE9D1663A4 /* StorybookCoreScenarios.swift in Sources */,
@@ -188,6 +245,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		70D07282E2AA93291264BE28 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3A102E2F22DC1565F9947A21 /* LivelineDemo */;
+			targetProxy = 877AE13246379834352CF187 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		07EBD2E4D0D116ED59FC7F12 /* Release */ = {
@@ -262,6 +327,44 @@
 				SUPPORTS_MACCATALYST = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		47F5C1B21FDBDEAA12A5884E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.liveline.demo-ui-tests";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = LivelineDemo;
+			};
+			name = Debug;
+		};
+		6AA9616676FB1EF2F5EE2B97 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.liveline.demo-ui-tests";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = LivelineDemo;
 			};
 			name = Release;
 		};
@@ -364,6 +467,15 @@
 			buildConfigurations = (
 				B61C8DDF4DBC67A1B98033C9 /* Debug */,
 				07EBD2E4D0D116ED59FC7F12 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		E860D29A49379E9DAE5B261F /* Build configuration list for PBXNativeTarget "LivelineDemoUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				47F5C1B21FDBDEAA12A5884E /* Debug */,
+				6AA9616676FB1EF2F5EE2B97 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

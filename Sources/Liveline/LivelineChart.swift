@@ -354,7 +354,9 @@ public struct LivelineChart: View {
             )
         }
         .onChange(of: configuration.scrub) { isEnabled in
-            if !isEnabled { endHover(configuration: configuration) }
+            if !isEnabled {
+                endHover(configuration: configuration)
+            }
         }
         .onDisappear {
             endHover(configuration: baseConfiguration, forceNotification: true)
@@ -447,6 +449,45 @@ private extension LivelineChart {
         motion: LivelineMotionPolicy,
         snapshotElapsedTime: TimeInterval?
     ) -> some View {
+        #if os(iOS)
+        chartDrawingCanvas(
+            wallTimestamp: wallTimestamp,
+            configuration: configuration,
+            semantics: semantics,
+            motion: motion,
+            snapshotElapsedTime: snapshotElapsedTime
+        )
+        .overlay {
+            LivelineScrubInteractionView(
+                isEnabled: configuration.scrub,
+                onScrub: { location in
+                    updateHover(at: location, configuration: configuration)
+                },
+                onEnd: {
+                    endHover(configuration: configuration)
+                }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        #else
+        chartDrawingCanvas(
+            wallTimestamp: wallTimestamp,
+            configuration: configuration,
+            semantics: semantics,
+            motion: motion,
+            snapshotElapsedTime: snapshotElapsedTime
+        )
+        .simultaneousGesture(scrubGesture(configuration))
+        #endif
+    }
+
+    func chartDrawingCanvas(
+        wallTimestamp: TimeInterval,
+        configuration: LivelineChartConfiguration,
+        semantics: LivelineChartSemantics,
+        motion: LivelineMotionPolicy,
+        snapshotElapsedTime: TimeInterval?
+    ) -> some View {
         Canvas { context, size in
             let timestamp = renderState.timestamp(
                 for: wallTimestamp,
@@ -471,7 +512,6 @@ private extension LivelineChart {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
-        .gesture(scrubGesture(configuration))
     }
 
     var effectiveConfiguration: LivelineChartConfiguration {
@@ -708,19 +748,23 @@ private extension LivelineChart {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 guard configuration.scrub else { return }
-                hoverLocation = value.location
-                reportHover(
-                    LivelineHoverResolver.resolve(
-                        location: value.location,
-                        snapshot: renderState.interactionSnapshot
-                    ),
-                    configuration: configuration
-                )
+                updateHover(at: value.location, configuration: configuration)
             }
             .onEnded { _ in
                 endHover(configuration: configuration)
             }
         #endif
+    }
+
+    func updateHover(at location: CGPoint, configuration: LivelineChartConfiguration) {
+        hoverLocation = location
+        reportHover(
+            LivelineHoverResolver.resolve(
+                location: location,
+                snapshot: renderState.interactionSnapshot
+            ),
+            configuration: configuration
+        )
     }
 
     func reportHover(_ hover: LivelineHoverPoint?, configuration: LivelineChartConfiguration) {

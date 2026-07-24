@@ -23,3 +23,16 @@ targets:
         SUPPORTS_MACCATALYST: false
         ASSETCATALOG_COMPILER_APPICON_NAME: ""
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+  LivelineDemoUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - UITests
+    dependencies:
+      - target: LivelineDemo
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: true
+        IPHONEOS_DEPLOYMENT_TARGET: 17.0
+        PRODUCT_BUNDLE_IDENTIFIER: com.liveline.demo-ui-tests
+        SWIFT_VERSION: 5.0

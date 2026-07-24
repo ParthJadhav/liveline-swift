@@ -2,6 +2,87 @@ import XCTest
 @testable import Liveline
 
 final class LivelineRuntimeTests: XCTestCase {
+    func testScrubPanAcceptsHorizontalVelocityInEitherDirection() {
+        XCTAssertTrue(
+            LivelineScrubPanPolicy.shouldBegin(
+                velocity: CGPoint(x: 100, y: 99)
+            )
+        )
+        XCTAssertTrue(
+            LivelineScrubPanPolicy.shouldBegin(
+                velocity: CGPoint(x: -80, y: 20)
+            )
+        )
+    }
+
+    func testScrubPanRejectsVerticalVelocityInEitherDirection() {
+        XCTAssertFalse(
+            LivelineScrubPanPolicy.shouldBegin(
+                velocity: CGPoint(x: 99, y: 100)
+            )
+        )
+        XCTAssertFalse(
+            LivelineScrubPanPolicy.shouldBegin(
+                velocity: CGPoint(x: 20, y: -80)
+            )
+        )
+    }
+
+    func testScrubPanGivesExactTiesAndStationaryInputToScrolling() {
+        XCTAssertFalse(
+            LivelineScrubPanPolicy.shouldBegin(
+                velocity: CGPoint(x: 100, y: 100)
+            )
+        )
+        XCTAssertFalse(
+            LivelineScrubPanPolicy.shouldBegin(
+                velocity: CGPoint(x: -100, y: 100)
+            )
+        )
+        XCTAssertFalse(
+            LivelineScrubPanPolicy.shouldBegin(
+                velocity: .zero
+            )
+        )
+    }
+
+    func testScrubPanRejectsNonFiniteVelocity() {
+        XCTAssertFalse(
+            LivelineScrubPanPolicy.shouldBegin(
+                velocity: CGPoint(x: CGFloat.infinity, y: 0)
+            )
+        )
+        XCTAssertFalse(
+            LivelineScrubPanPolicy.shouldBegin(
+                velocity: CGPoint(x: 0, y: CGFloat.nan)
+            )
+        )
+    }
+
+    func testScrubSessionLocksUntilTheGestureFinishes() {
+        var session = LivelineScrubSession()
+
+        XCTAssertFalse(session.shouldUpdate)
+        XCTAssertTrue(session.begin())
+        XCTAssertTrue(session.shouldUpdate)
+        XCTAssertFalse(session.begin())
+
+        // Direction changes do not re-run recognition once horizontal input
+        // owns this touch sequence.
+        XCTAssertTrue(session.shouldUpdate)
+        XCTAssertTrue(session.finish())
+        XCTAssertFalse(session.shouldUpdate)
+    }
+
+    func testScrubSessionClearsOnlyOnceForRepeatedEndOrCancel() {
+        var session = LivelineScrubSession()
+
+        XCTAssertFalse(session.finish())
+        XCTAssertTrue(session.begin())
+        XCTAssertTrue(session.finish())
+        XCTAssertFalse(session.finish())
+    }
+
     func testWindowSelectionTracksExternalValuesAndOptionChanges() {
         XCTAssertEqual(
             LivelineSelectionReconciler.window(

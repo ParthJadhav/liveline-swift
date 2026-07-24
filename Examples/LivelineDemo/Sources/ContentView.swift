@@ -2,13 +2,16 @@ import Liveline
 import SwiftUI
 
 struct ContentView: View {
+    private let stackedGestureTests = CommandLine.arguments.contains("-stacked-gesture-tests")
     private let ditherShowcase = StorybookLaunch.ditherShowcaseFromArguments()
     private let chartShowcase = StorybookLaunch.chartShowcaseFromArguments()
     private let launchedScenario = StorybookLaunch.scenarioFromArguments()
     private let chartOnly = StorybookLaunch.chartOnlyFromArguments()
 
     var body: some View {
-        if ditherShowcase {
+        if stackedGestureTests {
+            StackedChartGestureTestView()
+        } else if ditherShowcase {
             DitherShowcaseView()
         } else if chartShowcase {
             ChartShowcaseView()

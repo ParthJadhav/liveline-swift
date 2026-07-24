@@ -55,6 +55,38 @@ enum LivelineSelectionReconciler {
     }
 }
 
+/// Recognition policy for the iOS scrub pan. UIKit applies its own movement
+/// threshold before asking this policy, so the chart only needs to choose an
+/// axis. Vertical movement and exact ties deliberately belong to scrolling.
+enum LivelineScrubPanPolicy {
+    static func shouldBegin(velocity: CGPoint) -> Bool {
+        guard velocity.x.isFinite, velocity.y.isFinite else { return false }
+        return abs(velocity.x) > abs(velocity.y)
+    }
+}
+
+/// Keeps recognition ownership stable for the lifetime of one pan and makes
+/// end/cancel cleanup idempotent.
+struct LivelineScrubSession {
+    private(set) var isActive = false
+
+    var shouldUpdate: Bool {
+        isActive
+    }
+
+    mutating func begin() -> Bool {
+        guard !isActive else { return false }
+        isActive = true
+        return true
+    }
+
+    mutating func finish() -> Bool {
+        guard isActive else { return false }
+        isActive = false
+        return true
+    }
+}
+
 /// Decides whether SwiftUI should keep requesting frames and how state should
 /// settle when it does not. This is the single motion policy used by the chart.
 struct LivelineMotionPolicy: Equatable {
