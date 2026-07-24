@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 0.3.1 - 2026-07-25
+
+- Fixes gesture arbitration for vertically stacked LiveLine charts so vertical
+  drags that begin on chart content scroll the containing view smoothly, while
+  intentional horizontal drags remain locked to accurate scrubbing.
+- Adds unit coverage for direction boundaries, ties, stable intent, and
+  idempotent cancellation cleanup, plus five iOS Simulator UI scenarios
+  covering vertical and horizontal jitter and scrubbing in both directions.
+
 ## 0.3.0 - 2026-07-12
 
 - Adds a universal, configurable ordered-dither chart style with gradient,

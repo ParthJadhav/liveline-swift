@@ -67,7 +67,7 @@ In `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.3.0")
+    .package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.3.1")
 ],
 targets: [
     .target(

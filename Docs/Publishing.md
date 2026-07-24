@@ -46,7 +46,7 @@ xcodebuild -scheme Liveline -destination 'generic/platform=visionOS' build
 SwiftPM can consume a branch, but app teams usually prefer version tags.
 
 ```bash
-VERSION=0.3.0
+VERSION=0.3.1
 git tag "$VERSION"
 git push origin "$VERSION"
 ```
@@ -60,7 +60,7 @@ git show --stat --oneline "$VERSION"
 Then depend on:
 
 ```swift
-.package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.3.0")
+.package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.3.1")
 ```
 
 ## GitHub Release
