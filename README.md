@@ -67,7 +67,7 @@ In `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.3.1")
+    .package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.4.0")
 ],
 targets: [
     .target(
@@ -279,7 +279,7 @@ LivelineChart(funnel: stages, style: LivelineFunnelStyle(showsValues: true))
 - Smooth live value interpolation and range easing
 - Monotone cubic line paths to avoid overshoot
 - Time-window controls
-- Drag scrubbing with tooltips
+- Drag scrubbing with tooltips, plus opt-in tooltips on cursor hover
 - Live value badge and pulse dot
 - Momentum coloring and arrows
 - Optional particle burst and shake effects

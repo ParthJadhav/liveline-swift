@@ -17,7 +17,7 @@ enum LivelineInteractionBuilder {
             layout: layout,
             points: prepared.primaryVisible,
             behavior: behavior,
-            isEnabled: configuration.scrub,
+            isEnabled: configuration.resolvesTooltipSelection,
             targets: includeTargets ? targets(
                 content: content,
                 prepared: prepared,

@@ -358,6 +358,13 @@ public struct LivelineChart: View {
                 endHover(configuration: configuration)
             }
         }
+        .onChange(of: configuration.showsTooltipOnHover) { isEnabled in
+            // A cursor parked over the chart produces no further events, so the
+            // selection it left behind has to be cleared explicitly.
+            if !isEnabled {
+                endHover(configuration: configuration)
+            }
+        }
         .onDisappear {
             endHover(configuration: baseConfiguration, forceNotification: true)
         }
@@ -443,6 +450,35 @@ private extension LivelineChart {
     }
 
     func chartCanvas(
+        wallTimestamp: TimeInterval,
+        configuration: LivelineChartConfiguration,
+        semantics: LivelineChartSemantics,
+        motion: LivelineMotionPolicy,
+        snapshotElapsedTime: TimeInterval?
+    ) -> some View {
+        scrubbableChartCanvas(
+            wallTimestamp: wallTimestamp,
+            configuration: configuration,
+            semantics: semantics,
+            motion: motion,
+            snapshotElapsedTime: snapshotElapsedTime
+        )
+        // Hover sits outside the press-driven surfaces above so a cursor can
+        // inspect the chart without a button held down, and so the iOS scrub
+        // overlay does not swallow pointer movement on iPad.
+        .livelinePointerHover(
+            isEnabled: configuration.showsTooltipOnHover,
+            onMove: { location in
+                updateHover(at: location, configuration: configuration)
+            },
+            onExit: {
+                endHover(configuration: configuration)
+            }
+        )
+    }
+
+    @ViewBuilder
+    func scrubbableChartCanvas(
         wallTimestamp: TimeInterval,
         configuration: LivelineChartConfiguration,
         semantics: LivelineChartSemantics,

@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-07-26
+
+- Adds an opt-in `showsTooltipOnHover` interaction setting that shows the chart
+  tooltip when a cursor rests over the chart, with no press or drag. It is off
+  by default, so touch-first charts keep their existing press-to-inspect
+  behavior.
+- Honors the setting on macOS, on iPadOS with a trackpad, mouse, or Apple Pencil
+  hover, and on visionOS; tvOS and watchOS have no cursor and are unaffected.
+- Gates the marker, guide, and tooltip on either input path rather than on
+  `scrub` alone, so a chart can be hover-only with `scrub` disabled.
+- Preserves the pre-hover `LivelineChartInteraction` initializer signature, so
+  the public API check reports no breaking changes.
+
 ## 0.3.1 - 2026-07-25
 
 - Fixes gesture arbitration for vertically stacked LiveLine charts so vertical

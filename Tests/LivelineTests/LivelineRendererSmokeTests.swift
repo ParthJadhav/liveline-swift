@@ -268,6 +268,109 @@ final class LivelineRendererSmokeTests: XCTestCase {
         XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
     }
 
+    @MainActor
+    func testHoverOnlyConfigurationDrawsTheTooltipThroughTheRealRenderPath() throws {
+        let points = (0..<24).map { LivelinePoint(time: Double($0), value: 4 + Double($0 % 5)) }
+        let content = LivelineChartContent.line(data: points, value: 6).normalized()
+        let size = CGSize(width: 320, height: 220)
+
+        func rawPixels(of image: CGImage) throws -> Data {
+            var bytes = [UInt8](repeating: 0, count: image.width * image.height * 4)
+            let context = try XCTUnwrap(CGContext(
+                data: &bytes,
+                width: image.width,
+                height: image.height,
+                bitsPerComponent: 8,
+                bytesPerRow: image.width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            return Data(bytes)
+        }
+
+        func frame(hoverLocation: CGPoint?, scrub: Bool, showsTooltipOnHover: Bool) throws -> Data {
+            var configuration = LivelineChartConfiguration(
+                window: 24,
+                badge: false,
+                pulse: false,
+                scrub: scrub,
+                paused: true,
+                randomSeed: 7
+            )
+            configuration.showsTooltipOnHover = showsTooltipOnHover
+            configuration = configuration.normalizedForRendering()
+
+            let state = LivelineRenderState()
+            let semantics = content.semantics()
+            let renderer = ImageRenderer(
+                content: ZStack {
+                    Color.black
+                    Canvas { context, canvasSize in
+                        // Settle the reveal animation so only the hover state
+                        // differs between the frames being compared.
+                        for step in 0..<40 {
+                            var pass = context
+                            LivelineRenderer.draw(
+                                context: &pass,
+                                state: state,
+                                input: LivelineRenderInput(
+                                    content: content,
+                                    semantics: semantics,
+                                    accent: .blue,
+                                    configuration: configuration,
+                                    motion: LivelineMotionPolicy(
+                                        isPaused: true,
+                                        requiresTimeline: false,
+                                        settlesImmediately: true,
+                                        minimumInterval: 1.0 / 60.0
+                                    ),
+                                    activeWindow: 24,
+                                    hiddenSeries: [],
+                                    hoverLocation: hoverLocation,
+                                    timestamp: 1_000 + Double(step) / 60,
+                                    size: canvasSize
+                                )
+                            )
+                        }
+                    }
+                }
+                .frame(width: size.width, height: size.height)
+            )
+            renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+            renderer.scale = 1
+            let cgImage: CGImage = try XCTUnwrap(renderer.cgImage)
+            return try rawPixels(of: cgImage)
+        }
+
+        // Repeated ImageRenderer passes carry a little antialiasing jitter that
+        // has nothing to do with hover, so count only channel changes far above
+        // that floor. Drawn tooltip chrome is opaque and clears it easily.
+        func repaintedSamples(_ lhs: Data, _ rhs: Data) -> Int {
+            zip(lhs, rhs).count { abs(Int($0) - Int($1)) > 48 }
+        }
+
+        let probe = CGPoint(x: size.width * 0.55, y: size.height * 0.5)
+
+        // Each comparison moves exactly one variable: the pointer. The opt-in is
+        // held constant within a pair, so any repaint can only be the tooltip.
+        let optedInIdle = try frame(hoverLocation: nil, scrub: false, showsTooltipOnHover: true)
+        let optedInHovered = try frame(hoverLocation: probe, scrub: false, showsTooltipOnHover: true)
+        XCTAssertGreaterThan(
+            repaintedSamples(optedInIdle, optedInHovered),
+            500,
+            "hover-only chart did not draw a tooltip"
+        )
+
+        let optedOutIdle = try frame(hoverLocation: nil, scrub: false, showsTooltipOnHover: false)
+        let optedOutHovered = try frame(hoverLocation: probe, scrub: false, showsTooltipOnHover: false)
+        XCTAssertEqual(
+            repaintedSamples(optedOutIdle, optedOutHovered),
+            0,
+            "pointer drew a tooltip while the opt-in was off"
+        )
+    }
+
     private var configuration: LivelineChartConfiguration {
         LivelineChartConfiguration(
             window: 10,

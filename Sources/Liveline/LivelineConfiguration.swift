@@ -111,6 +111,14 @@ public struct LivelineChartViewport {
 
 public struct LivelineChartInteraction {
     public var scrub: Bool
+    /// Shows the tooltip when a cursor merely rests over the chart, without a
+    /// press or drag.
+    ///
+    /// Off by default so touch-first charts keep their press-to-inspect
+    /// behavior. Only platforms that report a free-moving pointer honor this:
+    /// macOS, iPadOS with a trackpad or mouse, and visionOS. On tvOS and
+    /// watchOS the flag has no effect.
+    public var showsTooltipOnHover: Bool
     public var windowStyle: LivelineWindowStyle
     public var lineMode: Bool
     public var seriesToggleCompact: Bool
@@ -118,8 +126,14 @@ public struct LivelineChartInteraction {
     public var showsModeControls: Bool
     public var showsSeriesControls: Bool
 
+    // `showsTooltipOnHover` is deliberately not defaulted here. Defaulted
+    // parameters are part of Swift's exported constructor signature, so giving
+    // it a default would replace — not extend — the pre-hover initializer.
+    // `LivelineConfigurationCompatibility` keeps that original signature as the
+    // fully-defaulted overload.
     public init(
         scrub: Bool = true,
+        showsTooltipOnHover: Bool,
         windowStyle: LivelineWindowStyle = .default,
         lineMode: Bool = false,
         seriesToggleCompact: Bool = false,
@@ -128,6 +142,7 @@ public struct LivelineChartInteraction {
         showsSeriesControls: Bool = true
     ) {
         self.scrub = scrub
+        self.showsTooltipOnHover = showsTooltipOnHover
         self.windowStyle = windowStyle
         self.lineMode = lineMode
         self.seriesToggleCompact = seriesToggleCompact
@@ -441,6 +456,7 @@ extension LivelineChartConfiguration {
     public var momentum: LivelineMomentum? { get { annotations.momentum } set { annotations.momentum = newValue } }
     public var autoDetectMomentum: Bool { get { annotations.autoDetectMomentum } set { annotations.autoDetectMomentum = newValue } }
     public var scrub: Bool { get { interaction.scrub } set { interaction.scrub = newValue } }
+    public var showsTooltipOnHover: Bool { get { interaction.showsTooltipOnHover } set { interaction.showsTooltipOnHover = newValue } }
     public var exaggerate: Bool { get { viewport.exaggerate } set { viewport.exaggerate = newValue } }
     public var showValue: Bool { get { appearance.showValue } set { appearance.showValue = newValue } }
     public var valueMomentumColor: Bool { get { appearance.valueMomentumColor } set { appearance.valueMomentumColor = newValue } }
@@ -476,6 +492,13 @@ extension LivelineChartConfiguration {
     }
 
     var resolvedSnapshotElapsedTime: TimeInterval? { snapshotElapsedTimeOverride }
+
+    /// True when any input path — press-and-drag scrubbing or cursor hover —
+    /// is allowed to resolve a tooltip selection. Renderers gate the marker,
+    /// guide, and tooltip on this rather than on `scrub` alone so a chart can
+    /// be hover-only.
+    var resolvesTooltipSelection: Bool { scrub || showsTooltipOnHover }
+
     var initialWindow: TimeInterval {
         guard !windows.isEmpty else { return window }
         return windows.contains(where: { $0.seconds == window }) ? window : (windows.first?.seconds ?? window)

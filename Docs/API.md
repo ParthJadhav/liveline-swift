@@ -251,6 +251,7 @@ let configuration = LivelineChartConfiguration(
     ),
     interaction: LivelineChartInteraction(
         scrub: true,
+        showsTooltipOnHover: false,
         showsModeControls: false,
         showsSeriesControls: true
     ),
@@ -296,6 +297,15 @@ LivelineChartConfiguration(
 )
 ```
 
+Options added after the flat initializer was frozen — `showsTooltipOnHover`
+among them — are set through the typed group or by assigning the flat property,
+which keeps the original initializer signature intact:
+
+```swift
+var configuration = LivelineChartConfiguration(theme: .dark, window: 60)
+configuration.showsTooltipOnHover = true
+```
+
 The Swift API keeps the upstream React feature surface but maps union-style props into typed fields. Web `momentum={false}` is `autoDetectMomentum: false`; web `momentum="up"` is `momentum: .up`. Web `degen={true}` is `degen: LivelineDegenOptions()`, and web `degen={false}` is `degen: nil`.
 
 Important options:
@@ -314,6 +324,7 @@ Important options:
 | `momentum` | `nil` | Use `.up`, `.down`, or `.flat` to override auto detection. |
 | `autoDetectMomentum` | `true` | Uses recent velocity to color momentum affordances. |
 | `scrub` | `true` | Enables drag scrubbing and tooltips. |
+| `showsTooltipOnHover` | `false` | Shows the tooltip when a cursor rests over the chart, with no press or drag. Honored on macOS, on iPadOS with a trackpad, mouse, or Apple Pencil hover, and on visionOS; ignored on tvOS and watchOS, which have no cursor. Works independently of `scrub`, so a chart can be hover-only. |
 | `tooltipY` | `14` | Adjusts structured tooltip placement vertically; values above or below the default shift the adaptive placement within the plot bounds. |
 | `exaggerate` | `false` | Uses a tighter Y range for small moves. |
 | `showValue` | `false` | Shows a live value label above the chart. |

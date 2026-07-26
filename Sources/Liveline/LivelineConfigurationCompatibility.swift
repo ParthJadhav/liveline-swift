@@ -1,9 +1,36 @@
 import CoreGraphics
 import Foundation
 
-// These overloads preserve the exact pre-dither API symbols. Defaulted
-// parameters are part of Swift's exported constructor signature, so inserting
-// `style` into the old initializers would otherwise be source-breaking.
+// These overloads preserve exact pre-existing API symbols. Defaulted parameters
+// are part of Swift's exported constructor signature, so inserting a new one
+// into an old initializer — `style` for dither, `showsTooltipOnHover` for cursor
+// hover — replaces that symbol rather than extending it. Each frozen signature
+// therefore lives on here as its own overload.
+extension LivelineChartInteraction {
+    /// The pre-hover initializer, preserved verbatim so existing call sites keep
+    /// resolving to the same exported symbol. Hover-on-cursor stays off here.
+    public init(
+        scrub: Bool = true,
+        windowStyle: LivelineWindowStyle = .default,
+        lineMode: Bool = false,
+        seriesToggleCompact: Bool = false,
+        seriesLegendSide: LivelineLegendSide = .trailing,
+        showsModeControls: Bool = false,
+        showsSeriesControls: Bool = true
+    ) {
+        self.init(
+            scrub: scrub,
+            showsTooltipOnHover: false,
+            windowStyle: windowStyle,
+            lineMode: lineMode,
+            seriesToggleCompact: seriesToggleCompact,
+            seriesLegendSide: seriesLegendSide,
+            showsModeControls: showsModeControls,
+            showsSeriesControls: showsSeriesControls
+        )
+    }
+}
+
 extension LivelineChartConfiguration {
     public init(
         theme: LivelineThemeMode = .dark,

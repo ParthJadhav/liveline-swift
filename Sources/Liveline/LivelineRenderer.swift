@@ -227,7 +227,7 @@ enum LivelineRenderer {
             snapshot: interactionSnapshot
         )
         let hover = tooltipSelection?.hover
-        let scrubAmount = config.scrub && hover != nil ? 1.0 : 0.0
+        let scrubAmount = config.resolvesTooltipSelection && hover != nil ? 1.0 : 0.0
 
         let compositorInput = LivelineCompositorInput(
             content: input.content,

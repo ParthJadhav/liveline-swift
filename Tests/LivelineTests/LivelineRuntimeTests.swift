@@ -272,6 +272,86 @@ final class LivelineRuntimeTests: XCTestCase {
         XCTAssertFalse(withoutCallback.showsModeControls)
     }
 
+    func testHoverTooltipIsOptInAndSurvivesEveryConfigurationEntryPoint() {
+        XCTAssertFalse(LivelineChartConfiguration().showsTooltipOnHover)
+        XCTAssertFalse(LivelineChartConfiguration(style: .standard).showsTooltipOnHover)
+        XCTAssertFalse(LivelineChartInteraction().showsTooltipOnHover)
+        XCTAssertFalse(LivelineChartConfiguration(scrub: false).showsTooltipOnHover)
+
+        var configuration = LivelineChartConfiguration(
+            appearance: LivelineChartAppearance(),
+            interaction: LivelineChartInteraction(scrub: false, showsTooltipOnHover: true)
+        )
+        XCTAssertTrue(configuration.showsTooltipOnHover)
+        XCTAssertTrue(configuration.interaction.showsTooltipOnHover)
+
+        configuration.showsTooltipOnHover = false
+        XCTAssertFalse(configuration.interaction.showsTooltipOnHover)
+        configuration.interaction.showsTooltipOnHover = true
+        XCTAssertTrue(configuration.showsTooltipOnHover)
+
+        // Normalization is a rendering concern; the opt-in must pass through it.
+        XCTAssertTrue(configuration.normalizedForRendering().showsTooltipOnHover)
+        XCTAssertTrue(configuration.respectingReducedMotion(true).showsTooltipOnHover)
+    }
+
+    func testHoverOnlyChartResolvesTooltipsWithoutScrubbing() {
+        let points = [
+            LivelinePoint(time: 1, value: 4),
+            LivelinePoint(time: 2, value: 7),
+            LivelinePoint(time: 3, value: 5),
+        ]
+        let content = LivelineChartContent.line(data: points, value: 5)
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 220),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 10,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2)
+
+        func snapshot(scrub: Bool, hover: Bool) -> LivelineInteractionSnapshot {
+            let configuration = LivelineChartConfiguration(
+                appearance: LivelineChartAppearance(),
+                interaction: LivelineChartInteraction(scrub: scrub, showsTooltipOnHover: hover)
+            )
+            let prepared = LivelineChartPreparer.prepare(
+                for: content,
+                hiddenSeries: [],
+                leftEdge: layout.leftEdge,
+                rightEdge: layout.rightEdge,
+                config: configuration
+            )
+            return LivelineInteractionBuilder.snapshot(
+                content: content,
+                prepared: prepared,
+                layout: layout,
+                palette: palette,
+                configuration: configuration,
+                hiddenSeries: [],
+                behavior: content.semantics().capabilities.hoverBehavior
+            )
+        }
+
+        let probe = CGPoint(x: layout.x(for: 2), y: layout.y(for: 7))
+
+        // Hover alone is enough; the two input paths gate the tooltip together.
+        let hoverOnly = snapshot(scrub: false, hover: true)
+        XCTAssertTrue(hoverOnly.isEnabled)
+        XCTAssertEqual(LivelineHoverResolver.resolve(location: probe, snapshot: hoverOnly)?.time, 2)
+        XCTAssertFalse(LivelineHoverResolver.resolveSelection(location: probe, snapshot: hoverOnly)?.rows.isEmpty ?? true)
+
+        XCTAssertTrue(snapshot(scrub: true, hover: false).isEnabled)
+        XCTAssertTrue(snapshot(scrub: true, hover: true).isEnabled)
+
+        let inert = snapshot(scrub: false, hover: false)
+        XCTAssertFalse(inert.isEnabled)
+        XCTAssertNil(LivelineHoverResolver.resolve(location: probe, snapshot: inert))
+        XCTAssertNil(LivelineHoverResolver.resolveSelection(location: probe, snapshot: inert))
+    }
+
     func testHoverResolverInterpolatesAndUsesBinaryNearestPointSelection() {
         let layout = LivelineLayout(
             size: CGSize(width: 120, height: 100),
