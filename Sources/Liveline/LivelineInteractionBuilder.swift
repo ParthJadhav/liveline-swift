@@ -176,6 +176,7 @@ enum LivelineInteractionBuilder {
             let visible = items.filter { $0.end >= layout.leftEdge - 2 && $0.start <= layout.rightEdge }
             let geometry = LivelineRenderer.timelineGeometry(
                 items: visible,
+                totalLaneCount: max((items.map(\.lane).max() ?? 0) + 1, 1),
                 style: style,
                 layout: layout,
                 palette: palette,
@@ -200,6 +201,7 @@ enum LivelineInteractionBuilder {
             let visible = cells.livelineVisible(in: visibleRange)
             let geometry = LivelineRenderer.heatmapGeometry(
                 cells: visible,
+                totalRowCount: max((cells.map(\.row).max() ?? 0) + 1, style.rowLabels.count, 1),
                 style: style,
                 layout: layout,
                 palette: palette,
@@ -362,15 +364,38 @@ enum LivelineInteractionBuilder {
             }
 
         case let .series(series):
-            let visibleSeries = series.filter { !hiddenSeries.contains($0.id) }
-            guard let primary = visibleSeries.first else { return [] }
-            let visible = primary.data.livelineVisible(in: visibleRange)
-            return interactionSlice(visible, nearestTo: targetLocation, layout: layout).map { point in
+            let visibleSeries = LivelineSeriesSelector.visibleSlices(
+                series: series,
+                hiddenSeries: hiddenSeries,
+                visibleRange: visibleRange
+            )
+            guard let primary = visibleSeries.first else {
+                return []
+            }
+            return interactionSlice(primary.points, nearestTo: targetLocation, layout: layout).map { point in
                 let rows = visibleSeries.compactMap { entry -> LivelineTooltipRow? in
-                    guard let interpolated = LivelineMath.interpolateOrdered(points: entry.data, at: point.time) else { return nil }
-                    return row(entry.label ?? entry.id, value(interpolated), entry.color)
+                    guard let interpolated = LivelineMath.interpolateOrdered(
+                        points: entry.points,
+                        at: point.time
+                    ) else {
+                        return nil
+                    }
+                    return row(
+                        entry.series.label ?? entry.series.id,
+                        value(interpolated),
+                        entry.series.color
+                    )
                 }
-                return xTarget(point: point, anchorValue: rows.isEmpty ? point.value : visibleSeries.compactMap { LivelineMath.interpolateOrdered(points: $0.data, at: point.time) }.max() ?? point.value, heading: time(point.time), rows: rows, layout: layout)
+                let anchorValue = visibleSeries.compactMap {
+                    LivelineMath.interpolateOrdered(points: $0.points, at: point.time)
+                }.max() ?? point.value
+                return xTarget(
+                    point: point,
+                    anchorValue: rows.isEmpty ? point.value : anchorValue,
+                    heading: time(point.time),
+                    rows: rows,
+                    layout: layout
+                )
             }
         }
     }
@@ -410,14 +435,19 @@ enum LivelineInteractionBuilder {
     ) -> [LivelineInteractionTarget] {
         data.livelineVisible(in: (layout.leftEdge - 2)...layout.rightEdge).map { point in
             let segments = LivelineMath.stackedSegments(values: point.values, mode: mode)
-            var rows = segments.enumerated().map { index, segment in
+            let signedValues = zip(point.values, segments).map { rawValue, segment in
+                rawValue < 0
+                    ? segment.lower - segment.upper
+                    : segment.upper - segment.lower
+            }
+            var rows = signedValues.enumerated().map { index, signedValue in
                 row(
                     "Series \(index + 1)",
-                    value(segment.upper - segment.lower),
+                    value(signedValue),
                     LivelineRenderer.extendedSeriesColor(index: index, colors: colors, palette: palette)
                 )
             }
-            let total = segments.map { $0.upper - $0.lower }.reduce(0, +)
+            let total = signedValues.reduce(0, +)
             rows.append(row("Total", value(total), palette.tooltipText))
             return xTarget(
                 point: LivelinePoint(time: point.time, value: total),

@@ -158,7 +158,10 @@ extension LivelineRenderer {
     }
 
     static func formatOrderSize(_ size: Double) -> String {
-        if size > Double(Int.max) { return String(format: "$%.2e", size) }
+        // `Double(Int.max)` rounds to 2^63 on 64-bit platforms, which is one
+        // greater than the largest representable Int. Converting that exact
+        // boundary traps, so keep it on the floating-point formatting path.
+        if size >= Double(Int.max) { return String(format: "$%.2e", size) }
         if size >= 10 { return "$\(Int(size.rounded()))" }
         if size >= 1 { return String(format: "$%.1f", size) }
         return String(format: "$%.2f", size)

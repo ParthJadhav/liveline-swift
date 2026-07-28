@@ -16,14 +16,24 @@ public struct LivelineChart: View {
     private let baseConfiguration: LivelineChartConfiguration
 
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var accessibilityVoiceOverEnabled
+    @Environment(\.accessibilitySwitchControlEnabled) private var accessibilitySwitchControlEnabled
     @Environment(\.livelineSnapshotElapsedTime) private var snapshotElapsedTime
     @Environment(\.livelineChartStyleOverride) private var chartStyleOverride
+    @ScaledMetric(relativeTo: .caption) private var scaledControlHitDimension: CGFloat = LivelineControlMetrics.minimumHitDimension
     @StateObject private var renderState = LivelineRenderState()
     @State private var activeWindow: TimeInterval
-    @State private var hoverLocation: CGPoint?
+    @State private var interactionSessions = LivelineInteractionSessions()
     @State private var lastReportedHover: LivelineHoverPoint?
     @State private var lineMode: Bool
     @State private var hiddenSeries: Set<String> = []
+    @State private var accessibilityIndex: Int?
+    @State private var accessibilityInspectionRequested = false
+    #if os(tvOS)
+    @State private var remoteScrubIndex: Int?
+    @State private var remoteInspectionActive = false
+    @FocusState private var remoteChartHasFocus: Bool
+    #endif
 
     public init(
         data: [LivelinePoint],
@@ -282,7 +292,19 @@ public struct LivelineChart: View {
 
     public var body: some View {
         let configuration = effectiveConfiguration
-        let semantics = content.semantics(hiddenSeries: hiddenSeries)
+        let semantics = content.semantics(
+            hiddenSeries: hiddenSeries,
+            activeWindow: activeWindow
+        )
+        let accessibilityModel = LivelineChartAccessibilityModel.make(
+            content: content,
+            semantics: semantics,
+            configuration: configuration,
+            hiddenSeries: hiddenSeries,
+            includeEntries: accessibilityVoiceOverEnabled
+                || accessibilitySwitchControlEnabled
+                || accessibilityInspectionRequested
+        )
         let resolvedSnapshotElapsedTime = snapshotElapsedTime
             ?? configuration.resolvedSnapshotElapsedTime
         let motion = LivelineMotionPolicy.resolve(
@@ -296,7 +318,7 @@ public struct LivelineChart: View {
             VStack(alignment: .leading, spacing: 6) {
                 if configuration.showValue {
                     Text(configuration.formatValue(semantics.currentValue))
-                        .font(.system(size: 20, weight: .medium, design: .monospaced))
+                        .font(.title3.monospaced().weight(.medium))
                         .tracking(-0.2)
                         .foregroundColor(valueColor(configuration: configuration, momentum: semantics.momentum))
                         .padding(.leading, resolvedLeftPadding(configuration))
@@ -322,7 +344,8 @@ public struct LivelineChart: View {
                     configuration: configuration,
                     semantics: semantics,
                     motion: motion,
-                    snapshotElapsedTime: resolvedSnapshotElapsedTime
+                    snapshotElapsedTime: resolvedSnapshotElapsedTime,
+                    accessibilityModel: accessibilityModel
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -352,21 +375,32 @@ public struct LivelineChart: View {
                 current: hiddenSeries,
                 availableIDs: identity.seriesIDs
             )
+            accessibilityIndex = nil
+            accessibilityInspectionRequested = false
+        }
+        .onChange(of: accessibilityModel.entryCount) { count in
+            if let accessibilityIndex, accessibilityIndex >= count {
+                self.accessibilityIndex = count > 0 ? count - 1 : nil
+            }
         }
         .onChange(of: configuration.scrub) { isEnabled in
             if !isEnabled {
-                endHover(configuration: configuration)
+                endHover(source: .scrub, configuration: configuration)
+                #if os(tvOS)
+                remoteInspectionActive = false
+                remoteScrubIndex = nil
+                #endif
             }
         }
         .onChange(of: configuration.showsTooltipOnHover) { isEnabled in
             // A cursor parked over the chart produces no further events, so the
             // selection it left behind has to be cleared explicitly.
             if !isEnabled {
-                endHover(configuration: configuration)
+                endHover(source: .pointer, configuration: configuration)
             }
         }
         .onDisappear {
-            endHover(configuration: baseConfiguration, forceNotification: true)
+            endAllHover(configuration: baseConfiguration, forceNotification: true)
         }
     }
 }
@@ -426,7 +460,8 @@ private extension LivelineChart {
         configuration: LivelineChartConfiguration,
         semantics: LivelineChartSemantics,
         motion: LivelineMotionPolicy,
-        snapshotElapsedTime: TimeInterval?
+        snapshotElapsedTime: TimeInterval?,
+        accessibilityModel: LivelineChartAccessibilityModel
     ) -> some View {
         if motion.requiresTimeline {
             TimelineView(.animation(minimumInterval: motion.minimumInterval)) { timeline in
@@ -435,7 +470,8 @@ private extension LivelineChart {
                     configuration: configuration,
                     semantics: semantics,
                     motion: motion,
-                    snapshotElapsedTime: snapshotElapsedTime
+                    snapshotElapsedTime: snapshotElapsedTime,
+                    accessibilityModel: accessibilityModel
                 )
             }
         } else {
@@ -444,7 +480,8 @@ private extension LivelineChart {
                 configuration: configuration,
                 semantics: semantics,
                 motion: motion,
-                snapshotElapsedTime: snapshotElapsedTime
+                snapshotElapsedTime: snapshotElapsedTime,
+                accessibilityModel: accessibilityModel
             )
         }
     }
@@ -454,7 +491,8 @@ private extension LivelineChart {
         configuration: LivelineChartConfiguration,
         semantics: LivelineChartSemantics,
         motion: LivelineMotionPolicy,
-        snapshotElapsedTime: TimeInterval?
+        snapshotElapsedTime: TimeInterval?,
+        accessibilityModel: LivelineChartAccessibilityModel
     ) -> some View {
         scrubbableChartCanvas(
             wallTimestamp: wallTimestamp,
@@ -469,12 +507,48 @@ private extension LivelineChart {
         .livelinePointerHover(
             isEnabled: configuration.showsTooltipOnHover,
             onMove: { location in
-                updateHover(at: location, configuration: configuration)
+                updateHover(at: location, source: .pointer, configuration: configuration)
             },
             onExit: {
-                endHover(configuration: configuration)
+                endHover(source: .pointer, configuration: configuration)
             }
         )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(accessibilityModel.label))
+        .accessibilityValue(Text(accessibilityModel.value(at: accessibilityIndex)))
+        .accessibilityHint(Text(accessibilityModel.hint))
+        .accessibilityAdjustableAction { direction in
+            if accessibilityModel.entries.isEmpty,
+               accessibilityModel.entryCount > 0 {
+                accessibilityInspectionRequested = true
+                switch direction {
+                case .increment:
+                    accessibilityIndex = 0
+                case .decrement:
+                    accessibilityIndex = accessibilityModel.entryCount - 1
+                @unknown default:
+                    break
+                }
+                return
+            }
+            switch direction {
+            case .increment:
+                accessibilityIndex = accessibilityModel.adjustedIndex(
+                    from: accessibilityIndex,
+                    direction: .increment
+                )
+            case .decrement:
+                accessibilityIndex = accessibilityModel.adjustedIndex(
+                    from: accessibilityIndex,
+                    direction: .decrement
+                )
+            @unknown default:
+                break
+            }
+        }
+        .accessibilityAction(named: Text("Show chart summary")) {
+            accessibilityIndex = nil
+        }
     }
 
     @ViewBuilder
@@ -497,13 +571,33 @@ private extension LivelineChart {
             LivelineScrubInteractionView(
                 isEnabled: configuration.scrub,
                 onScrub: { location in
-                    updateHover(at: location, configuration: configuration)
+                    updateHover(at: location, source: .scrub, configuration: configuration)
                 },
                 onEnd: {
-                    endHover(configuration: configuration)
+                    endHover(source: .scrub, configuration: configuration)
                 }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        #elseif os(tvOS)
+        chartDrawingCanvas(
+            wallTimestamp: wallTimestamp,
+            configuration: configuration,
+            semantics: semantics,
+            motion: motion,
+            snapshotElapsedTime: snapshotElapsedTime
+        )
+        .focusable(configuration.scrub)
+        .focused($remoteChartHasFocus)
+        .onTapGesture {
+            toggleRemoteInspection(configuration: configuration)
+        }
+        .onMoveCommand(perform: remoteMoveHandler(configuration: configuration))
+        .onExitCommand(perform: remoteExitHandler(configuration: configuration))
+        .onChange(of: remoteChartHasFocus) { hasFocus in
+            if !hasFocus {
+                endRemoteInspection(configuration: configuration)
+            }
         }
         #else
         chartDrawingCanvas(
@@ -540,7 +634,7 @@ private extension LivelineChart {
                     motion: motion,
                     activeWindow: activeWindow,
                     hiddenSeries: hiddenSeries,
-                    hoverLocation: hoverLocation,
+                    hoverLocation: interactionSessions.activeLocation,
                     timestamp: timestamp,
                     size: size
                 )
@@ -610,15 +704,22 @@ private extension LivelineChart {
                         configuration.onWindowChange?(option.seconds)
                     } label: {
                         Text(option.label)
-                            .font(.system(size: 11, weight: active ? .semibold : .regular))
+                            .font(.caption.weight(active ? .semibold : .regular))
                             .lineLimit(1)
-                            .offset(y: 1 / 3)
+                            .minimumScaleFactor(0.8)
                             .padding(.horizontal, configuration.windowStyle == .text ? 6 : 10)
-                            .frame(height: controlButtonHeight(configuration))
+                            .frame(
+                                minWidth: resolvedControlHitDimension,
+                                minHeight: controlButtonHeight(configuration)
+                            )
                             .foregroundColor(active ? activeControlColor(configuration) : inactiveControlColor(configuration))
                             .background(controlBackground(active: active, configuration: configuration))
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("liveline-window-\(option.label)")
+                    .accessibilityLabel(Text(option.label))
+                    .accessibilityValue(Text(active ? "Selected" : "Not selected"))
+                    .accessibilityAddTraits(active ? .isSelected : [])
                 }
             }
             .padding(controlGroupPadding(configuration))
@@ -646,13 +747,18 @@ private extension LivelineChart {
             configuration.onModeChange?(mode)
         } label: {
             LivelineModeIcon(mode: mode, active: active, color: active ? activeControlColor(configuration) : inactiveControlColor(configuration))
-                .frame(width: 12, height: 12)
-                .padding(.horizontal, 7)
-                .frame(height: controlButtonHeight(configuration))
+                .frame(width: 16, height: 16)
+                .frame(
+                    minWidth: resolvedControlHitDimension,
+                    minHeight: controlButtonHeight(configuration)
+                )
                 .background(controlBackground(active: active, configuration: configuration))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(mode == .line ? "liveline-mode-line" : "liveline-mode-candle")
         .accessibilityLabel(mode == .line ? "Line" : "Candle")
+        .accessibilityValue(active ? "Selected" : "Not selected")
+        .accessibilityAddTraits(active ? .isSelected : [])
     }
 
     @ViewBuilder
@@ -663,27 +769,51 @@ private extension LivelineChart {
             HStack(spacing: configuration.windowStyle == .text ? 4 : 2) {
                 ForEach(series) { entry in
                     let visible = !hiddenSeries.contains(entry.id)
+                    let canToggle = LivelineSelectionReconciler.canToggleSeries(
+                        entry.id,
+                        hidden: hiddenSeries,
+                        availableIDs: series.map(\.id)
+                    )
                     Button {
                         toggleSeries(entry.id, series: series, configuration: configuration)
                     } label: {
                         HStack(spacing: configuration.seriesToggleCompact ? 0 : 4) {
                             Circle()
-                                .fill(entry.color)
-                                .frame(width: configuration.seriesToggleCompact ? 8 : 6, height: configuration.seriesToggleCompact ? 8 : 6)
+                                .fill(visible ? entry.color : Color.clear)
+                                .overlay {
+                                    Circle().stroke(entry.color, lineWidth: 2)
+                                }
+                                .frame(width: configuration.seriesToggleCompact ? 10 : 8, height: configuration.seriesToggleCompact ? 10 : 8)
                             if !configuration.seriesToggleCompact {
                                 Text(entry.label ?? entry.id)
-                                    .font(.system(size: 11, weight: .medium))
+                                    .font(.caption.weight(.medium))
                                     .lineLimit(1)
+                                    .minimumScaleFactor(0.8)
                             }
                         }
                         .padding(.horizontal, seriesButtonHorizontalPadding(configuration))
-                        .offset(y: configuration.seriesToggleCompact ? 0 : 1 / 3)
-                        .frame(height: seriesButtonHeight(configuration))
+                        .frame(
+                            minWidth: resolvedControlHitDimension,
+                            minHeight: seriesButtonHeight(configuration)
+                        )
                         .foregroundColor(visible ? activeControlColor(configuration) : inactiveControlColor(configuration))
                         .background(controlBackground(active: visible, configuration: configuration))
-                        .opacity(visible ? 1 : 0.4)
                     }
                     .buttonStyle(.plain)
+                    .disabled(!canToggle)
+                    .accessibilityIdentifier("liveline-series-\(entry.id)")
+                    .accessibilityLabel(Text(entry.label ?? entry.id))
+                    .accessibilityValue(Text(
+                        visible
+                            ? (canToggle ? "Visible" : "Visible, required")
+                            : "Hidden"
+                    ))
+                    .accessibilityHint(Text(
+                        canToggle
+                            ? (visible ? "Hides this series" : "Shows this series")
+                            : "At least one series must remain visible"
+                    ))
+                    .accessibilityAddTraits(visible ? .isSelected : [])
                 }
             }
             .padding(controlGroupPadding(configuration))
@@ -703,11 +833,11 @@ private extension LivelineChart {
     }
 
     func activeControlColor(_ configuration: LivelineChartConfiguration) -> Color {
-        configuration.theme == .dark ? Color.white.opacity(0.70) : Color.black.opacity(0.55)
+        configuration.theme == .dark ? Color.white.opacity(0.94) : Color.black.opacity(0.86)
     }
 
     func inactiveControlColor(_ configuration: LivelineChartConfiguration) -> Color {
-        configuration.theme == .dark ? Color.white.opacity(0.25) : Color.black.opacity(0.22)
+        configuration.theme == .dark ? Color.white.opacity(0.66) : Color.black.opacity(0.62)
     }
 
     func groupBackground(_ configuration: LivelineChartConfiguration) -> Color {
@@ -715,7 +845,7 @@ private extension LivelineChart {
         case .text:
             return .clear
         case .default, .rounded:
-            return configuration.theme == .dark ? Color.white.opacity(0.03) : Color.black.opacity(0.02)
+            return configuration.theme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
         }
     }
 
@@ -724,7 +854,11 @@ private extension LivelineChart {
             if configuration.windowStyle == .text {
                 Color.clear
             } else {
-                (active ? (configuration.theme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.035)) : Color.clear)
+                if active {
+                    configuration.theme == .dark ? Color.white.opacity(0.16) : Color.black.opacity(0.11)
+                } else {
+                    configuration.theme == .dark ? Color.white.opacity(0.035) : Color.black.opacity(0.025)
+                }
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: configuration.windowStyle == .rounded ? 999 : 4, style: .continuous))
@@ -760,14 +894,15 @@ private extension LivelineChart {
     }
 
     func controlButtonHeight(_ configuration: LivelineChartConfiguration) -> CGFloat {
-        configuration.windowStyle == .text ? 20 : 22
+        resolvedControlHitDimension
     }
 
     func seriesButtonHeight(_ configuration: LivelineChartConfiguration) -> CGFloat {
-        guard configuration.seriesToggleCompact else {
-            return controlButtonHeight(configuration)
-        }
-        return configuration.windowStyle == .text ? 12 : 18
+        resolvedControlHitDimension
+    }
+
+    var resolvedControlHitDimension: CGFloat {
+        max(LivelineControlMetrics.minimumHitDimension, scaledControlHitDimension)
     }
 
     func seriesButtonHorizontalPadding(_ configuration: LivelineChartConfiguration) -> CGFloat {
@@ -777,29 +912,87 @@ private extension LivelineChart {
         return configuration.seriesToggleCompact ? 7 : 8
     }
 
+    #if !os(tvOS)
     func scrubGesture(_ configuration: LivelineChartConfiguration) -> some Gesture {
-        #if os(tvOS)
-        TapGesture()
-        #else
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 guard configuration.scrub else { return }
-                updateHover(at: value.location, configuration: configuration)
+                updateHover(at: value.location, source: .scrub, configuration: configuration)
             }
             .onEnded { _ in
-                endHover(configuration: configuration)
+                endHover(source: .scrub, configuration: configuration)
             }
-        #endif
+    }
+    #endif
+
+    func updateHover(
+        at location: CGPoint,
+        source: LivelineInteractionSource,
+        configuration: LivelineChartConfiguration
+    ) {
+        interactionSessions.update(location, source: source)
+        reportHover(
+            resolvedHover(at: location, configuration: configuration),
+            configuration: configuration
+        )
     }
 
-    func updateHover(at location: CGPoint, configuration: LivelineChartConfiguration) {
-        hoverLocation = location
-        reportHover(
-            LivelineHoverResolver.resolve(
-                location: location,
-                snapshot: renderState.interactionSnapshot
+    func resolvedHover(
+        at location: CGPoint,
+        configuration: LivelineChartConfiguration
+    ) -> LivelineHoverPoint? {
+        if let hover = LivelineHoverResolver.resolve(
+            location: location,
+            snapshot: renderState.interactionSnapshot
+        ) {
+            return hover
+        }
+
+        // Idle snapshots deliberately omit formatted targets. Cartesian charts
+        // can resolve directly from their points, but radial and region-based
+        // charts need a targeted snapshot before the very first callback.
+        guard let currentSnapshot = renderState.interactionSnapshot,
+              currentSnapshot.targets.isEmpty,
+              currentSnapshot.behavior == LivelineHoverBehavior.none,
+              let snapshot = targetedInteractionSnapshot(
+                configuration: configuration,
+                targetLocation: location
+              )
+        else {
+            return nil
+        }
+        renderState.interactionSnapshot = snapshot
+        return LivelineHoverResolver.resolve(location: location, snapshot: snapshot)
+    }
+
+    func targetedInteractionSnapshot(
+        configuration: LivelineChartConfiguration,
+        targetLocation: CGPoint?
+    ) -> LivelineInteractionSnapshot? {
+        guard let current = renderState.interactionSnapshot,
+              current.isEnabled else {
+            return nil
+        }
+        let prepared = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: hiddenSeries,
+            leftEdge: current.layout.leftEdge,
+            rightEdge: current.layout.rightEdge,
+            config: configuration
+        )
+        return LivelineInteractionBuilder.snapshot(
+            content: content,
+            prepared: prepared,
+            layout: current.layout,
+            palette: LivelinePalette.resolve(
+                accent: accent,
+                mode: configuration.theme,
+                lineWidth: configuration.lineWidth
             ),
-            configuration: configuration
+            configuration: configuration,
+            hiddenSeries: hiddenSeries,
+            behavior: current.behavior,
+            targetLocation: targetLocation
         )
     }
 
@@ -809,12 +1002,141 @@ private extension LivelineChart {
         configuration.onHover?(hover)
     }
 
-    func endHover(configuration: LivelineChartConfiguration, forceNotification: Bool = false) {
-        hoverLocation = nil
+    func endHover(
+        source: LivelineInteractionSource,
+        configuration: LivelineChartConfiguration
+    ) {
+        let previousLocation = interactionSessions.activeLocation
+        if let fallback = interactionSessions.end(source) {
+            reportHover(
+                resolvedHover(at: fallback, configuration: configuration),
+                configuration: configuration
+            )
+            return
+        }
+        guard previousLocation != nil || lastReportedHover != nil else { return }
+        let hadHover = lastReportedHover != nil
+        lastReportedHover = nil
+        if hadHover {
+            configuration.onHover?(nil)
+        }
+    }
+
+    func endAllHover(
+        configuration: LivelineChartConfiguration,
+        forceNotification: Bool = false
+    ) {
+        interactionSessions.clear()
         let hadHover = lastReportedHover != nil
         lastReportedHover = nil
         if hadHover || forceNotification {
             configuration.onHover?(nil)
         }
     }
+
+    #if os(tvOS)
+    func remoteMoveHandler(
+        configuration: LivelineChartConfiguration
+    ) -> ((MoveCommandDirection) -> Void)? {
+        guard remoteInspectionActive else { return nil }
+        return { direction in
+            moveRemoteSelection(direction, configuration: configuration)
+        }
+    }
+
+    func remoteExitHandler(
+        configuration: LivelineChartConfiguration
+    ) -> (() -> Void)? {
+        guard remoteInspectionActive else { return nil }
+        return {
+            endRemoteInspection(configuration: configuration)
+        }
+    }
+
+    func toggleRemoteInspection(configuration: LivelineChartConfiguration) {
+        guard configuration.scrub else { return }
+        if remoteInspectionActive {
+            endRemoteInspection(configuration: configuration)
+            return
+        }
+
+        guard let snapshot = targetedInteractionSnapshot(
+            configuration: configuration,
+            targetLocation: nil
+        ),
+        !snapshot.targets.isEmpty else {
+            return
+        }
+
+        remoteInspectionActive = true
+        selectRemoteTarget(
+            snapshot.targets.count - 1,
+            snapshot: snapshot,
+            configuration: configuration
+        )
+    }
+
+    func moveRemoteSelection(
+        _ direction: MoveCommandDirection,
+        configuration: LivelineChartConfiguration
+    ) {
+        guard configuration.scrub, remoteInspectionActive else {
+            return
+        }
+
+        let step: LivelineRemoteSelectionStep
+        switch direction {
+        case .left:
+            step = .backward
+        case .right:
+            step = .forward
+        case .up, .down:
+            endRemoteInspection(configuration: configuration)
+            return
+        @unknown default:
+            return
+        }
+
+        guard let snapshot = targetedInteractionSnapshot(
+            configuration: configuration,
+            targetLocation: nil
+        ),
+        !snapshot.targets.isEmpty else {
+            endRemoteInspection(configuration: configuration)
+            return
+        }
+
+        guard let nextIndex = LivelineRemoteSelectionPolicy.nextIndex(
+            current: remoteScrubIndex,
+            targetCount: snapshot.targets.count,
+            step: step
+        ) else {
+            return
+        }
+        selectRemoteTarget(
+            nextIndex,
+            snapshot: snapshot,
+            configuration: configuration
+        )
+    }
+
+    func selectRemoteTarget(
+        _ index: Int,
+        snapshot: LivelineInteractionSnapshot,
+        configuration: LivelineChartConfiguration
+    ) {
+        guard snapshot.targets.indices.contains(index) else { return }
+        remoteScrubIndex = index
+        renderState.interactionSnapshot = snapshot
+        let selection = snapshot.targets[index].selection
+        interactionSessions.update(selection.anchor, source: .scrub)
+        reportHover(selection.hover, configuration: configuration)
+    }
+
+    func endRemoteInspection(configuration: LivelineChartConfiguration) {
+        remoteInspectionActive = false
+        remoteScrubIndex = nil
+        endHover(source: .scrub, configuration: configuration)
+    }
+    #endif
 }

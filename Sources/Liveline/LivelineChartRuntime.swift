@@ -53,6 +53,109 @@ enum LivelineSelectionReconciler {
         hidden.insert(id)
         return (hidden, false)
     }
+
+    static func canToggleSeries(
+        _ id: String,
+        hidden current: Set<String>,
+        availableIDs: [String]
+    ) -> Bool {
+        guard availableIDs.contains(id) else { return false }
+        let hidden = hiddenSeries(current: current, availableIDs: availableIDs)
+        if hidden.contains(id) { return true }
+        return availableIDs.reduce(into: 0) { count, availableID in
+            if !hidden.contains(availableID) { count += 1 }
+        } > 1
+    }
+}
+
+enum LivelineInteractionSource: Equatable {
+    case pointer
+    case scrub
+}
+
+/// Retains independent pointer and scrub locations so ending one input path
+/// cannot clear a selection that is still owned by the other.
+struct LivelineInteractionSessions: Equatable {
+    private(set) var pointerLocation: CGPoint?
+    private(set) var scrubLocation: CGPoint?
+    private(set) var activeSource: LivelineInteractionSource?
+
+    var activeLocation: CGPoint? {
+        switch activeSource {
+        case .pointer:
+            return pointerLocation
+        case .scrub:
+            return scrubLocation
+        case nil:
+            return nil
+        }
+    }
+
+    mutating func update(_ location: CGPoint, source: LivelineInteractionSource) {
+        switch source {
+        case .pointer:
+            pointerLocation = location
+        case .scrub:
+            scrubLocation = location
+        }
+        activeSource = source
+    }
+
+    @discardableResult
+    mutating func end(_ source: LivelineInteractionSource) -> CGPoint? {
+        switch source {
+        case .pointer:
+            pointerLocation = nil
+        case .scrub:
+            scrubLocation = nil
+        }
+
+        guard activeSource == source else { return activeLocation }
+        switch source {
+        case .pointer where scrubLocation != nil:
+            activeSource = .scrub
+        case .scrub where pointerLocation != nil:
+            activeSource = .pointer
+        default:
+            activeSource = nil
+        }
+        return activeLocation
+    }
+
+    mutating func clear() {
+        pointerLocation = nil
+        scrubLocation = nil
+        activeSource = nil
+    }
+}
+
+enum LivelineRemoteSelectionStep {
+    case backward
+    case forward
+}
+
+/// Keeps tvOS inspection traversal deterministic and independently testable
+/// from SwiftUI's focus engine.
+enum LivelineRemoteSelectionPolicy {
+    static func nextIndex(
+        current: Int?,
+        targetCount: Int,
+        step: LivelineRemoteSelectionStep
+    ) -> Int? {
+        guard targetCount > 0 else { return nil }
+        let lastIndex = targetCount - 1
+        let currentIndex = min(max(current ?? lastIndex, 0), lastIndex)
+        switch step {
+        case .backward:
+            return max(currentIndex - 1, 0)
+        case .forward:
+            return min(currentIndex + 1, lastIndex)
+        }
+    }
+}
+
+enum LivelineControlMetrics {
+    static let minimumHitDimension: CGFloat = 44
 }
 
 /// Recognition policy for the iOS scrub pan. UIKit applies its own movement
@@ -254,6 +357,12 @@ enum LivelineHoverResolver {
             let radius = hypot(dx, dy)
             guard radius >= innerRadius, radius <= outerRadius else { return false }
             let fullTurn = 2 * Double.pi
+            // A complete ring has equivalent normalized start/end angles. Test
+            // the original span first so a one-segment donut remains hittable
+            // around its entire circumference instead of only on one ray.
+            if abs(endAngle - startAngle) >= fullTurn - 0.000_001 {
+                return true
+            }
             var angle = atan2(Double(dy), Double(dx)).truncatingRemainder(dividingBy: fullTurn)
             if angle < 0 { angle += fullTurn }
             var start = startAngle.truncatingRemainder(dividingBy: fullTurn)

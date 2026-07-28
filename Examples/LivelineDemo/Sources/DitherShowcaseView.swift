@@ -2,58 +2,69 @@ import Liveline
 import SwiftUI
 
 struct DitherShowcaseView: View {
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+
     private let linePoints = StorybookData.points(.normal, count: 140)
 
     var body: some View {
         ZStack {
             StorybookData.darkBackground.ignoresSafeArea()
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("DITHER / LIVELINE")
-                        .font(.system(size: 22, weight: .bold, design: .monospaced))
-                        .foregroundStyle(.white)
-                    Text("One animated style · every native chart")
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
-                        .foregroundStyle(.white.opacity(0.52))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("DITHER / LIVELINE")
+                            .font(.system(size: 22, weight: .bold, design: .monospaced))
+                            .foregroundStyle(.white)
+                        Text("One animated style · every native chart")
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.52))
+                    }
+
+                    LazyVGrid(
+                        columns: [
+                            GridItem(.adaptive(minimum: 250, maximum: 520), spacing: 10),
+                        ],
+                        spacing: 10
+                    ) {
+                        panel("LINE · GRADIENT", id: "line") {
+                            LivelineChart(
+                                data: linePoints,
+                                value: linePoints.last?.value ?? 0,
+                                color: StorybookData.blue,
+                                configuration: config(variant: .gradient, bloom: .aura, window: 100)
+                            )
+                        }
+
+                        panel("BAR · HATCHED", id: "bar") {
+                            LivelineChart(
+                                bars: StorybookData.bars(signed: false),
+                                color: StorybookData.violet,
+                                configuration: config(variant: .hatched, bloom: .high, window: 180)
+                            )
+                        }
+
+                        panel("DONUT · DOTTED", id: "donut") {
+                            LivelineChart(
+                                donut: StorybookData.categories,
+                                color: StorybookData.orange,
+                                style: LivelineDonutStyle(showsLabels: false),
+                                configuration: config(variant: .dotted, bloom: .low, window: 30)
+                            )
+                        }
+
+                        panel("RADAR · GRADIENT", id: "radar") {
+                            LivelineChart(
+                                radar: StorybookData.radar,
+                                color: StorybookData.cyan,
+                                configuration: config(variant: .gradient, bloom: .aura, window: 30)
+                            )
+                        }
+                    }
                 }
-
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    panel("LINE · GRADIENT") {
-                        LivelineChart(
-                            data: linePoints,
-                            value: linePoints.last?.value ?? 0,
-                            color: StorybookData.blue,
-                            configuration: config(variant: .gradient, bloom: .aura, window: 100)
-                        )
-                    }
-
-                    panel("BAR · HATCHED") {
-                        LivelineChart(
-                            bars: StorybookData.bars(signed: false),
-                            color: StorybookData.violet,
-                            configuration: config(variant: .hatched, bloom: .high, window: 180)
-                        )
-                    }
-
-                    panel("DONUT · DOTTED") {
-                        LivelineChart(
-                            donut: StorybookData.categories,
-                            color: StorybookData.orange,
-                            style: LivelineDonutStyle(showsLabels: false),
-                            configuration: config(variant: .dotted, bloom: .low, window: 30)
-                        )
-                    }
-
-                    panel("RADAR · GRADIENT") {
-                        LivelineChart(
-                            radar: StorybookData.radar,
-                            color: StorybookData.cyan,
-                            configuration: config(variant: .gradient, bloom: .aura, window: 30)
-                        )
-                    }
-                }
+                .padding(16)
             }
-            .padding(16)
+            .scrollIndicators(.hidden)
+            .accessibilityIdentifier("dither-showcase-scroll")
         }
         .preferredColorScheme(.dark)
     }
@@ -87,14 +98,16 @@ struct DitherShowcaseView: View {
 
     private func panel<Content: View>(
         _ title: String,
+        id: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(title)
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .foregroundStyle(.white.opacity(0.54))
+                .accessibilityIdentifier("dither-panel-title-\(id)")
             content()
-                .frame(height: 196)
+                .frame(height: verticalSizeClass == .compact ? 140 : 196)
         }
         .padding(9)
         .background(Color.white.opacity(0.035))

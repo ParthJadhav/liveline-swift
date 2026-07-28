@@ -279,7 +279,7 @@ LivelineChart(funnel: stages, style: LivelineFunnelStyle(showsValues: true))
 - Smooth live value interpolation and range easing
 - Monotone cubic line paths to avoid overshoot
 - Time-window controls
-- Drag scrubbing with tooltips, plus opt-in tooltips on cursor hover
+- Drag scrubbing with tooltips, opt-in cursor hover, and focus-based tvOS inspection
 - Live value badge and pulse dot
 - Momentum coloring and arrows
 - Optional particle burst and shake effects
@@ -303,6 +303,10 @@ LivelineChart(funnel: stages, style: LivelineFunnelStyle(showsValues: true))
 - Donut charts with configurable ring thickness, gaps, palettes, and labels
 - Radial gauges with custom sweeps, tracks, ticks, targets, and value labels
 - Funnel charts with configurable widths, spacing, palettes, labels, and values
+
+On tvOS, focus a chart and press Select to enter inspection, then move left or
+right through its values. Press Select, Up, Down, or Menu to leave inspection
+and resume normal focus navigation.
 - Reference line and orderbook stream labels
 
 ## Example App

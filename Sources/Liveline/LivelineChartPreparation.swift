@@ -274,7 +274,7 @@ enum LivelineChartPreparer {
             )
 
         case let .donut(data, _):
-            let total = data.map(\.value).reduce(0, +)
+            let total = data.filter { $0.value > 0 }.map(\.value).reduce(0, +)
             return LivelinePreparedChart(
                 primaryVisible: [],
                 rangePoints: total > 0 ? [LivelinePoint(time: 0, value: total)] : [],
@@ -304,43 +304,64 @@ enum LivelineChartPreparer {
             )
 
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
-            let visible = (lineData.isEmpty ? data : lineData).livelineVisible(in: (leftEdge - 2)...rightEdge)
+            let visibleRange = (leftEdge - 2)...rightEdge
+            let lineSource = lineData.isEmpty ? data : lineData
+            let visible = lineSource.livelineVisible(in: visibleRange)
             var range = visible
-            for candle in candles.livelineVisible(in: (leftEdge - 2)...rightEdge, candleWidth: candleWidth) {
+            for candle in candles.livelineVisible(in: visibleRange, candleWidth: candleWidth) {
                 range.append(LivelinePoint(time: candle.time, value: candle.high))
                 range.append(LivelinePoint(time: candle.time, value: candle.low))
             }
-            if range.isEmpty {
-                range = (lineData.isEmpty ? data : lineData).livelineSuffix(8)
-            }
-            if let liveCandle {
+
+            let liveCandleIsVisible = liveCandle.map {
+                $0.time + candleWidth >= visibleRange.lowerBound
+                    && $0.time <= visibleRange.upperBound
+            } ?? false
+            if let liveCandle, liveCandleIsVisible {
                 range.append(LivelinePoint(time: liveCandle.time, value: liveCandle.high))
                 range.append(LivelinePoint(time: liveCandle.time, value: liveCandle.low))
-            } else if let last = candles.last {
-                range.append(LivelinePoint(time: last.time, value: last.high))
-                range.append(LivelinePoint(time: last.time, value: last.low))
+            }
+
+            let usesFallbackRange = range.isEmpty
+            if usesFallbackRange {
+                range = lineSource.livelineSuffix(8)
+                if let fallback = liveCandle ?? candles.last {
+                    range.append(LivelinePoint(time: fallback.time, value: fallback.high))
+                    range.append(LivelinePoint(time: fallback.time, value: fallback.low))
+                }
             }
             return LivelinePreparedChart(
                 primaryVisible: visible,
                 rangePoints: range,
                 rangeOverride: nil,
-                primaryValue: lineValue ?? liveCandle?.close ?? value
+                primaryValue: lineValue
+                    ?? ((liveCandleIsVisible || usesFallbackRange) ? liveCandle?.close : nil)
+                    ?? value
             )
 
         case let .series(series):
             let visibleSeries = series.filter { !hiddenSeries.contains($0.id) }
-            let visiblePoints = visibleSeries.flatMap { $0.data.livelineVisible(in: (leftEdge - 2)...rightEdge) }
-            let fallback = visibleSeries.flatMap { $0.data.livelineSuffix(8) }
-            let firstSeries = visibleSeries.first ?? series.first
-            let primaryVisible = firstSeries?.data.livelineVisible(in: (leftEdge - 2)...rightEdge) ?? []
+            let visibleRange = (leftEdge - 2)...rightEdge
+            let renderableSlices = LivelineSeriesSelector.visibleSlices(
+                series: visibleSeries,
+                hiddenSeries: [],
+                visibleRange: visibleRange
+            )
+            let globallyRenderableSeries = visibleSeries.filter(\.livelineIsRenderable)
+            let visiblePoints = renderableSlices.flatMap { $0.points }
+            let fallback = globallyRenderableSeries.flatMap { $0.data.livelineSuffix(8) }
+            let firstSeries = renderableSlices.first?.series
+                ?? globallyRenderableSeries.first
+                ?? visibleSeries.first
+                ?? series.first(where: \.livelineIsRenderable)
+                ?? series.first
+            let primaryVisible = renderableSlices.first?.points ?? []
             var lower = Double.infinity
             var upper = -Double.infinity
-            for entry in visibleSeries {
-                let visible = entry.data.livelineVisible(in: (leftEdge - 2)...rightEdge)
-                guard visible.count >= 2 else { continue }
+            for slice in renderableSlices {
                 let range = LivelineMath.computeRange(
-                    points: visible,
-                    currentValue: entry.value,
+                    points: slice.points,
+                    currentValue: slice.series.value,
                     referenceValue: config.referenceLine?.value,
                     exaggerate: config.exaggerate
                 )

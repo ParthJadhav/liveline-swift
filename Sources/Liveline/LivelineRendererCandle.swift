@@ -25,7 +25,7 @@ extension LivelineRenderer {
     ) -> LivelineCandleOverlay {
         let pausedDeltaTime = deltaTime * (1 - state.pauseProgress)
         let lineModeTarget = config.lineMode ? 1.0 : 0.0
-        state.candleLineModeProgress = state.timedProgress(
+        state.candleLineModeProgress = state.transitionProgress(
             current: state.candleLineModeProgress,
             target: lineModeTarget,
             duration: candleLineMorphDuration,
@@ -47,7 +47,7 @@ extension LivelineRenderer {
 
         let hasTickData = !lineData.isEmpty
         let densityTarget = config.lineMode && lineModeProgress >= 0.30 && hasTickData ? 1.0 : 0.0
-        state.candleLineDensityProgress = state.timedProgress(
+        state.candleLineDensityProgress = state.transitionProgress(
             current: state.candleLineDensityProgress,
             target: densityTarget,
             duration: candleLineDensityDuration,
@@ -242,6 +242,13 @@ extension LivelineRenderer {
             return nil
         }
 
+        if state.settlesTransitionsImmediately {
+            state.candleDisplayLive = liveCandle
+            state.candleLiveBirthAlpha = 1
+            state.candleLiveBullBlend = liveCandle.close >= liveCandle.open ? 1 : 0
+            return liveCandle
+        }
+
         if state.candleDisplayLive?.time != liveCandle.time {
             state.candleDisplayLive = LivelineCandle(
                 time: liveCandle.time,
@@ -281,6 +288,13 @@ extension LivelineRenderer {
         displayMax: Double,
         deltaTime: TimeInterval
     ) {
+        if state.settlesTransitionsImmediately {
+            state.candleCloseLineSmooth = liveCandle?.close
+            state.candleLineSmoothClose = liveCandle?.close
+            state.candleLineTickSmooth = hasTickData ? lineValue : nil
+            return
+        }
+
         let range = max(0.001, displayMax - displayMin)
 
         if let liveCandle {

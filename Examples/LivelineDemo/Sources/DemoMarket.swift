@@ -10,11 +10,13 @@ final class DemoMarket: ObservableObject {
     @Published var liveCandle: LivelineCandle
     @Published var spread: [LivelineSeries]
     @Published var orderbook: LivelineOrderbookData
+    @Published private(set) var updateCount = 0
 
     private var timer: Timer?
     private let candleWidth: TimeInterval = 30
     private var startTime: TimeInterval
     private var phase = 0.0
+    private var timerGeneration: UInt = 0
 
     init() {
         let now = Date().timeIntervalSince1970
@@ -39,20 +41,33 @@ final class DemoMarket: ObservableObject {
     }
 
     func start() {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.55, repeats: true) { [weak self] _ in
+        guard timer == nil else { return }
+        timerGeneration &+= 1
+        let generation = timerGeneration
+        let timer = Timer(timeInterval: 0.55, repeats: true) { [weak self] _ in
             Task { @MainActor in
-                self?.tick()
+                guard let self,
+                      self.timer != nil,
+                      self.timerGeneration == generation
+                else {
+                    return
+                }
+                self.tick()
             }
         }
+        self.timer = timer
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     func stop() {
-        timer?.invalidate()
-        timer = nil
+        guard let timer else { return }
+        timerGeneration &+= 1
+        timer.invalidate()
+        self.timer = nil
     }
 
     private func tick() {
+        updateCount += 1
         phase += 0.34
         let now = Date().timeIntervalSince1970
         let impulse = sin(phase) * 14 + cos(phase * 0.37) * 8 + Double.random(in: -8...8)
@@ -129,5 +144,38 @@ final class DemoMarket: ObservableObject {
             LivelineOrderbookLevel(price: mid + Double(index + 1) * 4, size: Double.random(in: 0.5...18))
         }
         return LivelineOrderbookData(bids: bids, asks: asks)
+    }
+}
+
+/// A focused fixture that lets UI tests prove the demo clock keeps firing while
+/// UIScrollView has the main run loop in tracking mode.
+struct DemoMarketTimerTestView: View {
+    @StateObject private var market = DemoMarket()
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    ForEach(0..<8) { index in
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(index.isMultiple(of: 2) ? Color.blue.opacity(0.16) : Color.orange.opacity(0.16))
+                            .frame(height: 180)
+                    }
+                }
+                .padding(16)
+            }
+            .accessibilityIdentifier("live-market-test-scroll")
+
+            Text(String(market.updateCount))
+                .font(.caption.monospacedDigit())
+                .padding(8)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(8)
+                .accessibilityIdentifier("live-market-update-count")
+                .allowsHitTesting(false)
+        }
+        .background(Color(uiColor: .systemBackground))
+        .onAppear { market.start() }
+        .onDisappear { market.stop() }
     }
 }

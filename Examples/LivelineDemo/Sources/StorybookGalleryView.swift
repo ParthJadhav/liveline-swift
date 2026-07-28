@@ -2,25 +2,24 @@
 import SwiftUI
 
 struct StorybookGalleryView: View {
+    private static let legacyScrollCoordinateSpace = "storybook-gallery-scroll"
+
     @State private var showsDitherExamples = false
     @State private var isScrolling = false
+    @State private var legacyScrollOffset: CGFloat?
+    @State private var scrollIdleTask: Task<Void, Never>?
+    @State private var scrollPauseCount = 0
+
+    var showsScrollDiagnostics = false
 
     var body: some View {
         NavigationStack {
-            galleryScroll
+            VStack(spacing: 0) {
+                ditherControls
+                galleryScroll
+            }
             .navigationTitle("Storybook")
             .navigationBarTitleDisplayMode(.inline)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                Toggle(isOn: $showsDitherExamples) {
-                    Label("Dither style", systemImage: "sparkles")
-                        .font(.subheadline.weight(.medium))
-                }
-                .toggleStyle(.switch)
-                .padding(.horizontal, 16)
-                .frame(height: 44)
-                .background(.thinMaterial)
-                .accessibilityIdentifier("storybook-dither-toggle")
-            }
         }
         .livelineChartStyle(
             showsDitherExamples
@@ -33,18 +32,69 @@ struct StorybookGalleryView: View {
                 : nil
         )
         .animation(.easeInOut(duration: 0.2), value: showsDitherExamples)
+        .overlay(alignment: .topTrailing) {
+            if showsScrollDiagnostics {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(String(scrollPauseCount))
+                        .accessibilityIdentifier("storybook-scroll-pause-count")
+                    Text(isScrolling ? "true" : "false")
+                        .accessibilityIdentifier("storybook-scroll-active")
+                    Text(showsDitherExamples && !isScrolling ? "true" : "false")
+                        .accessibilityIdentifier("storybook-dither-animated")
+                }
+                .font(.caption2.monospacedDigit())
+                .padding(8)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(8)
+                .allowsHitTesting(false)
+            }
+        }
+        .onDisappear {
+            scrollIdleTask?.cancel()
+            scrollIdleTask = nil
+            legacyScrollOffset = nil
+            setScrolling(false)
+        }
+    }
+
+    private var ditherControls: some View {
+        HStack {
+            Label("Dither style", systemImage: "sparkles")
+                .font(.subheadline.weight(.medium))
+                .accessibilityHidden(true)
+
+            Spacer()
+
+            Toggle("Dither style", isOn: $showsDitherExamples)
+                .labelsHidden()
+                .accessibilityLabel("Dither style")
+                .accessibilityIdentifier("storybook-dither-toggle")
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 44)
+        .background(.thinMaterial)
     }
 
     @ViewBuilder
     private var galleryScroll: some View {
+        #if compiler(>=6.0)
         if #available(iOS 18.0, *) {
             scrollContent
                 .onScrollPhaseChange { _, phase in
-                    isScrolling = phase.isScrolling
+                    setScrolling(phase.isScrolling)
                 }
         } else {
             scrollContent
+                .onPreferenceChange(StorybookScrollOffsetPreferenceKey.self) { offset in
+                    legacyScrollOffsetDidChange(offset)
+                }
         }
+        #else
+        scrollContent
+            .onPreferenceChange(StorybookScrollOffsetPreferenceKey.self) { offset in
+                legacyScrollOffsetDidChange(offset)
+            }
+        #endif
     }
 
     private var scrollContent: some View {
@@ -68,7 +118,49 @@ struct StorybookGalleryView: View {
                 }
             }
             .padding(.vertical, 16)
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: StorybookScrollOffsetPreferenceKey.self,
+                        value: proxy.frame(in: .named(Self.legacyScrollCoordinateSpace)).minY
+                    )
+                }
+            }
         }
+        .coordinateSpace(name: Self.legacyScrollCoordinateSpace)
+        .accessibilityIdentifier("storybook-scroll")
+    }
+
+    private func legacyScrollOffsetDidChange(_ offset: CGFloat) {
+        guard let previousOffset = legacyScrollOffset else {
+            legacyScrollOffset = offset
+            return
+        }
+        guard abs(offset - previousOffset) > 0.5 else { return }
+
+        legacyScrollOffset = offset
+        setScrolling(true)
+        scrollIdleTask?.cancel()
+        scrollIdleTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            guard !Task.isCancelled else { return }
+            setScrolling(false)
+        }
+    }
+
+    private func setScrolling(_ value: Bool) {
+        if value, !isScrolling {
+            scrollPauseCount += 1
+        }
+        isScrolling = value
+    }
+}
+
+private struct StorybookScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
@@ -144,6 +236,9 @@ struct StorybookScenarioScreen: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     .background(Color(uiColor: .systemBackground))
             }
+        }
+        .onAppear {
+            StorybookLaunch.recordScenarioReady(scenario.id)
         }
     }
 

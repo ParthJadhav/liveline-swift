@@ -110,6 +110,10 @@ public struct LivelineChartViewport {
 }
 
 public struct LivelineChartInteraction {
+    /// Enables direct data inspection. Touch and pointer platforms scrub the
+    /// chart spatially. On tvOS, focus the chart and press Select to enter an
+    /// inspection mode, move left or right between values, then press Select,
+    /// Up, Down, or Menu to return to normal focus navigation.
     public var scrub: Bool
     /// Shows the tooltip when a cursor merely rests over the chart, without a
     /// press or drag.

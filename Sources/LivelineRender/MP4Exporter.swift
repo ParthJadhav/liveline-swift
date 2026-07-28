@@ -91,7 +91,7 @@ final class MP4Exporter {
         guard writer.startWriting() else { throw writerError(writer, fallback: "Could not start the MP4 writer") }
         writer.startSession(atSourceTime: .zero)
 
-        let frameCount = max(1, Int((options.duration * Double(options.fps)).rounded()))
+        let frameCount = options.frameCount
         for frameIndex in 0..<frameCount {
             try autoreleasepool {
                 let elapsed = Double(frameIndex) / Double(options.fps)
@@ -114,6 +114,8 @@ final class MP4Exporter {
             }
         }
 
+        let renderedDuration = CMTime(value: CMTimeValue(frameCount), timescale: CMTimeScale(options.fps))
+        writer.endSession(atSourceTime: renderedDuration)
         input.markAsFinished()
         let semaphore = DispatchSemaphore(value: 0)
         writer.finishWriting { semaphore.signal() }

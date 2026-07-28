@@ -371,6 +371,81 @@ final class LivelineRendererSmokeTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testReducedMotionSettlesCompleteCandlePresentationThroughRendererInput() throws {
+        let points = [
+            LivelinePoint(time: 1, value: 10),
+            LivelinePoint(time: 2, value: 14),
+        ]
+        let live = LivelineCandle(time: 2, open: 10, high: 16, low: 9, close: 14)
+        let content = LivelineChartContent.candle(
+            data: points,
+            value: 14,
+            candles: [],
+            candleWidth: 1,
+            liveCandle: live,
+            lineData: points,
+            lineValue: 14
+        )
+        var configuration = self.configuration
+        configuration.lineMode = true
+        configuration.grid = false
+        configuration.paused = false
+
+        func render(
+            state: LivelineRenderState,
+            settlesImmediately: Bool
+        ) throws {
+            let renderer = ImageRenderer(
+                content: Canvas { context, size in
+                    var context = context
+                    LivelineRenderer.draw(
+                        context: &context,
+                        state: state,
+                        input: LivelineRenderInput(
+                            content: content,
+                            semantics: content.semantics(),
+                            accent: .blue,
+                            configuration: configuration,
+                            motion: LivelineMotionPolicy(
+                                isPaused: false,
+                                requiresTimeline: !settlesImmediately,
+                                settlesImmediately: settlesImmediately,
+                                minimumInterval: 1 / 60
+                            ),
+                            activeWindow: 10,
+                            hiddenSeries: [],
+                            hoverLocation: nil,
+                            timestamp: 1_000,
+                            size: size
+                        )
+                    )
+                }
+                .frame(width: 320, height: 220)
+            )
+            renderer.proposedSize = ProposedViewSize(width: 320, height: 220)
+            _ = try XCTUnwrap(renderer.nsImage)
+        }
+
+        let reducedState = LivelineRenderState()
+        try render(state: reducedState, settlesImmediately: true)
+        XCTAssertEqual(reducedState.candleLineModeProgress, 1)
+        XCTAssertEqual(reducedState.candleLineDensityProgress, 1)
+        XCTAssertEqual(reducedState.candleDisplayLive?.high, live.high)
+        XCTAssertEqual(reducedState.candleDisplayLive?.low, live.low)
+        XCTAssertEqual(reducedState.candleDisplayLive?.close, live.close)
+        XCTAssertEqual(reducedState.candleLiveBirthAlpha, 1)
+        XCTAssertEqual(reducedState.candleLineSmoothClose, live.close)
+        XCTAssertEqual(reducedState.candleLineTickSmooth, 14)
+
+        let animatedState = LivelineRenderState()
+        try render(state: animatedState, settlesImmediately: false)
+        XCTAssertLessThan(animatedState.candleLineModeProgress, 1)
+        XCTAssertLessThan(animatedState.candleLineDensityProgress, 1)
+        XCTAssertEqual(animatedState.candleDisplayLive?.close, live.open)
+        XCTAssertLessThan(animatedState.candleLiveBirthAlpha, 1)
+    }
+
     private var configuration: LivelineChartConfiguration {
         LivelineChartConfiguration(
             window: 10,

@@ -43,6 +43,7 @@ final class LivelineRenderState: ObservableObject {
     var candleLineModeTransition: TimedTransition?
     var candleLineDensityProgress: Double = 0
     var candleLineDensityTransition: TimedTransition?
+    var settlesTransitionsImmediately = false
     var ditherGeometryCache: LivelineDitherGeometry?
     var ditherGeometryBuildCount = 0
 
@@ -181,6 +182,26 @@ final class LivelineRenderState: ObservableObject {
         transition.lastValue = transition.from + (transition.target - transition.from) * eased
         self[keyPath: keyPath] = transition
         return transition.lastValue
+    }
+
+    func transitionProgress(
+        current: Double,
+        target: Double,
+        duration: TimeInterval,
+        timestamp: TimeInterval,
+        transition keyPath: ReferenceWritableKeyPath<LivelineRenderState, TimedTransition?>
+    ) -> Double {
+        guard !settlesTransitionsImmediately else {
+            self[keyPath: keyPath] = nil
+            return target
+        }
+        return timedProgress(
+            current: current,
+            target: target,
+            duration: duration,
+            timestamp: timestamp,
+            transition: keyPath
+        )
     }
 }
 

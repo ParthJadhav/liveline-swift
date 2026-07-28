@@ -24,6 +24,14 @@ jobs:
       - name: Validate generated project metadata
         run: python3 scripts/storybook_manifest.py validate
 
+      - name: Validate Storybook capture scenario overrides
+        run: |
+          STORYBOOK_SCENARIOS="line-basic-dark" scripts/capture-storybook.sh --validate-only
+          if STORYBOOK_SCENARIOS="does-not-exist" scripts/capture-storybook.sh --validate-only; then
+            echo "capture-storybook.sh accepted an unknown scenario ID" >&2
+            exit 1
+          fi
+
       - name: Test package
         run: swift test
 
@@ -75,3 +83,150 @@ jobs:
 
       - name: Build demo app
         run: xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
+
+  ios-demo-ui-tests:
+    name: iOS Demo UI (${{ matrix.label }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: iOS 17.5
+            artifact: ios-17
+            runner: macos-14
+            xcode: "15.4"
+            runtime_major: "17"
+          - label: Current
+            artifact: current
+            runner: macos-latest
+            xcode: latest-stable
+            runtime_major: latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode ${{ matrix.xcode }}
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ matrix.xcode }}
+
+      - name: Show toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Install pinned XcodeGen
+        run: |
+          scripts/install-xcodegen.sh "$RUNNER_TEMP/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Generate demo project
+        run: xcodegen generate
+        working-directory: Examples/LivelineDemo
+
+      - name: Run demo UI tests on available iOS simulators
+        timeout-minutes: 25
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ARTIFACT_DIR="$RUNNER_TEMP/liveline-demo-ui-tests"
+          mkdir -p "$ARTIFACT_DIR"
+          xcrun simctl list devices available -j > "$ARTIFACT_DIR/devices.json"
+
+          python3 - \
+            "$ARTIFACT_DIR/devices.json" \
+            "$ARTIFACT_DIR/destination.txt" \
+            "${{ matrix.runtime_major }}" <<'PY'
+          import json
+          import pathlib
+          import re
+          import sys
+
+          source = pathlib.Path(sys.argv[1])
+          destination = pathlib.Path(sys.argv[2])
+          requested_major = sys.argv[3]
+          payload = json.loads(source.read_text())
+          candidates = []
+          for runtime_id, devices in payload.get("devices", {}).items():
+              match = re.search(r"SimRuntime\.iOS-(\d+)(?:-(\d+))?", runtime_id)
+              if not match:
+                  continue
+              version = (int(match.group(1)), int(match.group(2) or 0))
+              for device in devices:
+                  if device.get("isAvailable", True) and device.get("name", "").startswith("iPhone"):
+                      candidates.append({
+                          "version": version,
+                          "name": device["name"],
+                          "udid": device["udid"],
+                          "runtime": runtime_id,
+                      })
+
+          if requested_major != "latest":
+              candidates = [
+                  candidate
+                  for candidate in candidates
+                  if candidate["version"][0] == int(requested_major)
+              ]
+
+          if not candidates:
+              raise SystemExit(
+                  f"No available iPhone simulator was found for runtime {requested_major}"
+              )
+
+          def device_score(candidate):
+              name = candidate["name"]
+              preferred_phone = 2 if "Pro" in name and "Max" not in name else 1
+              return candidate["version"], preferred_phone, name
+
+          selected = max(candidates, key=device_score)
+          destination.write_text(
+              f"{selected['udid']}|{selected['runtime']}|{selected['name']}\n"
+          )
+          PY
+
+          IFS='|' read -r device_id runtime_id device_name < "$ARTIFACT_DIR/destination.txt"
+          echo "Running LivelineDemoUITests on $device_name ($runtime_id)"
+          if ! xcrun simctl list devices booted | grep -Fq "$device_id"; then
+            xcrun simctl boot "$device_id"
+          fi
+          xcrun simctl bootstatus "$device_id" -b
+
+          result_bundle="$ARTIFACT_DIR/${{ matrix.artifact }}.xcresult"
+          test_log="$ARTIFACT_DIR/${{ matrix.artifact }}.log"
+          derived_data="$RUNNER_TEMP/LivelineDemoUITestDerivedData-${{ matrix.artifact }}"
+
+          set +e
+          set -o pipefail
+          xcodebuild test \
+            -project Examples/LivelineDemo/LivelineDemo.xcodeproj \
+            -scheme LivelineDemo \
+            -destination "platform=iOS Simulator,id=$device_id" \
+            -derivedDataPath "$derived_data" \
+            -resultBundlePath "$result_bundle" \
+            -enableCodeCoverage NO \
+            -parallel-testing-enabled NO \
+            -only-testing:LivelineDemoUITests \
+            2>&1 | tee "$test_log"
+          test_status=${PIPESTATUS[0]}
+          set -e
+
+          if [[ $test_status -ne 0 ]]; then
+            xcrun simctl io "$device_id" screenshot \
+              "$ARTIFACT_DIR/${{ matrix.artifact }}-failure.png" || true
+            xcrun simctl spawn "$device_id" log show \
+              --last 5m \
+              --style compact \
+              --predicate 'process == "LivelineDemo" OR process == "LivelineDemoUITests-Runner"' \
+              > "$ARTIFACT_DIR/${{ matrix.artifact }}-simulator.log" 2>&1 || true
+            exit "$test_status"
+          fi
+
+      - name: Upload demo UI-test diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: liveline-demo-ui-tests-${{ matrix.artifact }}
+          path: ${{ runner.temp }}/liveline-demo-ui-tests
+          if-no-files-found: warn
+          retention-days: 7

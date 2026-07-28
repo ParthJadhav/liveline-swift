@@ -323,7 +323,7 @@ Important options:
 | `fadeEffects` | `false` | Enables renderer-driven chart reveals, line edge masks, scrub dimming, axis label, series, and tooltip fade transitions. Disabled by default so charts render at full opacity immediately. |
 | `momentum` | `nil` | Use `.up`, `.down`, or `.flat` to override auto detection. |
 | `autoDetectMomentum` | `true` | Uses recent velocity to color momentum affordances. |
-| `scrub` | `true` | Enables drag scrubbing and tooltips. |
+| `scrub` | `true` | Enables direct data inspection. Touch and pointer platforms use drag scrubbing. On tvOS, focus the chart, press Select, and move left or right; press Select, Up, Down, or Menu to return to normal focus navigation. |
 | `showsTooltipOnHover` | `false` | Shows the tooltip when a cursor rests over the chart, with no press or drag. Honored on macOS, on iPadOS with a trackpad, mouse, or Apple Pencil hover, and on visionOS; ignored on tvOS and watchOS, which have no cursor. Works independently of `scrub`, so a chart can be hover-only. |
 | `tooltipY` | `14` | Adjusts structured tooltip placement vertically; values above or below the default shift the adaptive placement within the plot bounds. |
 | `exaggerate` | `false` | Uses a tighter Y range for small moves. |

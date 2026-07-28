@@ -29,6 +29,7 @@ struct StackedChartGestureTestView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
+                .stackedChartLegacyScrollMetrics()
             }
             .accessibilityIdentifier("stacked-chart-scroll")
             .modifier(StackedChartScrollObserver { offset in
@@ -129,14 +130,58 @@ private struct StackedChartScrollObserver: ViewModifier {
 
     @ViewBuilder
     func body(content: Content) -> some View {
+        #if compiler(>=6.0)
         if #available(iOS 18.0, *) {
             content.onScrollGeometryChange(for: CGFloat.self) { geometry in
                 geometry.contentOffset.y + geometry.contentInsets.top
             } action: { _, offset in
-                onChange(offset)
+                onChange(max(0, offset))
             }
         } else {
             content
+                .coordinateSpace(name: StackedChartScrollMetrics.coordinateSpace)
+                .onPreferenceChange(StackedChartScrollOffsetPreferenceKey.self) { contentY in
+                    onChange(max(0, -contentY))
+                }
+        }
+        #else
+        content
+            .coordinateSpace(name: StackedChartScrollMetrics.coordinateSpace)
+            .onPreferenceChange(StackedChartScrollOffsetPreferenceKey.self) { contentY in
+                onChange(max(0, -contentY))
+            }
+        #endif
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func stackedChartLegacyScrollMetrics() -> some View {
+        if #available(iOS 18.0, *) {
+            self
+        } else {
+            background {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: StackedChartScrollOffsetPreferenceKey.self,
+                        value: proxy.frame(
+                            in: .named(StackedChartScrollMetrics.coordinateSpace)
+                        ).minY
+                    )
+                }
+            }
         }
     }
+}
+
+private struct StackedChartScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private enum StackedChartScrollMetrics {
+    static let coordinateSpace = "stacked-chart-scroll-coordinate-space"
 }

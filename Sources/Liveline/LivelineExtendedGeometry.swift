@@ -92,13 +92,15 @@ struct LivelineFunnelGeometry {
 extension LivelineRenderer {
     static func timelineGeometry(
         items: [LivelineTimelineItem],
+        totalLaneCount: Int? = nil,
         style: LivelineTimelineStyle,
         layout: LivelineLayout,
         palette: LivelinePalette,
         reveal: Double
     ) -> LivelineTimelineGeometry {
         let progress = LivelineMath.easedReveal(reveal)
-        let laneCount = max((items.map(\.lane).max() ?? 0) + 1, 1)
+        let visibleLaneCount = (items.map(\.lane).max() ?? 0) + 1
+        let laneCount = max(totalLaneCount ?? visibleLaneCount, visibleLaneCount, 1)
         let laneHeight = layout.chartHeight / CGFloat(laneCount)
         let barHeight = max(laneHeight * style.resolvedBarHeightRatio, 3)
         let marks = items.enumerated().compactMap { index, item -> LivelineTimelineMark? in
@@ -131,13 +133,15 @@ extension LivelineRenderer {
 
     static func heatmapGeometry(
         cells: [LivelineHeatmapCell],
+        totalRowCount: Int? = nil,
         style: LivelineHeatmapStyle,
         layout: LivelineLayout,
         palette: LivelinePalette,
         reveal: Double
     ) -> LivelineHeatmapGeometry {
         let progress = LivelineMath.easedReveal(reveal)
-        let rowCount = max((cells.map(\.row).max() ?? 0) + 1, style.rowLabels.count, 1)
+        let visibleRowCount = (cells.map(\.row).max() ?? 0) + 1
+        let rowCount = max(totalRowCount ?? visibleRowCount, visibleRowCount, style.rowLabels.count, 1)
         let rowHeight = layout.chartHeight / CGFloat(rowCount)
         let cellWidth = bucketWidth(
             times: Array(Set(cells.map(\.time))).sorted(),

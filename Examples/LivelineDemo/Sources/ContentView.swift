@@ -3,40 +3,54 @@ import SwiftUI
 
 struct ContentView: View {
     private let stackedGestureTests = CommandLine.arguments.contains("-stacked-gesture-tests")
+    private let liveMarketTimerTests = CommandLine.arguments.contains("-live-market-timer-tests")
+    private let storybookScrollTests = CommandLine.arguments.contains("-storybook-scroll-tests")
     private let ditherShowcase = StorybookLaunch.ditherShowcaseFromArguments()
     private let chartShowcase = StorybookLaunch.chartShowcaseFromArguments()
-    private let launchedScenario = StorybookLaunch.scenarioFromArguments()
+    private let scenarioLaunch = StorybookLaunch.scenarioLaunchFromArguments()
     private let chartOnly = StorybookLaunch.chartOnlyFromArguments()
 
     var body: some View {
         if stackedGestureTests {
             StackedChartGestureTestView()
+        } else if liveMarketTimerTests {
+            DemoMarketTimerTestView()
+        } else if storybookScrollTests {
+            StorybookGalleryView(showsScrollDiagnostics: true)
         } else if ditherShowcase {
             DitherShowcaseView()
         } else if chartShowcase {
             ChartShowcaseView()
-        } else if let launchedScenario {
-            StorybookScenarioScreen(scenario: launchedScenario, chrome: false, chartOnly: chartOnly)
         } else {
-            TabView {
-                LiveDemoView()
-                    .tabItem {
-                        Label("Live", systemImage: "chart.xyaxis.line")
-                    }
+            switch scenarioLaunch {
+            case .none:
+                TabView {
+                    LiveDemoView()
+                        .tabItem {
+                            Label("Live", systemImage: "chart.xyaxis.line")
+                        }
 
-                StorybookGalleryView()
-                    .tabItem {
-                        Label("Storybook", systemImage: "square.grid.2x2")
-                    }
+                    StorybookGalleryView()
+                        .tabItem {
+                            Label("Storybook", systemImage: "square.grid.2x2")
+                        }
+                }
+            case let .scenario(scenario):
+                StorybookScenarioScreen(scenario: scenario, chrome: false, chartOnly: chartOnly)
+            case let .invalid(message):
+                StorybookLaunchErrorView(message: message)
             }
         }
     }
 }
 
 struct LiveDemoView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var market = DemoMarket()
     @State private var lineWindow: TimeInterval = 60
     @State private var candleLineMode = false
+    @State private var isVisible = false
 
     var body: some View {
         NavigationStack {
@@ -49,12 +63,28 @@ struct LiveDemoView: View {
                 }
                 .padding(16)
             }
+            .accessibilityIdentifier("live-demo-scroll")
             .background(Color(uiColor: .systemBackground))
             .navigationTitle("Liveline")
             .navigationBarTitleDisplayMode(.inline)
         }
-        .onAppear { market.start() }
-        .onDisappear { market.stop() }
+        .onAppear {
+            isVisible = true
+            if scenePhase == .active {
+                market.start()
+            }
+        }
+        .onDisappear {
+            isVisible = false
+            market.stop()
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase == .active, isVisible {
+                market.start()
+            } else {
+                market.stop()
+            }
+        }
     }
 
     private var header: some View {
@@ -62,6 +92,8 @@ struct LiveDemoView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("$\(market.latest, specifier: "%.2f")")
                     .font(.system(size: 28, weight: .semibold, design: .monospaced))
+                    .accessibilityIdentifier("live-market-price")
+                    .accessibilityValue(Text("Update \(market.updateCount)"))
                 Text("BTC-USD")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -142,7 +174,7 @@ struct LiveDemoView: View {
             LivelineChart(
                 series: market.spread,
                 configuration: LivelineChartConfiguration(
-                    theme: .light,
+                    theme: colorScheme == .dark ? .dark : .light,
                     window: 180,
                     windows: [
                         LivelineWindowOption(label: "1m", seconds: 60),
@@ -158,6 +190,8 @@ struct LiveDemoView: View {
             .padding(.bottom, 8)
             .background(Color(uiColor: .secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .accessibilityIdentifier("live-spread-chart")
+            .accessibilityValue(Text(colorScheme == .dark ? "Dark theme" : "Light theme"))
         }
     }
 

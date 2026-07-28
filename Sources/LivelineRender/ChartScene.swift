@@ -8,8 +8,8 @@ struct ChartScene: View {
 
     var body: some View {
         chart
-            .padding(.horizontal, max(28, CGFloat(options.width) * 0.035))
-            .padding(.vertical, max(24, CGFloat(options.height) * 0.055))
+            .padding(.horizontal, outerHorizontalPadding)
+            .padding(.vertical, outerVerticalPadding)
             .frame(width: CGFloat(options.width), height: CGFloat(options.height))
             .background(options.background)
             .environment(\.colorScheme, options.theme == "light" ? .light : .dark)
@@ -34,7 +34,7 @@ struct ChartScene: View {
             lerpSpeed: 0.12,
             randomSeed: options.randomSeed,
             snapshotElapsedTime: elapsedTime,
-            padding: LivelinePadding(top: 20, right: 82, bottom: 38, left: options.chart == .heatmap ? 76 : 20)
+            padding: chartPadding
         )
         let accent = options.accent
 
@@ -185,6 +185,24 @@ struct ChartScene: View {
 
     private var baseTime: TimeInterval { 1_788_888_000 }
     private var sampleInterval: TimeInterval { 8 }
+    private var outerHorizontalPadding: CGFloat {
+        max(4, CGFloat(options.width) * 0.035)
+    }
+    private var outerVerticalPadding: CGFloat {
+        max(4, CGFloat(options.height) * 0.055)
+    }
+    private var chartPadding: LivelinePadding {
+        let width = CGFloat(options.width)
+        let height = CGFloat(options.height)
+        return LivelinePadding(
+            top: min(20, max(6, height * 0.12)),
+            right: min(82, max(12, width * 0.20)),
+            bottom: min(38, max(10, height * 0.18)),
+            left: options.chart == .heatmap
+                ? min(76, max(16, width * 0.25))
+                : min(20, max(6, width * 0.08))
+        )
+    }
     private var chartWindow: TimeInterval {
         let sampleCount: Int
         if options.chart == .heatmap {

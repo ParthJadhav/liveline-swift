@@ -226,8 +226,10 @@ extension LivelineRenderer {
             return .standard
 
         case let .timeline(data, style):
+            let visible = data.filter { $0.end >= layout.leftEdge && $0.start <= layout.rightEdge }
             let geometry = timelineGeometry(
-                items: data.filter { $0.end >= layout.leftEdge && $0.start <= layout.rightEdge },
+                items: visible,
+                totalLaneCount: max((data.map(\.lane).max() ?? 0) + 1, 1),
                 style: style,
                 layout: layout,
                 palette: palette,
@@ -244,8 +246,10 @@ extension LivelineRenderer {
             return .timeline(geometry, style)
 
         case let .heatmap(data, style):
+            let visible = data.livelineVisible(in: layout.leftEdge...layout.rightEdge)
             let geometry = heatmapGeometry(
-                cells: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                cells: visible,
+                totalRowCount: max((data.map(\.row).max() ?? 0) + 1, style.rowLabels.count, 1),
                 style: style,
                 layout: layout,
                 palette: palette,

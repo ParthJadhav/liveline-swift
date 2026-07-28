@@ -143,6 +143,94 @@ final class LivelineRuntimeTests: XCTestCase {
                 availableIDs: ["a", "b"]
             )
         )
+        XCTAssertFalse(
+            LivelineSelectionReconciler.canToggleSeries(
+                "b",
+                hidden: ["a"],
+                availableIDs: ["a", "b"]
+            )
+        )
+        XCTAssertTrue(
+            LivelineSelectionReconciler.canToggleSeries(
+                "a",
+                hidden: ["a"],
+                availableIDs: ["a", "b"]
+            )
+        )
+    }
+
+    func testPointerAndScrubSessionsEndIndependently() {
+        var sessions = LivelineInteractionSessions()
+        let pointer = CGPoint(x: 20, y: 30)
+        let scrub = CGPoint(x: 80, y: 40)
+
+        sessions.update(pointer, source: .pointer)
+        sessions.update(scrub, source: .scrub)
+        XCTAssertEqual(sessions.activeSource, .scrub)
+        XCTAssertEqual(sessions.activeLocation, scrub)
+
+        XCTAssertEqual(sessions.end(.scrub), pointer)
+        XCTAssertEqual(sessions.activeSource, .pointer)
+        XCTAssertEqual(sessions.activeLocation, pointer)
+
+        // Ending an already-inactive modality leaves the active owner intact.
+        XCTAssertEqual(sessions.end(.scrub), pointer)
+        XCTAssertEqual(sessions.end(.pointer), nil)
+        XCTAssertNil(sessions.activeSource)
+
+        sessions.update(scrub, source: .scrub)
+        sessions.update(pointer, source: .pointer)
+        XCTAssertEqual(sessions.end(.pointer), scrub)
+        XCTAssertEqual(sessions.activeSource, .scrub)
+        XCTAssertEqual(sessions.activeLocation, scrub)
+        XCTAssertEqual(sessions.end(.pointer), scrub)
+        XCTAssertNil(sessions.end(.scrub))
+    }
+
+    func testTVRemoteSelectionPolicyClampsAndHandlesEmptyData() {
+        XCTAssertNil(
+            LivelineRemoteSelectionPolicy.nextIndex(
+                current: nil,
+                targetCount: 0,
+                step: .forward
+            )
+        )
+        XCTAssertEqual(
+            LivelineRemoteSelectionPolicy.nextIndex(
+                current: nil,
+                targetCount: 4,
+                step: .forward
+            ),
+            3
+        )
+        XCTAssertEqual(
+            LivelineRemoteSelectionPolicy.nextIndex(
+                current: 3,
+                targetCount: 4,
+                step: .backward
+            ),
+            2
+        )
+        XCTAssertEqual(
+            LivelineRemoteSelectionPolicy.nextIndex(
+                current: 0,
+                targetCount: 4,
+                step: .backward
+            ),
+            0
+        )
+        XCTAssertEqual(
+            LivelineRemoteSelectionPolicy.nextIndex(
+                current: 99,
+                targetCount: 4,
+                step: .forward
+            ),
+            3
+        )
+    }
+
+    func testChartControlHitDimensionMeetsAccessibilityMinimum() {
+        XCTAssertGreaterThanOrEqual(LivelineControlMetrics.minimumHitDimension, 44)
     }
 
     func testMotionPolicyOnlySchedulesFramesWhenAVisibleEffectNeedsThem() {
@@ -684,17 +772,119 @@ final class LivelineRuntimeTests: XCTestCase {
         XCTAssertEqual(movedHover?.value ?? 0, 72.5, accuracy: 0.0001)
     }
 
-    func testDirectRegionHoverCallbackStillResolvesWithTargetedSnapshots() {
+    func testEveryDirectRegionFamilyResolvesItsFirstEventFromAnIdleSnapshot() throws {
+        let categories = [
+            LivelineCategoryValue(id: "a", label: "Alpha", value: 6),
+            LivelineCategoryValue(id: "b", label: "Beta", value: 4),
+        ]
+        let contents: [(String, LivelineChartContent)] = [
+            (
+                "timeline",
+                .timeline(
+                    data: [LivelineTimelineItem(id: "one", label: "Deploy", start: 1, end: 3, lane: 0)],
+                    style: LivelineTimelineStyle()
+                )
+            ),
+            (
+                "heatmap",
+                .heatmap(
+                    data: [LivelineHeatmapCell(time: 1, row: 0, value: 0.8)],
+                    style: LivelineHeatmapStyle(rowLabels: ["API"])
+                )
+            ),
+            (
+                "radar",
+                .radar(
+                    data: [
+                        LivelineRadarPoint(label: "A", value: 0.3),
+                        LivelineRadarPoint(label: "B", value: 0.8),
+                        LivelineRadarPoint(label: "C", value: 0.5),
+                    ],
+                    style: LivelineRadarStyle()
+                )
+            ),
+            ("donut", .donut(data: categories, style: LivelineDonutStyle())),
+            ("gauge", .gauge(value: 0.65, range: 0...1, style: LivelineGaugeStyle())),
+            ("funnel", .funnel(data: categories, style: LivelineFunnelStyle())),
+        ]
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 220),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 10,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let configuration = LivelineChartConfiguration(window: 10, scrub: true, paused: true)
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2)
+
+        for (name, content) in contents {
+            let prepared = LivelineChartPreparer.prepare(
+                for: content,
+                hiddenSeries: [],
+                leftEdge: layout.leftEdge,
+                rightEdge: layout.rightEdge,
+                config: configuration
+            )
+            let idle = LivelineInteractionBuilder.snapshot(
+                content: content,
+                prepared: prepared,
+                layout: layout,
+                palette: palette,
+                configuration: configuration,
+                hiddenSeries: [],
+                behavior: .none,
+                includeTargets: false
+            )
+            XCTAssertTrue(idle.targets.isEmpty, "\(name) idle snapshot was not lightweight")
+            XCTAssertNil(
+                LivelineHoverResolver.resolve(
+                    location: LivelineRenderer.plotCenter(layout),
+                    snapshot: idle
+                ),
+                "\(name) unexpectedly resolved without its targeted fallback"
+            )
+
+            let complete = LivelineInteractionBuilder.snapshot(
+                content: content,
+                prepared: prepared,
+                layout: layout,
+                palette: palette,
+                configuration: configuration,
+                hiddenSeries: [],
+                behavior: .none
+            )
+            let location = try XCTUnwrap(complete.targets.first, "\(name) built no target")
+                .selection.anchor
+            let targeted = LivelineInteractionBuilder.snapshot(
+                content: content,
+                prepared: prepared,
+                layout: layout,
+                palette: palette,
+                configuration: configuration,
+                hiddenSeries: [],
+                behavior: .none,
+                targetLocation: location
+            )
+            XCTAssertNotNil(
+                LivelineHoverResolver.resolve(location: location, snapshot: targeted),
+                "\(name) failed to resolve its first targeted event"
+            )
+        }
+    }
+
+    func testFullTurnSectorContainsEveryPointAroundTheRing() {
+        let center = CGPoint(x: 100, y: 100)
         let selection = LivelineTooltipSelection(
-            hover: LivelineHoverPoint(time: 0, value: 0.65, x: 120, y: 90),
-            heading: "Gauge",
-            rows: [LivelineTooltipRow(label: "Value", value: "65%", color: .blue)],
-            anchor: CGPoint(x: 120, y: 90)
+            hover: LivelineHoverPoint(time: 0, value: 1, x: 100, y: 40),
+            heading: "Only segment",
+            rows: [],
+            anchor: CGPoint(x: 100, y: 40)
         )
         let snapshot = LivelineInteractionSnapshot(
             layout: LivelineLayout(
-                size: CGSize(width: 240, height: 180),
-                padding: LivelineResolvedPadding(top: 10, right: 10, bottom: 10, left: 10),
+                size: CGSize(width: 200, height: 200),
+                padding: LivelineResolvedPadding(top: 0, right: 0, bottom: 0, left: 0),
                 minValue: 0,
                 maxValue: 1,
                 leftEdge: 0,
@@ -703,12 +893,141 @@ final class LivelineRuntimeTests: XCTestCase {
             points: [],
             behavior: .none,
             isEnabled: true,
-            targets: [LivelineInteractionTarget(selection: selection, region: .circle(center: selection.anchor, radius: 20))]
+            targets: [
+                LivelineInteractionTarget(
+                    selection: selection,
+                    region: .sector(
+                        center: center,
+                        innerRadius: 40,
+                        outerRadius: 80,
+                        startAngle: -.pi / 2,
+                        endAngle: -.pi / 2 + 2 * .pi
+                    )
+                ),
+            ]
         )
 
-        XCTAssertEqual(
-            LivelineHoverResolver.resolve(location: selection.anchor, snapshot: snapshot)?.value,
-            0.65
+        for location in [
+            CGPoint(x: 100, y: 40),
+            CGPoint(x: 160, y: 100),
+            CGPoint(x: 100, y: 160),
+            CGPoint(x: 40, y: 100),
+        ] {
+            XCTAssertEqual(
+                LivelineHoverResolver.resolve(location: location, snapshot: snapshot)?.value,
+                1
+            )
+        }
+        XCTAssertNil(
+            LivelineHoverResolver.resolve(
+                location: CGPoint(x: 100, y: 90),
+                snapshot: snapshot
+            )
+        )
+    }
+
+    func testSingleCategoryDonutBuildsAFullRingTargetEndToEnd() throws {
+        let content = LivelineChartContent.donut(
+            data: [LivelineCategoryValue(id: "only", label: "Only", value: 10)],
+            style: LivelineDonutStyle()
+        )
+        let configuration = LivelineChartConfiguration(window: 10, scrub: true, paused: true)
+        let layout = LivelineLayout(
+            size: CGSize(width: 200, height: 200),
+            padding: LivelineResolvedPadding(top: 10, right: 10, bottom: 10, left: 10),
+            minValue: 0,
+            maxValue: 10,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let prepared = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 0,
+            rightEdge: 10,
+            config: configuration
+        )
+        let snapshot = LivelineInteractionBuilder.snapshot(
+            content: content,
+            prepared: prepared,
+            layout: layout,
+            palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
+            configuration: configuration,
+            hiddenSeries: [],
+            behavior: .none
+        )
+        let target = try XCTUnwrap(snapshot.targets.first)
+        guard case let .sector(center, innerRadius, outerRadius, _, _) = target.region else {
+            return XCTFail("Single-category donut did not build a sector")
+        }
+        let radius = (innerRadius + outerRadius) / 2
+
+        for point in [
+            CGPoint(x: center.x + radius, y: center.y),
+            CGPoint(x: center.x, y: center.y + radius),
+            CGPoint(x: center.x - radius, y: center.y),
+            CGPoint(x: center.x, y: center.y - radius),
+        ] {
+            XCTAssertEqual(
+                LivelineHoverResolver.resolve(location: point, snapshot: snapshot)?.value,
+                10
+            )
+        }
+    }
+
+    func testPartialAndWrappingSectorHitRulesRemainDirectional() {
+        let center = CGPoint(x: 100, y: 100)
+        let selection = LivelineTooltipSelection(
+            hover: LivelineHoverPoint(time: 0, value: 1, x: 100, y: 100),
+            heading: "Segment",
+            rows: [],
+            anchor: center
+        )
+        func snapshot(start: Double, end: Double) -> LivelineInteractionSnapshot {
+            LivelineInteractionSnapshot(
+                layout: LivelineLayout(
+                    size: CGSize(width: 200, height: 200),
+                    padding: LivelineResolvedPadding(top: 0, right: 0, bottom: 0, left: 0),
+                    minValue: 0,
+                    maxValue: 1,
+                    leftEdge: 0,
+                    rightEdge: 1
+                ),
+                points: [],
+                behavior: .none,
+                isEnabled: true,
+                targets: [
+                    LivelineInteractionTarget(
+                        selection: selection,
+                        region: .sector(
+                            center: center,
+                            innerRadius: 20,
+                            outerRadius: 80,
+                            startAngle: start,
+                            endAngle: end
+                        )
+                    ),
+                ]
+            )
+        }
+
+        let partial = snapshot(start: 0, end: .pi / 2)
+        XCTAssertNotNil(
+            LivelineHoverResolver.resolve(location: CGPoint(x: 150, y: 100), snapshot: partial)
+        )
+        XCTAssertNotNil(
+            LivelineHoverResolver.resolve(location: CGPoint(x: 100, y: 150), snapshot: partial)
+        )
+        XCTAssertNil(
+            LivelineHoverResolver.resolve(location: CGPoint(x: 50, y: 100), snapshot: partial)
+        )
+
+        let wrapping = snapshot(start: 3 * .pi / 2, end: 5 * .pi / 2)
+        XCTAssertNotNil(
+            LivelineHoverResolver.resolve(location: CGPoint(x: 150, y: 100), snapshot: wrapping)
+        )
+        XCTAssertNil(
+            LivelineHoverResolver.resolve(location: CGPoint(x: 50, y: 100), snapshot: wrapping)
         )
     }
 
@@ -727,6 +1046,27 @@ final class LivelineRuntimeTests: XCTestCase {
         XCTAssertEqual(state.presentationTimestamp(for: 200, isPaused: true), 200)
         XCTAssertEqual(state.presentationTimestamp(for: 205, isPaused: true), 200)
         XCTAssertEqual(state.presentationTimestamp(for: 206, isPaused: false), 206)
+    }
+
+    func testReducedMotionSettlesTimedTransitionsOnTheFirstFrame() {
+        let state = LivelineRenderState()
+        state.candleLineModeTransition = TimedTransition(
+            from: 0,
+            target: 1,
+            startTimestamp: 10
+        )
+        state.settlesTransitionsImmediately = true
+
+        let progress = state.transitionProgress(
+            current: 0,
+            target: 1,
+            duration: 0.5,
+            timestamp: 10,
+            transition: \.candleLineModeTransition
+        )
+
+        XCTAssertEqual(progress, 1)
+        XCTAssertNil(state.candleLineModeTransition)
     }
 
     func testSeededEffectsUseTheRenderStatesDeterministicRandomStream() {

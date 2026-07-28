@@ -15,6 +15,7 @@
 		402DB5ED38210BA5A7C8156F /* ChartShowcaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C08F79D60A276EA7E755DCBB /* ChartShowcaseView.swift */; };
 		50A8196CDC4C6C75538429CB /* StorybookCartesianScenarios.swift in Sources */ = {isa = PBXBuildFile; fileRef = A22812B815C9DEE80FFE9636 /* StorybookCartesianScenarios.swift */; };
 		550CD9098220F8C26D01D9F2 /* DemoMarket.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AA3FB67FFD448A011D77A88 /* DemoMarket.swift */; };
+		59C6C4664F71A2A4975E0281 /* DemoRegressionUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 633F643D9B44AB75CA71DC4B /* DemoRegressionUITests.swift */; };
 		5DE6529AD9834DAC0525CB7C /* StackedChartGestureTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3FBA6E02F6D0E95537C2066 /* StackedChartGestureTestView.swift */; };
 		68A08A355EFFCBDD35146C9D /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8DFE268FCCEBC5F770ED32D8 /* ContentView.swift */; };
 		94D6664348AAB53AECFF2A55 /* Liveline in Frameworks */ = {isa = PBXBuildFile; productRef = C8383F349455BB91EED4F17D /* Liveline */; };
@@ -40,6 +41,7 @@
 		2AA3FB67FFD448A011D77A88 /* DemoMarket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoMarket.swift; sourceTree = "<group>"; };
 		34BBE66DC9B5E7F4117C5FB4 /* StorybookAdvancedScenarios.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookAdvancedScenarios.swift; sourceTree = "<group>"; };
 		51B67FE02F589DE3867E6458 /* StorybookData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookData.swift; sourceTree = "<group>"; };
+		633F643D9B44AB75CA71DC4B /* DemoRegressionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoRegressionUITests.swift; sourceTree = "<group>"; };
 		84B6019E4E542078710AA9DA /* LivelineDemo.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = LivelineDemo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		889CEFAA18D45D1947DB0C04 /* StorybookCoreScenarios.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookCoreScenarios.swift; sourceTree = "<group>"; };
 		8DFE268FCCEBC5F770ED32D8 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -72,6 +74,7 @@
 		496E6E2FDA66AF62DE3EA167 /* UITests */ = {
 			isa = PBXGroup;
 			children = (
+				633F643D9B44AB75CA71DC4B /* DemoRegressionUITests.swift */,
 				A23CFBA9A5D81260A49B7021 /* StackedChartGestureUITests.swift */,
 			);
 			path = UITests;
@@ -220,6 +223,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				59C6C4664F71A2A4975E0281 /* DemoRegressionUITests.swift in Sources */,
 				1B6A3B44BF8405A57AF0EC83 /* StackedChartGestureUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

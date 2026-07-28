@@ -175,7 +175,10 @@ extension LivelineChartContent {
         }
     }
 
-    func semantics(hiddenSeries: Set<String> = []) -> LivelineChartSemantics {
+    func semantics(
+        hiddenSeries: Set<String> = [],
+        activeWindow: TimeInterval? = nil
+    ) -> LivelineChartSemantics {
         switch self {
         case let .line(data, value):
             return semantics(
@@ -262,13 +265,14 @@ extension LivelineChartContent {
             return semantics(kind: .radar, capabilities: .radial, currentValue: average, momentumPoints: [], latestTime: nil)
 
         case let .donut(data, _):
-            return semantics(kind: .donut, capabilities: .radial, currentValue: data.map(\.value).reduce(0, +), momentumPoints: [], latestTime: nil)
+            let positive = data.filter { $0.value > 0 }
+            return semantics(kind: .donut, capabilities: .radial, currentValue: positive.map(\.value).reduce(0, +), momentumPoints: [], latestTime: nil)
 
         case let .gauge(value, _, _):
             return semantics(kind: .gauge, capabilities: .radial, currentValue: value, momentumPoints: [], latestTime: nil)
 
         case let .funnel(data, _):
-            return semantics(kind: .funnel, capabilities: .radial, currentValue: data.last?.value ?? 0, momentumPoints: [], latestTime: nil)
+            return semantics(kind: .funnel, capabilities: .radial, currentValue: data.last(where: { $0.value > 0 })?.value ?? 0, momentumPoints: [], latestTime: nil)
 
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
             let points = lineData.isEmpty ? data : lineData
@@ -283,14 +287,38 @@ extension LivelineChartContent {
 
         case let .series(series):
             let visible = series.filter { !hiddenSeries.contains($0.id) }
-            let primary = visible.first ?? series.first
+            let renderable = visible.filter(\.livelineIsRenderable)
+            let timeSeries = !renderable.isEmpty
+                ? renderable
+                : (!visible.isEmpty ? visible : series.filter(\.livelineIsRenderable))
+            let latestTime = timeSeries.compactMap { $0.data.last?.time }.max()
+            let windowedPrimary: LivelineVisibleSeries?
+            if let activeWindow,
+               activeWindow.isFinite,
+               activeWindow > 0,
+               let latestTime {
+                let rightEdge = latestTime + activeWindow * LivelineRenderer.windowBufferNoBadge
+                let visibleRange = (rightEdge - activeWindow - 2)...rightEdge
+                windowedPrimary = LivelineSeriesSelector.visibleSlices(
+                    series: renderable,
+                    hiddenSeries: [],
+                    visibleRange: visibleRange
+                ).first
+            } else {
+                windowedPrimary = nil
+            }
+            let primary = windowedPrimary?.series
+                ?? renderable.first
+                ?? visible.first
+                ?? series.first(where: \.livelineIsRenderable)
+                ?? series.first
             let ids = series.map(\.id)
             return semantics(
                 kind: .series,
                 capabilities: .series,
                 currentValue: primary?.value ?? 0,
-                momentumPoints: primary?.data ?? [],
-                latestTime: series.compactMap { $0.data.last?.time }.max(),
+                momentumPoints: windowedPrimary?.points ?? primary?.data ?? [],
+                latestTime: latestTime,
                 seriesIDs: ids
             )
         }
@@ -312,6 +340,35 @@ extension LivelineChartContent {
             latestTime: latestTime,
             seriesIDs: seriesIDs
         )
+    }
+}
+
+extension LivelineSeries {
+    /// A multi-series line needs at least one segment to produce visible
+    /// geometry. Keep empty and single-sample entries available to controls,
+    /// but do not let them become the chart's primary rendered series.
+    var livelineIsRenderable: Bool {
+        data.count >= 2
+    }
+}
+
+struct LivelineVisibleSeries {
+    var series: LivelineSeries
+    var points: [LivelinePoint]
+}
+
+enum LivelineSeriesSelector {
+    static func visibleSlices(
+        series: [LivelineSeries],
+        hiddenSeries: Set<String>,
+        visibleRange: ClosedRange<TimeInterval>
+    ) -> [LivelineVisibleSeries] {
+        series.compactMap { entry in
+            guard !hiddenSeries.contains(entry.id) else { return nil }
+            let points = entry.data.livelineVisible(in: visibleRange)
+            guard points.count >= 2 else { return nil }
+            return LivelineVisibleSeries(series: entry, points: points)
+        }
     }
 }
 

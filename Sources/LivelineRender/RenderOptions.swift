@@ -96,10 +96,10 @@ struct RenderOptions {
       --seed <integer>            Deterministic effects seed
 
     VIDEO
-      --width <pixels>            Even output width (default: 1920)
-      --height <pixels>           Even output height (default: 1080)
+      --width <pixels>            Even output width, at least 320 (default: 1920)
+      --height <pixels>           Even output height, at least 180 (default: 1080)
       --fps <integer>             Output frame rate (default: 30)
-      --duration <seconds>        Output duration (default: 4)
+      --duration <seconds>        Output duration; at least two frames, rounded up (default: 4)
       --output <path>             MP4 destination (default: liveline-chart.mp4)
 
     OTHER
@@ -187,15 +187,22 @@ struct RenderOptions {
     func validate() throws {
         guard !values.isEmpty else { throw RenderCommandError.message("--values must contain at least one number") }
         guard values.count <= 10_000 else { throw RenderCommandError.message("--values supports at most 10,000 samples") }
-        guard width >= 2, height >= 2, width <= 8_192, height <= 8_192,
+        guard width >= 320, height >= 180, width <= 8_192, height <= 8_192,
               width.isMultiple(of: 2), height.isMultiple(of: 2),
               width * height <= 33_554_432
         else {
-            throw RenderCommandError.message("--width and --height must be even, at most 8192, and no more than 32 megapixels combined")
+            throw RenderCommandError.message(
+                "--width must be an even value from 320 through 8192, --height must be an even value from 180 through 8192, and their area must not exceed 32 megapixels"
+            )
         }
-        guard (1...120).contains(fps) else { throw RenderCommandError.message("--fps must be between 1 and 120") }
-        guard duration.isFinite, duration > 0, duration <= 600 else {
-            throw RenderCommandError.message("--duration must be greater than 0 and at most 600 seconds")
+        guard (1...120).contains(fps) else {
+            throw RenderCommandError.message("--fps must be between 1 and 120")
+        }
+        let coversAtLeastTwoFrames = duration * Double(fps) >= 2 - 1e-9
+        guard duration.isFinite, coversAtLeastTwoFrames, duration <= 600 else {
+            throw RenderCommandError.message(
+                "--duration must be at least two frames (exactly 2/\(fps) seconds at \(fps) fps) and at most 600 seconds; longer values round up to the next whole frame"
+            )
         }
         guard minimum.isFinite, maximum.isFinite, minimum < maximum else {
             throw RenderCommandError.message("--min must be less than --max")
@@ -220,6 +227,10 @@ struct RenderOptions {
     var outputURL: URL {
         URL(fileURLWithPath: output, relativeTo: URL(fileURLWithPath: FileManager.default.currentDirectoryPath))
             .standardizedFileURL
+    }
+
+    var frameCount: Int {
+        max(2, Int(ceil(duration * Double(fps) - 1e-9)))
     }
 
     var chartStyle: LivelineChartStyle {
@@ -277,6 +288,7 @@ struct RenderOptions {
         }
         return value
     }
+
 }
 
 extension Color {

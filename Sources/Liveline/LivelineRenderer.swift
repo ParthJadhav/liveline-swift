@@ -41,6 +41,7 @@ enum LivelineRenderer {
             return
         }
 
+        state.settlesTransitionsImmediately = input.motion.settlesImmediately
         let config = input.configuration
         let palette = LivelinePalette.resolve(accent: input.accent, mode: config.theme, lineWidth: config.lineWidth)
         let capabilities = input.semantics.capabilities
@@ -114,7 +115,12 @@ enum LivelineRenderer {
         }
         let smoothValue = state.smoothValue ?? currentValue
 
-        let range = valueRange(renderData: renderData, smoothValue: smoothValue, config: config)
+        let range = valueRange(
+            renderData: renderData,
+            smoothValue: smoothValue,
+            visibleTimeRange: leftEdge...rightEdge,
+            config: config
+        )
         if state.displayMin == nil || state.displayMax == nil || input.motion.settlesImmediately {
             state.displayMin = range.lowerBound
             state.displayMax = range.upperBound
@@ -382,10 +388,16 @@ extension LivelineRenderer {
     static func valueRange(
         renderData: LivelinePreparedChart,
         smoothValue: Double,
+        visibleTimeRange: ClosedRange<TimeInterval>,
         config: LivelineChartConfiguration
     ) -> ClosedRange<Double> {
         if let rangeOverride = renderData.rangeOverride {
-            return rangeIncludingActivePoint(rangeOverride, renderData: renderData, config: config)
+            return rangeIncludingActivePoint(
+                rangeOverride,
+                renderData: renderData,
+                visibleTimeRange: visibleTimeRange,
+                config: config
+            )
         }
 
         let range = LivelineMath.computeRange(
@@ -394,15 +406,22 @@ extension LivelineRenderer {
             referenceValue: config.referenceLine?.value,
             exaggerate: config.exaggerate
         )
-        return rangeIncludingActivePoint(range, renderData: renderData, config: config)
+        return rangeIncludingActivePoint(
+            range,
+            renderData: renderData,
+            visibleTimeRange: visibleTimeRange,
+            config: config
+        )
     }
 
     static func rangeIncludingActivePoint(
         _ range: ClosedRange<Double>,
         renderData: LivelinePreparedChart,
+        visibleTimeRange: ClosedRange<TimeInterval>,
         config: LivelineChartConfiguration
     ) -> ClosedRange<Double> {
         guard let activePoint = config.activePoint,
+              visibleTimeRange.contains(activePoint.time),
               let value = activePoint.value ?? LivelineMath.interpolateOrdered(points: renderData.primaryVisible, at: activePoint.time)
         else {
             return range

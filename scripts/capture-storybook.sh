@@ -6,12 +6,25 @@ DEMO_DIR="$ROOT_DIR/Examples/LivelineDemo"
 DERIVED_DATA="$ROOT_DIR/.build/LivelineDemoStorybookDerivedData"
 DEFAULT_MEDIA_DIR="$ROOT_DIR/Media/storybook"
 CHART_ONLY=false
+VALIDATE_ONLY=false
 MANIFEST_TOOL="$ROOT_DIR/scripts/storybook_manifest.py"
 
-if [[ "${1:-}" == "--chart-only" ]]; then
-  CHART_ONLY=true
-  DEFAULT_MEDIA_DIR="$ROOT_DIR/Media/storybook-chart-only"
-fi
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --chart-only)
+      CHART_ONLY=true
+      DEFAULT_MEDIA_DIR="$ROOT_DIR/Media/storybook-chart-only"
+      ;;
+    --validate-only)
+      VALIDATE_ONLY=true
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
 
 MEDIA_DIR="${STORYBOOK_OUT_DIR:-$DEFAULT_MEDIA_DIR}"
 
@@ -20,13 +33,42 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-SCENARIOS=()
+MANIFEST_SCENARIOS=()
 while IFS= read -r scenario; do
-  SCENARIOS+=("$scenario")
+  MANIFEST_SCENARIOS+=("$scenario")
 done < <(python3 "$MANIFEST_TOOL" ids)
 
+SCENARIOS=("${MANIFEST_SCENARIOS[@]}")
 if [[ -n "${STORYBOOK_SCENARIOS:-}" ]]; then
   read -r -a SCENARIOS <<< "$STORYBOOK_SCENARIOS"
+fi
+
+scenario_is_known() {
+  local requested="$1"
+  local known
+  for known in "${MANIFEST_SCENARIOS[@]}"; do
+    if [[ "$known" == "$requested" ]]; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+if [[ ${#SCENARIOS[@]} -eq 0 ]]; then
+  echo "No Storybook scenarios were requested." >&2
+  exit 1
+fi
+
+for scenario in "${SCENARIOS[@]}"; do
+  if ! scenario_is_known "$scenario"; then
+    echo "Unknown Storybook scenario ID '$scenario'. Check storybook-scenarios.json." >&2
+    exit 1
+  fi
+done
+
+if [[ "$VALIDATE_ONLY" == true ]]; then
+  echo "Validated ${#SCENARIOS[@]} Storybook scenario ID(s)"
+  exit 0
 fi
 
 DEFAULT_CAPTURE_WAIT_SECONDS="${STORYBOOK_CAPTURE_WAIT_SECONDS:-2.2}"
@@ -110,18 +152,48 @@ fi
 
 xcrun simctl install "$DEVICE_ID" "$APP_PATH"
 
+APP_DATA_DIR="$(xcrun simctl get_app_container "$DEVICE_ID" com.liveline.demo data)"
+CAPTURE_STATUS_FILE="$APP_DATA_DIR/Library/Caches/liveline-storybook-capture-status.txt"
+
 for scenario in "${SCENARIOS[@]}"; do
   xcrun simctl terminate "$DEVICE_ID" com.liveline.demo >/dev/null 2>&1 || true
   capture_wait="$(wait_seconds_for "$scenario")"
+  capture_token="${scenario}-$$-${RANDOM}-${RANDOM}"
   launch_args=(--storybook-scenario "$scenario")
   if [[ "$CHART_ONLY" == true ]]; then
     launch_args+=(--storybook-chart-only)
   fi
   launch_args+=(--storybook-snapshot-elapsed "$capture_wait")
+  launch_args+=(--storybook-capture-token "$capture_token")
   if [[ -n "${STORYBOOK_ORDERBOOK_RANDOM_SEED:-}" ]]; then
     launch_args+=(--storybook-orderbook-seed "$STORYBOOK_ORDERBOOK_RANDOM_SEED")
   fi
-  xcrun simctl launch "$DEVICE_ID" com.liveline.demo "${launch_args[@]}" >/dev/null
+  launch_output="$(xcrun simctl launch "$DEVICE_ID" com.liveline.demo "${launch_args[@]}")"
+
+  expected_status="${capture_token}|${scenario}"
+  actual_status=""
+  scenario_ready=false
+  for ((attempt = 0; attempt < 100; attempt += 1)); do
+    if [[ -f "$CAPTURE_STATUS_FILE" ]]; then
+      actual_status="$(tr -d '\r\n' < "$CAPTURE_STATUS_FILE")"
+      if [[ "$actual_status" == "$expected_status" ]]; then
+        scenario_ready=true
+        break
+      fi
+      if [[ "$actual_status" == "${capture_token}|ERROR:"* ]]; then
+        break
+      fi
+    fi
+    sleep 0.10
+  done
+
+  if [[ "$scenario_ready" != true ]]; then
+    echo "Storybook scenario '$scenario' did not become ready." >&2
+    echo "Launch result: $launch_output" >&2
+    echo "App status: ${actual_status:-<none>}" >&2
+    exit 1
+  fi
+
   sleep "$(awk -v wait="$capture_wait" 'BEGIN { printf "%.2f", wait + 0.60 }')"
   xcrun simctl io "$DEVICE_ID" screenshot "$MEDIA_DIR/$scenario.png" >/dev/null
   echo "Captured $scenario"

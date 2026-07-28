@@ -37,6 +37,10 @@ let package = Package(
             name: "LivelineRender",
             dependencies: ["Liveline"]
         ),
+        .testTarget(
+            name: "LivelineRenderTests",
+            dependencies: ["LivelineRender"]
+        ),
     ],
     swiftLanguageVersions: [.v5]
 )
