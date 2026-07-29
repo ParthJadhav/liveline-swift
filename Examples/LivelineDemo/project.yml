@@ -1,6 +1,7 @@
 name: LivelineDemo
 options:
   bundleIdPrefix: com.liveline
+  projectFormat: xcode15_0
   deploymentTarget:
     iOS: "16.0"
 packages:

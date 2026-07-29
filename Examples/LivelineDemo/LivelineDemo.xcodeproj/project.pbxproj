@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 60;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -185,6 +185,7 @@
 				};
 			};
 			buildConfigurationList = DE3BB9E5656C72019E811EAF /* Build configuration list for PBXProject "LivelineDemo" */;
+			compatibilityVersion = "Xcode 15.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -196,7 +197,6 @@
 			packageReferences = (
 				89E8FCA059FF552DED0AC7B9 /* XCLocalSwiftPackageReference "../.." */,
 			);
-			preferredProjectObjectVersion = 77;
 			productRefGroup = 58FD617EEE1E3D433344C0F3 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
