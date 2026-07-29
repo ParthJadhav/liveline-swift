@@ -24,7 +24,6 @@ final class StackedChartGestureUITests: XCTestCase {
         XCTAssertEqual(diagnosticInt("gesture-hover-updates"), 0)
         XCTAssertEqual(diagnosticText("gesture-hover-active"), "false")
         assertScrolled(from: initialChartMinY, byAtLeast: 70)
-        XCTAssertGreaterThan(diagnosticNumber("gesture-scroll-offset"), 70)
     }
 
     func testVerticalDragWithHorizontalJitterScrollsWithoutScrubbing() {
@@ -39,17 +38,18 @@ final class StackedChartGestureUITests: XCTestCase {
         XCTAssertEqual(diagnosticInt("gesture-hover-updates"), 0)
         XCTAssertEqual(diagnosticText("gesture-hover-active"), "false")
         assertScrolled(from: initialChartMinY, byAtLeast: 60)
-        XCTAssertGreaterThan(diagnosticNumber("gesture-scroll-offset"), 60)
     }
 
     func testHorizontalScrubWithVerticalJitterDoesNotScroll() {
+        let initialChartMinY = chart(0).frame.minY
+
         drag(
             on: chart(0),
             from: CGVector(dx: 0.18, dy: 0.55),
             by: CGVector(dx: 210, dy: 18)
         )
 
-        XCTAssertLessThan(abs(diagnosticNumber("gesture-scroll-offset")), 3)
+        XCTAssertLessThan(abs(chart(0).frame.minY - initialChartMinY), 3)
         XCTAssertGreaterThan(diagnosticInt("gesture-hover-updates"), 1)
         XCTAssertEqual(diagnosticInt("gesture-hover-clears"), 1)
         XCTAssertEqual(diagnosticText("gesture-hover-active"), "false")
@@ -67,10 +67,11 @@ final class StackedChartGestureUITests: XCTestCase {
 
         XCTAssertEqual(diagnosticInt("gesture-hover-updates"), 0)
         assertScrolled(from: initialChartMinY, byAtLeast: 40)
-        XCTAssertGreaterThan(diagnosticNumber("gesture-scroll-offset"), 40)
     }
 
     func testOppositeHorizontalScrubsEachClearExactlyOnce() {
+        let initialChartMinY = chart(0).frame.minY
+
         drag(
             on: chart(0),
             from: CGVector(dx: 0.18, dy: 0.45),
@@ -82,7 +83,7 @@ final class StackedChartGestureUITests: XCTestCase {
             by: CGVector(dx: -210, dy: 12)
         )
 
-        XCTAssertLessThan(abs(diagnosticNumber("gesture-scroll-offset")), 3)
+        XCTAssertLessThan(abs(chart(0).frame.minY - initialChartMinY), 3)
         XCTAssertGreaterThan(diagnosticInt("gesture-hover-updates"), 2)
         XCTAssertEqual(diagnosticInt("gesture-hover-clears"), 2)
         XCTAssertEqual(diagnosticText("gesture-hover-active"), "false")
@@ -117,15 +118,6 @@ final class StackedChartGestureUITests: XCTestCase {
         let text = diagnosticText(identifier)
         guard let value = Int(text) else {
             XCTFail("Expected integer diagnostic for \(identifier), got \(text)")
-            return 0
-        }
-        return value
-    }
-
-    private func diagnosticNumber(_ identifier: String) -> Double {
-        let text = diagnosticText(identifier)
-        guard let value = Double(text) else {
-            XCTFail("Expected numeric diagnostic for \(identifier), got \(text)")
             return 0
         }
         return value

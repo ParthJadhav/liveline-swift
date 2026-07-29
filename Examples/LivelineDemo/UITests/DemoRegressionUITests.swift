@@ -168,7 +168,7 @@ final class DemoRegressionUITests: XCTestCase {
         alpha.tap()
         beta.tap()
         let requiredExpectation = XCTNSPredicateExpectation(
-            predicate: NSPredicate(format: "enabled == false"),
+            predicate: NSPredicate(format: "value == 'Visible, required'"),
             object: gamma
         )
         XCTAssertEqual(

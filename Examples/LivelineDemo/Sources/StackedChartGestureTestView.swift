@@ -22,6 +22,16 @@ struct StackedChartGestureTestView: View {
     var body: some View {
         ZStack(alignment: .topTrailing) {
             ScrollView {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: StackedChartScrollOffsetPreferenceKey.self,
+                        value: proxy.frame(
+                            in: .named(StackedChartScrollMetrics.coordinateSpace)
+                        ).minY
+                    )
+                }
+                .frame(height: 0)
+
                 LazyVStack(spacing: 24) {
                     ForEach(0..<5) { index in
                         chart(index: index)
@@ -29,7 +39,6 @@ struct StackedChartGestureTestView: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .stackedChartLegacyScrollMetrics()
             }
             .accessibilityIdentifier("stacked-chart-scroll")
             .modifier(StackedChartScrollObserver { offset in
@@ -151,26 +160,6 @@ private struct StackedChartScrollObserver: ViewModifier {
                 onChange(max(0, -contentY))
             }
         #endif
-    }
-}
-
-private extension View {
-    @ViewBuilder
-    func stackedChartLegacyScrollMetrics() -> some View {
-        if #available(iOS 18.0, *) {
-            self
-        } else {
-            background {
-                GeometryReader { proxy in
-                    Color.clear.preference(
-                        key: StackedChartScrollOffsetPreferenceKey.self,
-                        value: proxy.frame(
-                            in: .named(StackedChartScrollMetrics.coordinateSpace)
-                        ).minY
-                    )
-                }
-            }
-        }
     }
 }
 

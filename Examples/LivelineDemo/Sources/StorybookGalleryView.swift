@@ -99,6 +99,14 @@ struct StorybookGalleryView: View {
 
     private var scrollContent: some View {
         ScrollView {
+            GeometryReader { proxy in
+                Color.clear.preference(
+                    key: StorybookScrollOffsetPreferenceKey.self,
+                    value: proxy.frame(in: .named(Self.legacyScrollCoordinateSpace)).minY
+                )
+            }
+            .frame(height: 0)
+
             LazyVStack(alignment: .leading, spacing: 22) {
                 ForEach(StorybookGalleryItem.all) { item in
                     switch item {
@@ -118,14 +126,6 @@ struct StorybookGalleryView: View {
                 }
             }
             .padding(.vertical, 16)
-            .background {
-                GeometryReader { proxy in
-                    Color.clear.preference(
-                        key: StorybookScrollOffsetPreferenceKey.self,
-                        value: proxy.frame(in: .named(Self.legacyScrollCoordinateSpace)).minY
-                    )
-                }
-            }
         }
         .coordinateSpace(name: Self.legacyScrollCoordinateSpace)
         .accessibilityIdentifier("storybook-scroll")
