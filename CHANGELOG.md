@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.5.0 - 2026-07-29
+
+- Adds accessible chart summaries and adjustable value inspection, improves
+  Dynamic Type sizing and control hit targets, and strengthens labels and
+  traits throughout the demo.
+- Adds focus-based tvOS chart inspection with deterministic remote navigation.
+- Keeps pointer hover and drag-scrub sessions independent so one input path
+  cannot clear a selection still owned by the other.
+- Hardens chart geometry, rendering, and export option validation, including
+  full-ring donut hit testing and frame-accurate MP4 durations.
+- Expands package, renderer, accessibility, runtime, and core regression
+  coverage, plus iOS demo UI tests on both iOS 17.5 and the current SDK.
+- Extends CI validation across all declared Apple platforms and Storybook
+  scenario overrides.
+
 ## 0.4.0 - 2026-07-26
 
 - Adds an opt-in `showsTooltipOnHover` interaction setting that shows the chart
