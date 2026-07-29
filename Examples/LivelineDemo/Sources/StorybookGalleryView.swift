@@ -2,11 +2,8 @@
 import SwiftUI
 
 struct StorybookGalleryView: View {
-    private static let legacyScrollCoordinateSpace = "storybook-gallery-scroll"
-
     @State private var showsDitherExamples = false
     @State private var isScrolling = false
-    @State private var legacyScrollOffset: CGFloat = 0
     @State private var scrollIdleTask: Task<Void, Never>?
     @State private var scrollPauseCount = 0
 
@@ -52,7 +49,6 @@ struct StorybookGalleryView: View {
         .onDisappear {
             scrollIdleTask?.cancel()
             scrollIdleTask = nil
-            legacyScrollOffset = 0
             setScrolling(false)
         }
     }
@@ -85,28 +81,16 @@ struct StorybookGalleryView: View {
                 }
         } else {
             scrollContent
-                .onPreferenceChange(StorybookScrollOffsetPreferenceKey.self) { offset in
-                    legacyScrollOffsetDidChange(offset)
-                }
+                .simultaneousGesture(legacyScrollGesture)
         }
         #else
         scrollContent
-            .onPreferenceChange(StorybookScrollOffsetPreferenceKey.self) { offset in
-                legacyScrollOffsetDidChange(offset)
-            }
+            .simultaneousGesture(legacyScrollGesture)
         #endif
     }
 
     private var scrollContent: some View {
         ScrollView {
-            GeometryReader { proxy in
-                Color.clear.preference(
-                    key: StorybookScrollOffsetPreferenceKey.self,
-                    value: proxy.frame(in: .named(Self.legacyScrollCoordinateSpace)).minY
-                )
-            }
-            .frame(height: 0)
-
             LazyVStack(alignment: .leading, spacing: 22) {
                 ForEach(StorybookGalleryItem.all) { item in
                     switch item {
@@ -127,21 +111,24 @@ struct StorybookGalleryView: View {
             }
             .padding(.vertical, 16)
         }
-        .coordinateSpace(name: Self.legacyScrollCoordinateSpace)
         .accessibilityIdentifier("storybook-scroll")
     }
 
-    private func legacyScrollOffsetDidChange(_ offset: CGFloat) {
-        guard abs(offset - legacyScrollOffset) > 0.5 else { return }
-
-        legacyScrollOffset = offset
-        setScrolling(true)
-        scrollIdleTask?.cancel()
-        scrollIdleTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 180_000_000)
-            guard !Task.isCancelled else { return }
-            setScrolling(false)
-        }
+    private var legacyScrollGesture: some Gesture {
+        DragGesture(minimumDistance: 1)
+            .onChanged { _ in
+                scrollIdleTask?.cancel()
+                scrollIdleTask = nil
+                setScrolling(true)
+            }
+            .onEnded { _ in
+                scrollIdleTask?.cancel()
+                scrollIdleTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 500_000_000)
+                    guard !Task.isCancelled else { return }
+                    setScrolling(false)
+                }
+            }
     }
 
     private func setScrolling(_ value: Bool) {
@@ -149,14 +136,6 @@ struct StorybookGalleryView: View {
             scrollPauseCount += 1
         }
         isScrolling = value
-    }
-}
-
-private struct StorybookScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
 
