@@ -16,7 +16,6 @@ final class DemoMarket: ObservableObject {
     private let candleWidth: TimeInterval = 30
     private var startTime: TimeInterval
     private var phase = 0.0
-    private var timerGeneration: UInt = 0
 
     init() {
         let now = Date().timeIntervalSince1970
@@ -42,28 +41,26 @@ final class DemoMarket: ObservableObject {
 
     func start() {
         guard timer == nil else { return }
-        timerGeneration &+= 1
-        let generation = timerGeneration
-        let timer = Timer(timeInterval: 0.55, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                guard let self,
-                      self.timer != nil,
-                      self.timerGeneration == generation
-                else {
-                    return
-                }
-                self.tick()
-            }
-        }
+        let timer = Timer(
+            timeInterval: 0.55,
+            target: self,
+            selector: #selector(timerDidFire(_:)),
+            userInfo: nil,
+            repeats: true
+        )
         self.timer = timer
         RunLoop.main.add(timer, forMode: .common)
     }
 
     func stop() {
         guard let timer else { return }
-        timerGeneration &+= 1
         timer.invalidate()
         self.timer = nil
+    }
+
+    @objc private func timerDidFire(_ sender: Timer) {
+        guard timer === sender else { return }
+        tick()
     }
 
     private func tick() {
