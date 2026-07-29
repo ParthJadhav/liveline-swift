@@ -6,7 +6,7 @@ struct StorybookGalleryView: View {
 
     @State private var showsDitherExamples = false
     @State private var isScrolling = false
-    @State private var legacyScrollOffset: CGFloat?
+    @State private var legacyScrollOffset: CGFloat = 0
     @State private var scrollIdleTask: Task<Void, Never>?
     @State private var scrollPauseCount = 0
 
@@ -52,7 +52,7 @@ struct StorybookGalleryView: View {
         .onDisappear {
             scrollIdleTask?.cancel()
             scrollIdleTask = nil
-            legacyScrollOffset = nil
+            legacyScrollOffset = 0
             setScrolling(false)
         }
     }
@@ -132,11 +132,7 @@ struct StorybookGalleryView: View {
     }
 
     private func legacyScrollOffsetDidChange(_ offset: CGFloat) {
-        guard let previousOffset = legacyScrollOffset else {
-            legacyScrollOffset = offset
-            return
-        }
-        guard abs(offset - previousOffset) > 0.5 else { return }
+        guard abs(offset - legacyScrollOffset) > 0.5 else { return }
 
         legacyScrollOffset = offset
         setScrolling(true)
