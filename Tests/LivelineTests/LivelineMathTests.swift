@@ -546,6 +546,62 @@ final class LivelineMathTests: XCTestCase {
         XCTAssertEqual(LivelineMath.detectMomentum(points: flat), .flat)
     }
 
+    func testDecimatorPassesThroughInputsThatFitThePlotWidth() {
+        let points = (0..<40).map { LivelinePoint(time: Double($0), value: Double($0 % 7)) }
+        let decimated = LivelineDecimator.decimated(points: points, plotWidth: 100)
+
+        XCTAssertEqual(decimated, points)
+        XCTAssertTrue(decimated.livelineSharesStorage(with: points))
+    }
+
+    func testDecimatorKeepsEndpointsAndColumnExtremes() {
+        let width: CGFloat = 40
+        let count = 4_000
+        let points = (0..<count).map { index -> LivelinePoint in
+            let value = sin(Double(index) * 0.03) * 10 + (index % 97 == 0 ? 40 : 0) - (index % 89 == 0 ? 35 : 0)
+            return LivelinePoint(time: Double(index), value: value)
+        }
+
+        let decimated = LivelineDecimator.decimated(points: points, plotWidth: width)
+
+        XCTAssertLessThan(decimated.count, points.count)
+        XCTAssertLessThanOrEqual(decimated.count, LivelineDecimator.sampleLimit(plotWidth: width) + 2)
+        XCTAssertEqual(decimated.first, points.first)
+        XCTAssertEqual(decimated.last, points.last)
+        XCTAssertEqual(decimated.map(\.time), decimated.map(\.time).sorted())
+        XCTAssertEqual(decimated.map(\.value).min(), points.map(\.value).min())
+        XCTAssertEqual(decimated.map(\.value).max(), points.map(\.value).max())
+
+        // Every horizontal column keeps both of its extremes.
+        let columns = LivelineDecimator.sampleLimit(plotWidth: width) / LivelineDecimator.samplesPerPoint
+        let span = points[count - 1].time - points[0].time
+        var expected: [Int: (min: Double, max: Double)] = [:]
+        for point in points {
+            let column = min(columns - 1, Int((point.time - points[0].time) / span * Double(columns)))
+            let current = expected[column] ?? (point.value, point.value)
+            expected[column] = (Swift.min(current.min, point.value), Swift.max(current.max, point.value))
+        }
+        var produced: [Int: (min: Double, max: Double)] = [:]
+        for point in decimated {
+            let column = min(columns - 1, Int((point.time - points[0].time) / span * Double(columns)))
+            let current = produced[column] ?? (point.value, point.value)
+            produced[column] = (Swift.min(current.min, point.value), Swift.max(current.max, point.value))
+        }
+        for (column, bounds) in expected {
+            XCTAssertEqual(produced[column]?.min, bounds.min, "column \(column) lost its minimum")
+            XCTAssertEqual(produced[column]?.max, bounds.max, "column \(column) lost its maximum")
+        }
+    }
+
+    func testDecimatorIsDeterministic() {
+        let points = (0..<3_000).map { LivelinePoint(time: Double($0), value: cos(Double($0) * 0.017) * 3) }
+
+        XCTAssertEqual(
+            LivelineDecimator.decimated(points: points, plotWidth: 120),
+            LivelineDecimator.decimated(points: points, plotWidth: 120)
+        )
+    }
+
     func testMonotoneSplinePathCanBeCreatedForMultiplePoints() {
         let path = LivelineMath.monotoneSplinePath(points: [
             CGPoint(x: 0, y: 2),

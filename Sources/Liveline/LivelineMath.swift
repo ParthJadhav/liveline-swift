@@ -116,6 +116,19 @@ enum LivelineMath {
         }
     }
 
+    /// Pass the live render state to reuse the previous frame's segments while
+    /// the underlying samples are unchanged.
+    static func waterfallSegments(
+        points: [LivelinePoint],
+        initialValue: Double,
+        state: LivelineRenderState?
+    ) -> [LivelineWaterfallSegment] {
+        guard let state else {
+            return waterfallSegments(points: points, initialValue: initialValue)
+        }
+        return state.waterfallSegments(points: points, initialValue: initialValue)
+    }
+
     static func waterfallSegments(
         points: [LivelinePoint],
         initialValue: Double
@@ -342,6 +355,81 @@ enum LivelineMath {
 
     static func loadingBreath(_ time: TimeInterval) -> Double {
         0.22 + 0.08 * sin(time / 1.2 * .pi)
+    }
+}
+
+/// Reduces a dense run of samples to what a stroked path can actually show.
+///
+/// Only the drawn geometry is decimated: hover targets, tooltips, momentum,
+/// and accessibility keep reading the full-resolution samples.
+enum LivelineDecimator {
+    /// Two samples per horizontal point leaves room for a min/max pair in every
+    /// column, which is what keeps spikes from disappearing.
+    static let samplesPerPoint = 2
+
+    static func sampleLimit(plotWidth: CGFloat) -> Int {
+        let width = plotWidth.isFinite ? Swift.max(1, Double(plotWidth)) : 1
+        return Swift.max(2, Int(width.rounded(.down)) * samplesPerPoint)
+    }
+
+    /// Min/max per horizontal column. The first and last samples always
+    /// survive, as do both extremes of every column, so the stroked shape is
+    /// indistinguishable from the full-resolution path at render scale.
+    /// Deterministic: the same input and width always produce the same output.
+    static func decimated(points: [LivelinePoint], plotWidth: CGFloat) -> [LivelinePoint] {
+        let limit = sampleLimit(plotWidth: plotWidth)
+        guard points.count > limit,
+              let first = points.first,
+              let last = points.last
+        else {
+            return points
+        }
+
+        let span = last.time - first.time
+        guard span.isFinite, span > 0 else { return points }
+
+        let columns = Swift.max(1, limit / samplesPerPoint)
+        var result: [LivelinePoint] = []
+        result.reserveCapacity(limit + 2)
+        result.append(first)
+
+        var currentColumn = -1
+        var minimum = first
+        var maximum = first
+
+        func append(_ point: LivelinePoint) {
+            guard result.last != point else { return }
+            result.append(point)
+        }
+
+        func flush() {
+            guard currentColumn >= 0 else { return }
+            if minimum.time <= maximum.time {
+                append(minimum)
+                append(maximum)
+            } else {
+                append(maximum)
+                append(minimum)
+            }
+        }
+
+        for point in points {
+            let progress = (point.time - first.time) / span
+            let column = Swift.min(columns - 1, Swift.max(0, Int(progress * Double(columns))))
+            if column != currentColumn {
+                flush()
+                currentColumn = column
+                minimum = point
+                maximum = point
+            } else {
+                if point.value < minimum.value { minimum = point }
+                if point.value > maximum.value { maximum = point }
+            }
+        }
+        flush()
+
+        if result.last != last { result.append(last) }
+        return result
     }
 }
 

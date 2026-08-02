@@ -11,13 +11,91 @@ struct LivelinePreparedChart {
     }
 }
 
+/// Cheap stand-in for a sample array's contents: the backing buffer plus the
+/// endpoints. Matching shapes mean the samples are the same array, without
+/// walking them.
+struct LivelineDataShape: Equatable {
+    var storage: UInt
+    var count: Int
+    var firstTime: TimeInterval
+    var lastTime: TimeInterval
+    var lastValue: Double
+}
+
+struct LivelineWaterfallKey: Equatable {
+    var shape: LivelineDataShape
+    var initialValue: Double
+}
+
+/// Identity of a prepared chart. Everything `prepare` reads is either covered
+/// here or derived from it, so a matching key means a matching result.
+struct LivelinePreparedChartKey: Equatable {
+    var kind: LivelineChartKind
+    var shapes: [LivelineDataShape]
+    var identifiers: [String]
+    var variant: Double
+    var hiddenSeries: Set<String>
+    var leftEdge: TimeInterval
+    var rightEdge: TimeInterval
+    var referenceValue: Double?
+    var exaggerate: Bool
+}
+
+extension Array where Element: LivelineTimedDatum {
+    func livelineShape(lastValue: Double = 0) -> LivelineDataShape {
+        LivelineDataShape(
+            storage: livelineStorageIdentity,
+            count: count,
+            firstTime: first?.time ?? 0,
+            lastTime: last?.time ?? 0,
+            lastValue: lastValue
+        )
+    }
+}
+
 enum LivelineChartPreparer {
     static func prepare(
         for content: LivelineChartContent,
         hiddenSeries: Set<String>,
         leftEdge: TimeInterval,
         rightEdge: TimeInterval,
-        config: LivelineChartConfiguration
+        config: LivelineChartConfiguration,
+        state: LivelineRenderState? = nil
+    ) -> LivelinePreparedChart {
+        let key = state.flatMap { _ in
+            cacheKey(
+                for: content,
+                hiddenSeries: hiddenSeries,
+                leftEdge: leftEdge,
+                rightEdge: rightEdge,
+                config: config
+            )
+        }
+        if let state, let key, let cached = state.preparedChart(for: key) {
+            return cached
+        }
+
+        let prepared = build(
+            for: content,
+            hiddenSeries: hiddenSeries,
+            leftEdge: leftEdge,
+            rightEdge: rightEdge,
+            config: config,
+            state: state
+        )
+        if let state, let key {
+            state.storePreparedChart(prepared, for: key)
+        }
+        return prepared
+    }
+
+    private static func build(
+        for content: LivelineChartContent,
+        hiddenSeries: Set<String>,
+        leftEdge: TimeInterval,
+        rightEdge: TimeInterval,
+        config: LivelineChartConfiguration,
+        state: LivelineRenderState?
     ) -> LivelinePreparedChart {
         switch content {
         case let .line(data, value):
@@ -134,7 +212,11 @@ enum LivelineChartPreparer {
             )
 
         case let .waterfall(data, style):
-            let segments = LivelineMath.waterfallSegments(points: data, initialValue: style.resolvedInitialValue)
+            let segments = LivelineMath.waterfallSegments(
+                points: data,
+                initialValue: style.resolvedInitialValue,
+                state: state
+            )
             let visible = segments.livelineVisible(in: (leftEdge - 2)...rightEdge)
             let source = visible.isEmpty ? Array(segments.suffix(8)) : visible
             let endpointPoints = source.map { LivelinePoint(time: $0.time, value: $0.end) }
@@ -377,6 +459,121 @@ enum LivelineChartPreparer {
         }
     }
 
+    /// Returns `nil` for the kinds whose preparation depends on more than a
+    /// cheap identity — those keep recomputing every frame.
+    static func cacheKey(
+        for content: LivelineChartContent,
+        hiddenSeries: Set<String>,
+        leftEdge: TimeInterval,
+        rightEdge: TimeInterval,
+        config: LivelineChartConfiguration
+    ) -> LivelinePreparedChartKey? {
+        let shapes: [LivelineDataShape]
+        let kind: LivelineChartKind
+        var identifiers: [String] = []
+        var variant: Double = 0
+
+        switch content {
+        case let .line(data, value):
+            kind = .line
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+            variant = value
+
+        case let .bars(data, style):
+            kind = .bars
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+            variant = style.resolvedBaseline
+
+        case let .range(data, _):
+            kind = .range
+            shapes = [data.livelineShape(lastValue: data.last?.midpoint ?? 0)]
+
+        case let .scatter(data, value, _):
+            kind = .scatter
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+            variant = value
+
+        case let .steps(data, value, _):
+            kind = .steps
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+            variant = value
+
+        case let .lollipops(data, style):
+            kind = .lollipops
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+            variant = style.resolvedBaseline
+
+        case let .bubbles(data, _):
+            kind = .bubbles
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+
+        case let .boxPlots(data, _):
+            kind = .boxPlots
+            shapes = [data.livelineShape(lastValue: data.last?.median ?? 0)]
+
+        case let .waterfall(data, style):
+            kind = .waterfall
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+            variant = style.resolvedInitialValue
+
+        case let .errorBars(data, _):
+            kind = .errorBars
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+
+        case let .dumbbells(data, _):
+            kind = .dumbbells
+            shapes = [data.livelineShape(lastValue: data.last?.end ?? 0)]
+
+        case let .stackedBars(data, style):
+            kind = .stackedBars
+            shapes = [data.livelineShape(lastValue: LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode))]
+            identifiers = [style.mode.rawValue]
+
+        case let .stackedAreas(data, style):
+            kind = .stackedAreas
+            shapes = [data.livelineShape(lastValue: LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode))]
+            identifiers = [style.mode.rawValue]
+
+        case let .timeline(data, _):
+            kind = .timeline
+            shapes = [
+                LivelineDataShape(
+                    storage: data.livelineStorageIdentity,
+                    count: data.count,
+                    firstTime: data.first?.start ?? 0,
+                    lastTime: data.last?.end ?? 0,
+                    lastValue: 0
+                ),
+            ]
+
+        case let .heatmap(data, style):
+            kind = .heatmap
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+            variant = Double(style.rowLabels.count)
+
+        case let .series(series):
+            kind = .series
+            shapes = series.map { $0.data.livelineShape(lastValue: $0.value) }
+            identifiers = series.map(\.id)
+
+        case .radar, .donut, .gauge, .funnel, .candle:
+            // Aggregates over unordered data or a live candle: not worth a key
+            // that would have to restate the whole payload.
+            return nil
+        }
+
+        return LivelinePreparedChartKey(
+            kind: kind,
+            shapes: shapes,
+            identifiers: identifiers,
+            variant: variant,
+            hiddenSeries: hiddenSeries,
+            leftEdge: leftEdge,
+            rightEdge: rightEdge,
+            referenceValue: config.referenceLine?.value,
+            exaggerate: config.exaggerate
+        )
+    }
 }
 
 extension LivelinePreparedChart {

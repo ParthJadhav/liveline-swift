@@ -22,6 +22,11 @@ extension LivelineRenderer {
     ) -> [CGPoint] {
         guard !points.isEmpty else { return [] }
 
+        // Dense feeds carry far more samples than the plot has columns. Thin
+        // them to what the stroke can resolve; the callers that need every
+        // sample read the prepared chart instead of this geometry.
+        let points = LivelineDecimator.decimated(points: points, plotWidth: layout.chartWidth)
+
         let centerY = layout.padding.top + layout.chartHeight / 2
         let amplitude = layout.chartHeight * loadingAmplitudeRatio
         let phase = timestamp * loadingScrollSpeed

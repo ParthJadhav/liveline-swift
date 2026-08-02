@@ -90,25 +90,49 @@ extension LivelineChartContent {
     func normalized() -> LivelineChartContent {
         switch self {
         case let .line(data, value):
-            let data = LivelineInputNormalizer.points(data)
-            return .line(data: data, value: LivelineInputNormalizer.value(value, fallback: data.last?.value ?? 0))
+            let points = LivelineInputNormalizer.points(data)
+            let resolvedValue = LivelineInputNormalizer.value(value, fallback: points.last?.value ?? 0)
+            guard points.livelineSharesStorage(with: data), resolvedValue == value else {
+                return .line(data: points, value: resolvedValue)
+            }
+            return self
 
         case let .bars(data, style):
-            return .bars(data: LivelineInputNormalizer.points(data), style: style)
+            let points = LivelineInputNormalizer.points(data)
+            guard points.livelineSharesStorage(with: data) else {
+                return .bars(data: points, style: style)
+            }
+            return self
 
         case let .range(data, style):
-            return .range(data: LivelineInputNormalizer.ranges(data), style: style)
+            let points = LivelineInputNormalizer.ranges(data)
+            guard points.livelineSharesStorage(with: data) else {
+                return .range(data: points, style: style)
+            }
+            return self
 
         case let .scatter(data, value, style):
-            let data = LivelineInputNormalizer.points(data)
-            return .scatter(data: data, value: LivelineInputNormalizer.value(value, fallback: data.last?.value ?? 0), style: style)
+            let points = LivelineInputNormalizer.points(data)
+            let resolvedValue = LivelineInputNormalizer.value(value, fallback: points.last?.value ?? 0)
+            guard points.livelineSharesStorage(with: data), resolvedValue == value else {
+                return .scatter(data: points, value: resolvedValue, style: style)
+            }
+            return self
 
         case let .steps(data, value, style):
-            let data = LivelineInputNormalizer.points(data)
-            return .steps(data: data, value: LivelineInputNormalizer.value(value, fallback: data.last?.value ?? 0), style: style)
+            let points = LivelineInputNormalizer.points(data)
+            let resolvedValue = LivelineInputNormalizer.value(value, fallback: points.last?.value ?? 0)
+            guard points.livelineSharesStorage(with: data), resolvedValue == value else {
+                return .steps(data: points, value: resolvedValue, style: style)
+            }
+            return self
 
         case let .lollipops(data, style):
-            return .lollipops(data: LivelineInputNormalizer.points(data), style: style)
+            let points = LivelineInputNormalizer.points(data)
+            guard points.livelineSharesStorage(with: data) else {
+                return .lollipops(data: points, style: style)
+            }
+            return self
 
         case let .bubbles(data, style):
             return .bubbles(data: LivelineInputNormalizer.bubbles(data), style: style)
@@ -117,7 +141,11 @@ extension LivelineChartContent {
             return .boxPlots(data: LivelineInputNormalizer.boxPlots(data), style: style)
 
         case let .waterfall(data, style):
-            return .waterfall(data: LivelineInputNormalizer.points(data), style: style)
+            let points = LivelineInputNormalizer.points(data)
+            guard points.livelineSharesStorage(with: data) else {
+                return .waterfall(data: points, style: style)
+            }
+            return self
 
         case let .errorBars(data, style):
             return .errorBars(data: LivelineInputNormalizer.errorBars(data), style: style)
@@ -155,23 +183,44 @@ extension LivelineChartContent {
             return .funnel(data: LivelineInputNormalizer.categories(data), style: style)
 
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
-            let data = LivelineInputNormalizer.points(data)
-            let lineData = LivelineInputNormalizer.points(lineData)
-            let candles = LivelineInputNormalizer.candles(candles)
-            let liveCandle = liveCandle.flatMap(LivelineInputNormalizer.candle)
-            let fallback = lineData.last?.value ?? liveCandle?.close ?? data.last?.value ?? candles.last?.close ?? 0
-            return .candle(
-                data: data,
-                value: LivelineInputNormalizer.value(value, fallback: fallback),
-                candles: candles,
-                candleWidth: LivelineInputNormalizer.positive(candleWidth, fallback: 1),
-                liveCandle: liveCandle,
-                lineData: lineData,
-                lineValue: lineValue.flatMap { $0.isFinite ? $0 : nil }
-            )
+            let points = LivelineInputNormalizer.points(data)
+            let linePoints = LivelineInputNormalizer.points(lineData)
+            let resolvedCandles = LivelineInputNormalizer.candles(candles)
+            let resolvedLiveCandle = liveCandle.flatMap(LivelineInputNormalizer.candle)
+            let fallback = linePoints.last?.value
+                ?? resolvedLiveCandle?.close
+                ?? points.last?.value
+                ?? resolvedCandles.last?.close
+                ?? 0
+            let resolvedValue = LivelineInputNormalizer.value(value, fallback: fallback)
+            let resolvedWidth = LivelineInputNormalizer.positive(candleWidth, fallback: 1)
+            let resolvedLineValue = lineValue.flatMap { $0.isFinite ? $0 : nil }
+            guard points.livelineSharesStorage(with: data),
+                  linePoints.livelineSharesStorage(with: lineData),
+                  resolvedCandles.livelineSharesStorage(with: candles),
+                  resolvedLiveCandle == liveCandle,
+                  resolvedValue == value,
+                  resolvedWidth == candleWidth,
+                  resolvedLineValue == lineValue
+            else {
+                return .candle(
+                    data: points,
+                    value: resolvedValue,
+                    candles: resolvedCandles,
+                    candleWidth: resolvedWidth,
+                    liveCandle: resolvedLiveCandle,
+                    lineData: linePoints,
+                    lineValue: resolvedLineValue
+                )
+            }
+            return self
 
         case let .series(series):
-            return .series(LivelineInputNormalizer.series(series))
+            let entries = LivelineInputNormalizer.series(series)
+            guard entries.livelineSharesStorage(with: series) else {
+                return .series(entries)
+            }
+            return self
         }
     }
 
@@ -645,6 +694,8 @@ enum LivelineInputNormalizer {
     }
 
     static func heatmap(_ source: [LivelineHeatmapCell]) -> [LivelineHeatmapCell] {
+        if isCellOrdered(source) { return source }
+
         let normalized = source.enumerated().compactMap { offset, cell -> (offset: Int, cell: LivelineHeatmapCell)? in
             guard let time = LivelineScalar.time(cell.time), cell.value.isFinite else { return nil }
             return (
@@ -674,6 +725,26 @@ enum LivelineInputNormalizer {
         return result
     }
 
+    /// Heatmap twin of `isTimeOrdered`: cells already climb by time then row
+    /// with no duplicate coordinate and no repair to apply.
+    private static func isCellOrdered(_ source: [LivelineHeatmapCell]) -> Bool {
+        var previous: LivelineHeatmapCell?
+        for cell in source {
+            guard let time = LivelineScalar.time(cell.time),
+                  time == cell.time,
+                  cell.value.isFinite,
+                  value(cell.value, fallback: 0) == cell.value,
+                  cell.row >= 0,
+                  cell.row <= LivelineScalar.maximumDiscreteIndex
+            else {
+                return false
+            }
+            if let previous, (cell.time, cell.row) <= (previous.time, previous.row) { return false }
+            previous = cell
+        }
+        return true
+    }
+
     static func radar(_ source: [LivelineRadarPoint]) -> [LivelineRadarPoint] {
         var seen = Set<String>()
         return source.compactMap { point in
@@ -695,6 +766,8 @@ enum LivelineInputNormalizer {
     }
 
     static func series(_ source: [LivelineSeries]) -> [LivelineSeries] {
+        if isSeriesNormalized(source) { return source }
+
         var seen = Set<String>()
         return source.compactMap { entry in
             guard !entry.id.isEmpty, seen.insert(entry.id).inserted else { return nil }
@@ -709,10 +782,12 @@ enum LivelineInputNormalizer {
         }
     }
 
-    private static func timed<Element: LivelineTimedDatum>(
+    private static func timed<Element: LivelineTimedDatum & Equatable>(
         _ source: [Element],
         normalize: (Element) -> Element?
     ) -> [Element] {
+        if isTimeOrdered(source, normalize: normalize) { return source }
+
         let normalized = source.enumerated().compactMap { offset, element -> (offset: Int, element: Element)? in
             guard let element = normalize(element), element.time.isFinite else { return nil }
             return (offset, element)
@@ -733,5 +808,54 @@ enum LivelineInputNormalizer {
             }
         }
         return result
+    }
+
+    /// Every entry keeps a unique non-empty identifier, a finite value, and
+    /// samples that `points` would return untouched.
+    private static func isSeriesNormalized(_ source: [LivelineSeries]) -> Bool {
+        var seen = Set<String>()
+        seen.reserveCapacity(source.count)
+        for entry in source {
+            guard !entry.id.isEmpty,
+                  seen.insert(entry.id).inserted,
+                  value(entry.value, fallback: entry.data.last?.value ?? 0) == entry.value,
+                  points(entry.data).livelineSharesStorage(with: entry.data)
+            else {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// Single pass over the input: every sample survives normalization
+    /// unchanged and the times already climb strictly. Realtime feeds almost
+    /// always land here, which lets the caller's buffer be reused instead of
+    /// paying for a sort and two intermediate arrays on every render.
+    private static func isTimeOrdered<Element: LivelineTimedDatum & Equatable>(
+        _ source: [Element],
+        normalize: (Element) -> Element?
+    ) -> Bool {
+        var previousTime: TimeInterval?
+        for element in source {
+            guard let normalized = normalize(element), normalized == element else { return false }
+            if let previousTime, element.time <= previousTime { return false }
+            previousTime = element.time
+        }
+        return true
+    }
+}
+
+extension Array {
+    /// Opaque address of the backing buffer. Only ever compared, never
+    /// dereferenced, so it is a cheap way to prove two arrays are the same
+    /// samples without walking them.
+    var livelineStorageIdentity: UInt {
+        withUnsafeBufferPointer { buffer in
+            buffer.baseAddress.map { UInt(bitPattern: UnsafeRawPointer($0)) } ?? 0
+        }
+    }
+
+    func livelineSharesStorage(with other: [Element]) -> Bool {
+        count == other.count && livelineStorageIdentity == other.livelineStorageIdentity
     }
 }

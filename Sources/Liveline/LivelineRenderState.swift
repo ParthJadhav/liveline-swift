@@ -46,6 +46,32 @@ final class LivelineRenderState: ObservableObject {
     var settlesTransitionsImmediately = false
     var ditherGeometryCache: LivelineDitherGeometry?
     var ditherGeometryBuildCount = 0
+    private var preparedChartKey: LivelinePreparedChartKey?
+    private var preparedChartCache: LivelinePreparedChart?
+    private var waterfallKey: LivelineWaterfallKey?
+    private var waterfallCache: [LivelineWaterfallSegment] = []
+
+    /// Frames repeat far more often than data changes. Reuse the derived
+    /// arrays whenever the identity behind them is untouched.
+    func preparedChart(for key: LivelinePreparedChartKey) -> LivelinePreparedChart? {
+        preparedChartKey == key ? preparedChartCache : nil
+    }
+
+    func storePreparedChart(_ chart: LivelinePreparedChart, for key: LivelinePreparedChartKey) {
+        preparedChartKey = key
+        preparedChartCache = chart
+    }
+
+    /// Waterfall segments are a running total over the *entire* dataset, so
+    /// recomputing them per frame dominates the chart. Memoize on data identity.
+    func waterfallSegments(points: [LivelinePoint], initialValue: Double) -> [LivelineWaterfallSegment] {
+        let key = LivelineWaterfallKey(shape: points.livelineShape(lastValue: points.last?.value ?? 0), initialValue: initialValue)
+        if waterfallKey == key { return waterfallCache }
+        let segments = LivelineMath.waterfallSegments(points: points, initialValue: initialValue)
+        waterfallKey = key
+        waterfallCache = segments
+        return segments
+    }
 
     func frame(for timestamp: TimeInterval, isPaused: Bool) -> LivelineAnimationFrame {
         defer { lastTimestamp = timestamp }
@@ -141,6 +167,10 @@ final class LivelineRenderState: ObservableObject {
         candleLineDensityProgress = 0
         candleLineDensityTransition = nil
         ditherGeometryCache = nil
+        preparedChartKey = nil
+        preparedChartCache = nil
+        waterfallKey = nil
+        waterfallCache.removeAll(keepingCapacity: true)
     }
 
     func nextRandom(seed: UInt32) -> Double {

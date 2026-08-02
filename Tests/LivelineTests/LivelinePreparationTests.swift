@@ -28,6 +28,124 @@ final class LivelinePreparationTests: XCTestCase {
         XCTAssertEqual(data.livelineVisible(in: 15...25), [LivelinePoint(time: 20, value: 22)])
     }
 
+    func testSortedInputSkipsNormalizationWork() {
+        let points = (0..<64).map { LivelinePoint(time: Double($0) * 0.5, value: Double($0)) }
+
+        let normalized = LivelineInputNormalizer.points(points)
+        XCTAssertEqual(normalized, points)
+        XCTAssertTrue(normalized.livelineSharesStorage(with: points), "sorted input should reuse its buffer")
+
+        let content = LivelineChartContent.line(data: points, value: 63)
+        guard case let .line(normalizedData, normalizedValue) = content.normalized() else {
+            return XCTFail("Expected normalized line content")
+        }
+        XCTAssertTrue(normalizedData.livelineSharesStorage(with: points))
+        XCTAssertEqual(normalizedValue, 63)
+    }
+
+    func testFastPathAndSlowPathAgreeOnUnsortedAndDuplicateInput() {
+        let unsorted = [
+            LivelinePoint(time: 30, value: 3),
+            LivelinePoint(time: 10, value: 1),
+            LivelinePoint(time: 20, value: 2),
+            LivelinePoint(time: 20, value: 22),
+            LivelinePoint(time: .nan, value: 4),
+            LivelinePoint(time: 40, value: .infinity),
+        ]
+
+        let normalized = LivelineInputNormalizer.points(unsorted)
+        XCTAssertFalse(normalized.livelineSharesStorage(with: unsorted))
+        // Re-normalizing an already-clean array must be a no-op, so the fast
+        // path and the sort path have to land on the same samples.
+        XCTAssertEqual(LivelineInputNormalizer.points(normalized), normalized)
+        XCTAssertTrue(LivelineInputNormalizer.points(normalized).livelineSharesStorage(with: normalized))
+
+        let cells = [
+            LivelineHeatmapCell(time: 20, row: 2, value: 30),
+            LivelineHeatmapCell(time: 10, row: 1, value: 20),
+            LivelineHeatmapCell(time: 10, row: 1, value: 21),
+        ]
+        let normalizedCells = LivelineInputNormalizer.heatmap(cells)
+        XCTAssertFalse(normalizedCells.livelineSharesStorage(with: cells))
+        XCTAssertEqual(LivelineInputNormalizer.heatmap(normalizedCells), normalizedCells)
+        XCTAssertTrue(LivelineInputNormalizer.heatmap(normalizedCells).livelineSharesStorage(with: normalizedCells))
+
+        let clean = [
+            LivelineSeries(id: "a", data: [LivelinePoint(time: 0, value: 1)], value: 1, color: .blue),
+            LivelineSeries(id: "b", data: [LivelinePoint(time: 0, value: 2)], value: 2, color: .red),
+        ]
+        XCTAssertTrue(LivelineInputNormalizer.series(clean).livelineSharesStorage(with: clean))
+    }
+
+    func testPreparedChartCacheInvalidatesOnDataAndEdgeChanges() {
+        let state = LivelineRenderState()
+        let points = (0..<200).map { LivelinePoint(time: Double($0), value: Double($0 % 11)) }
+        let content = LivelineChartContent.line(data: points, value: 5).normalized()
+        let configuration = LivelineChartConfiguration()
+
+        func prepare(_ content: LivelineChartContent, leftEdge: TimeInterval) -> LivelinePreparedChart {
+            LivelineChartPreparer.prepare(
+                for: content,
+                hiddenSeries: [],
+                leftEdge: leftEdge,
+                rightEdge: 150,
+                config: configuration,
+                state: state
+            )
+        }
+
+        let first = prepare(content, leftEdge: 10)
+        let repeated = prepare(content, leftEdge: 10)
+        XCTAssertTrue(
+            repeated.primaryVisible.livelineSharesStorage(with: first.primaryVisible),
+            "an unchanged frame should reuse the prepared chart"
+        )
+
+        let movedEdges = prepare(content, leftEdge: 20)
+        XCTAssertFalse(movedEdges.primaryVisible.livelineSharesStorage(with: first.primaryVisible))
+        XCTAssertEqual(movedEdges.primaryVisible.first?.time, 18)
+
+        let restored = prepare(content, leftEdge: 10)
+        let appended = LivelineChartContent.line(
+            data: points + [LivelinePoint(time: 200, value: 4)],
+            value: 4
+        ).normalized()
+        let afterAppend = prepare(appended, leftEdge: 10)
+        XCTAssertFalse(
+            afterAppend.primaryVisible.livelineSharesStorage(with: restored.primaryVisible),
+            "appended samples must invalidate the prepared chart"
+        )
+        XCTAssertEqual(afterAppend.primaryValue, 4)
+
+        // A prepared chart without render state never consults the cache.
+        let uncached = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 10,
+            rightEdge: 150,
+            config: configuration
+        )
+        XCTAssertEqual(uncached.primaryVisible, restored.primaryVisible)
+    }
+
+    func testWaterfallSegmentsAreMemoizedUntilSamplesChange() {
+        let state = LivelineRenderState()
+        let points = (0..<64).map { LivelinePoint(time: Double($0), value: Double($0 % 5) - 2) }
+
+        let first = state.waterfallSegments(points: points, initialValue: 10)
+        let repeated = state.waterfallSegments(points: points, initialValue: 10)
+        XCTAssertTrue(repeated.livelineSharesStorage(with: first))
+        XCTAssertEqual(first, LivelineMath.waterfallSegments(points: points, initialValue: 10))
+
+        let rebased = state.waterfallSegments(points: points, initialValue: 20)
+        XCTAssertFalse(rebased.livelineSharesStorage(with: first))
+        XCTAssertEqual(rebased, LivelineMath.waterfallSegments(points: points, initialValue: 20))
+
+        let extended = points + [LivelinePoint(time: 64, value: 3)]
+        let grown = state.waterfallSegments(points: extended, initialValue: 20)
+        XCTAssertEqual(grown, LivelineMath.waterfallSegments(points: extended, initialValue: 20))
+    }
+
     func testInterpolationNormalizesUnorderedInputAtItsSafeInterface() throws {
         let points = [
             LivelinePoint(time: 10, value: 10),

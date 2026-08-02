@@ -74,7 +74,8 @@ enum LivelineRenderer {
             hiddenSeries: input.hiddenSeries,
             leftEdge: leftEdge,
             rightEdge: rightEdge,
-            config: config
+            config: config,
+            state: state
         )
         state.reconcile(
             identity: input.semantics.identity,

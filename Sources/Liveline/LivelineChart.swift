@@ -978,7 +978,8 @@ private extension LivelineChart {
             hiddenSeries: hiddenSeries,
             leftEdge: current.layout.leftEdge,
             rightEdge: current.layout.rightEdge,
-            config: configuration
+            config: configuration,
+            state: renderState
         )
         return LivelineInteractionBuilder.snapshot(
             content: content,

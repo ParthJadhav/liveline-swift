@@ -174,8 +174,12 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                segments: LivelineMath.waterfallSegments(points: data, initialValue: style.resolvedInitialValue)
-                    .livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                segments: LivelineMath.waterfallSegments(
+                    points: data,
+                    initialValue: style.resolvedInitialValue,
+                    state: state
+                )
+                .livelineVisible(in: layout.leftEdge...layout.rightEdge),
                 style: style,
                 reveal: reveal
             )
