@@ -446,6 +446,74 @@ final class LivelineRendererSmokeTests: XCTestCase {
         XCTAssertLessThan(animatedState.candleLiveBirthAlpha, 1)
     }
 
+    @MainActor
+    func testRepeatFramesReuseMeasuredTextAndResolvedPalettes() throws {
+        let content = LivelineChartContent.series([
+            LivelineSeries(
+                id: "revenue",
+                data: (0..<20).map { LivelinePoint(time: Double($0), value: Double($0 % 5) + 1) },
+                value: 3,
+                color: .green,
+                label: "Revenue"
+            ),
+            LivelineSeries(
+                id: "cost",
+                data: (0..<20).map { LivelinePoint(time: Double($0), value: Double($0 % 3) + 1) },
+                value: 2,
+                color: .red,
+                label: "Cost"
+            ),
+        ])
+        let semantics = content.semantics()
+        var configuration = LivelineChartConfiguration(window: 20, badge: false, pulse: false, paused: true)
+        configuration.seriesLegendSide = .trailing
+        configuration = configuration.normalizedForRendering()
+
+        let state = LivelineRenderState()
+        let size = CGSize(width: 320, height: 200)
+        let renderer = ImageRenderer(
+            content: Canvas { context, canvasSize in
+                for step in 0..<8 {
+                    var pass = context
+                    LivelineRenderer.draw(
+                        context: &pass,
+                        state: state,
+                        input: LivelineRenderInput(
+                            content: content,
+                            semantics: semantics,
+                            accent: .blue,
+                            configuration: configuration,
+                            motion: LivelineMotionPolicy(
+                                isPaused: true,
+                                requiresTimeline: false,
+                                settlesImmediately: true,
+                                minimumInterval: 1.0 / 60.0
+                            ),
+                            activeWindow: 20,
+                            hiddenSeries: [],
+                            hoverLocation: nil,
+                            timestamp: 1_000 + Double(step) / 60,
+                            size: canvasSize
+                        )
+                    )
+                }
+            }
+            .frame(width: size.width, height: size.height)
+        )
+        renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+        _ = renderer.nsImage
+
+        // One palette per distinct accent (chart plus each series) and one
+        // legend measurement, no matter how many frames were drawn. The first
+        // frame resolves the chart accent and the gutter before `reconcile`
+        // adopts the identity and flushes the caches, so each of those is paid
+        // exactly once more.
+        XCTAssertEqual(state.paletteBuildCount, 4)
+        XCTAssertEqual(state.legendGutterMeasureCount, 2)
+        XCTAssertFalse(state.timeAxisLabels.isEmpty)
+        XCTAssertTrue(state.timeAxisLabels.values.contains { $0.measuredWidth != nil })
+    }
+
     private var configuration: LivelineChartConfiguration {
         LivelineChartConfiguration(
             window: 10,

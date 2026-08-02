@@ -52,7 +52,7 @@ enum LivelineInteractionBuilder {
             }
 
         case let .bars(data, style):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 let color = $0.value >= style.resolvedBaseline ? (style.positiveColor ?? palette.line) : style.negativeColor
                 return xTarget(point: $0, anchorValue: $0.value, heading: time($0.time), rows: [
                     row("Value", value($0.value), color),
@@ -60,7 +60,7 @@ enum LivelineInteractionBuilder {
             }
 
         case let .range(data, _):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 xTarget(
                     point: LivelinePoint(time: $0.time, value: $0.midpoint),
                     anchorValue: $0.upper,
@@ -74,14 +74,14 @@ enum LivelineInteractionBuilder {
             }
 
         case let .scatter(data, _, _), let .steps(data, _, _):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 xTarget(point: $0, anchorValue: $0.value, heading: time($0.time), rows: [
                     row("Value", value($0.value), palette.line),
                 ], layout: layout)
             }
 
         case let .lollipops(data, style):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 let color = $0.value >= style.resolvedBaseline ? (style.positiveColor ?? palette.line) : style.negativeColor
                 return xTarget(point: $0, anchorValue: $0.value, heading: time($0.time), rows: [
                     row("Value", value($0.value), color),
@@ -89,7 +89,7 @@ enum LivelineInteractionBuilder {
             }
 
         case let .bubbles(data, _):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 xTarget(
                     point: LivelinePoint(time: $0.time, value: $0.value),
                     anchorValue: $0.value,
@@ -103,7 +103,7 @@ enum LivelineInteractionBuilder {
             }
 
         case let .boxPlots(data, _):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 xTarget(
                     point: LivelinePoint(time: $0.time, value: $0.median),
                     anchorValue: $0.maximum,
@@ -120,8 +120,9 @@ enum LivelineInteractionBuilder {
             }
 
         case let .waterfall(data, style):
-            return LivelineMath.waterfallSegments(points: data, initialValue: style.resolvedInitialValue)
+            let segments = LivelineMath.waterfallSegments(points: data, initialValue: style.resolvedInitialValue)
                 .livelineVisible(in: visibleRange)
+            return interactionSlice(segments, nearestTo: targetLocation, layout: layout)
                 .map { segment in
                     let color = segment.delta >= 0 ? (style.positiveColor ?? palette.line) : style.negativeColor
                     return xTarget(
@@ -138,7 +139,7 @@ enum LivelineInteractionBuilder {
                 }
 
         case let .errorBars(data, _):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 xTarget(
                     point: LivelinePoint(time: $0.time, value: $0.value),
                     anchorValue: $0.upper,
@@ -153,7 +154,7 @@ enum LivelineInteractionBuilder {
             }
 
         case let .dumbbells(data, style):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 xTarget(
                     point: LivelinePoint(time: $0.time, value: $0.end),
                     anchorValue: max($0.start, $0.end),
@@ -167,10 +168,10 @@ enum LivelineInteractionBuilder {
             }
 
         case let .stackedBars(data, style):
-            return stackedTargets(data: data, mode: style.mode, colors: style.colors, layout: layout, palette: palette, value: value, time: time)
+            return stackedTargets(data: data, mode: style.mode, colors: style.colors, layout: layout, palette: palette, targetLocation: targetLocation, value: value, time: time)
 
         case let .stackedAreas(data, style):
-            return stackedTargets(data: data, mode: style.mode, colors: style.colors, layout: layout, palette: palette, value: value, time: time)
+            return stackedTargets(data: data, mode: style.mode, colors: style.colors, layout: layout, palette: palette, targetLocation: targetLocation, value: value, time: time)
 
         case let .timeline(items, style):
             let visible = items.filter { $0.end >= layout.leftEdge - 2 && $0.start <= layout.rightEdge }
@@ -182,7 +183,7 @@ enum LivelineInteractionBuilder {
                 palette: palette,
                 reveal: 1
             )
-            return geometry.marks.map { mark in
+            return interactionMarks(geometry.marks, nearestTo: targetLocation, rect: \.rect).map { mark in
                 return target(
                     time: mark.item.start,
                     value: mark.item.end - mark.item.start,
@@ -207,7 +208,7 @@ enum LivelineInteractionBuilder {
                 palette: palette,
                 reveal: 1
             )
-            return geometry.marks.map { mark in
+            return interactionMarks(geometry.marks, nearestTo: targetLocation, rect: \.rect).map { mark in
                 let label = style.rowLabels.indices.contains(mark.cell.row)
                     ? style.rowLabels[mark.cell.row]
                     : "Row \(mark.cell.row + 1)"
@@ -424,16 +425,31 @@ enum LivelineInteractionBuilder {
         return [targetTime - before.time <= after.time - targetTime ? before : after]
     }
 
+    /// Rect-region kinds cannot be narrowed by time, but the resolver only ever
+    /// selects a mark whose slack-expanded rect contains the pointer. Everything
+    /// outside that box would have its rows formatted and then discarded.
+    private static func interactionMarks<Element>(
+        _ marks: [Element],
+        nearestTo location: CGPoint?,
+        rect: (Element) -> CGRect
+    ) -> [Element] {
+        guard let location else { return marks }
+        let slack = LivelineInteractionRegion.rectHitSlack
+        return marks.filter { rect($0).insetBy(dx: -slack, dy: -slack).contains(location) }
+    }
+
     private static func stackedTargets(
         data: [LivelineStackedPoint],
         mode: LivelineStackMode,
         colors: [Color],
         layout: LivelineLayout,
         palette: LivelinePalette,
+        targetLocation: CGPoint?,
         value: (Double) -> String,
         time: (TimeInterval) -> String
     ) -> [LivelineInteractionTarget] {
-        data.livelineVisible(in: (layout.leftEdge - 2)...layout.rightEdge).map { point in
+        let visible = data.livelineVisible(in: (layout.leftEdge - 2)...layout.rightEdge)
+        return interactionSlice(visible, nearestTo: targetLocation, layout: layout).map { point in
             let segments = LivelineMath.stackedSegments(values: point.values, mode: mode)
             let signedValues = zip(point.values, segments).map { rawValue, segment in
                 rawValue < 0

@@ -24,7 +24,7 @@ extension LivelineRenderer {
             let entryAlpha = state.seriesAlpha[entry.id] ?? target
             guard entryAlpha > 0.01 else { continue }
 
-            let palette = LivelinePalette.resolve(accent: entry.color, mode: config.theme, lineWidth: config.lineWidth)
+            let palette = state.palette(accent: entry.color, mode: config.theme, lineWidth: config.lineWidth)
             var layer = context
             layer.opacity *= entryAlpha * alpha
             let visible = entry.data.livelineVisible(in: (layout.leftEdge - 2)...layout.rightEdge)

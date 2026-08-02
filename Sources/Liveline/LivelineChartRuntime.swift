@@ -249,6 +249,11 @@ struct LivelineInteractionTarget {
 }
 
 enum LivelineInteractionRegion {
+    /// Hit slack applied to rect regions, so a pointer just outside a mark
+    /// still selects it. Shared with the interaction builder, which narrows
+    /// rect-region charts to the marks this slack can reach.
+    static let rectHitSlack: CGFloat = 8
+
     case x
     case rect(CGRect)
     case circle(center: CGPoint, radius: CGFloat)
@@ -348,7 +353,9 @@ enum LivelineHoverResolver {
         case .x:
             return false
         case let .rect(rect):
-            return rect.insetBy(dx: -8, dy: -8).contains(location)
+            return rect
+                .insetBy(dx: -LivelineInteractionRegion.rectHitSlack, dy: -LivelineInteractionRegion.rectHitSlack)
+                .contains(location)
         case let .circle(center, radius):
             return distanceSquared(location, center) <= radius * radius
         case let .sector(center, innerRadius, outerRadius, startAngle, endAngle):

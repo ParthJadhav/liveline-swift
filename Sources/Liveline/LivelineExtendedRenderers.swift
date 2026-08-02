@@ -124,7 +124,7 @@ extension LivelineRenderer {
     ) {
         let progress = LivelineMath.easedReveal(reveal)
         guard !points.isEmpty, progress > 0.001 else { return }
-        let width = bucketWidth(times: points.map(\.time), layout: layout, ratio: style.resolvedWidthRatio, maximum: 48)
+        let width = bucketWidth(sortedTimes: points.lazy.map(\.time), layout: layout, ratio: style.resolvedWidthRatio, maximum: 48)
         var layer = context
         layer.clip(to: plotClip(layout))
 

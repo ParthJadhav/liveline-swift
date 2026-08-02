@@ -369,6 +369,147 @@ struct LivelineChartAccessibilityModel: Equatable {
     }
 }
 
+/// Identity of everything `LivelineChartAccessibilityModel.make` reads. Hover
+/// lives in view state, so the body re-evaluates on every pointer move: a
+/// matching key means the previous model is still correct and the dataset does
+/// not have to be reformatted. Formatters are closures and cannot be compared,
+/// so they are represented by what they produce for a fixed probe.
+struct LivelineAccessibilityModelKey: Equatable {
+    var kind: LivelineChartKind
+    var shapes: [LivelineDataShape]
+    var identifiers: [String]
+    var variants: [Double]
+    var hiddenSeries: Set<String>
+    var includeEntries: Bool
+    var loading: Bool
+    var lineMode: Bool
+    var emptyText: String
+    var currentValue: Double
+    var momentum: LivelineMomentum
+    var formatterProbe: [String]
+
+    static func make(
+        content: LivelineChartContent,
+        semantics: LivelineChartSemantics,
+        configuration: LivelineChartConfiguration,
+        hiddenSeries: Set<String>,
+        includeEntries: Bool
+    ) -> LivelineAccessibilityModelKey {
+        var shapes: [LivelineDataShape] = []
+        var identifiers: [String] = []
+        var variants: [Double] = []
+
+        switch content {
+        case let .line(data, value):
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+            variants = [value]
+
+        case let .bars(data, _), let .lollipops(data, _):
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+
+        case let .range(data, _):
+            shapes = [data.livelineShape(lastValue: data.last?.upper ?? 0)]
+
+        case let .scatter(data, value, _), let .steps(data, value, _):
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+            variants = [value]
+
+        case let .bubbles(data, _):
+            shapes = [data.livelineShape(lastValue: data.last?.magnitude ?? 0)]
+
+        case let .boxPlots(data, _):
+            shapes = [data.livelineShape(lastValue: data.last?.median ?? 0)]
+
+        case let .waterfall(data, style):
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+            variants = [style.resolvedInitialValue]
+
+        case let .errorBars(data, _):
+            shapes = [data.livelineShape(lastValue: data.last?.upper ?? 0)]
+
+        case let .dumbbells(data, _):
+            shapes = [data.livelineShape(lastValue: data.last?.end ?? 0)]
+
+        case let .stackedBars(data, style):
+            shapes = [data.livelineShape(lastValue: LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode))]
+            identifiers = [style.mode.rawValue]
+
+        case let .stackedAreas(data, style):
+            shapes = [data.livelineShape(lastValue: LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode))]
+            identifiers = [style.mode.rawValue]
+
+        case let .timeline(data, _):
+            shapes = [untimedShape(data, lastValue: data.last?.end ?? 0)]
+            identifiers = [data.last?.label ?? ""]
+
+        case let .heatmap(data, style):
+            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
+            identifiers = style.rowLabels
+
+        case let .radar(data, _):
+            shapes = [untimedShape(data, lastValue: data.last?.value ?? 0)]
+
+        case let .donut(data, _), let .funnel(data, _):
+            shapes = [untimedShape(data, lastValue: data.last?.value ?? 0)]
+
+        case let .gauge(value, range, style):
+            variants = [value, range.lowerBound, range.upperBound, style.resolvedTarget ?? .infinity]
+
+        case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
+            shapes = [
+                data.livelineShape(lastValue: data.last?.value ?? 0),
+                candles.livelineShape(lastValue: candles.last?.close ?? 0),
+                lineData.livelineShape(lastValue: lineData.last?.value ?? 0),
+            ]
+            variants = [
+                value,
+                candleWidth,
+                lineValue ?? .infinity,
+                liveCandle?.time ?? .infinity,
+                liveCandle?.open ?? .infinity,
+                liveCandle?.high ?? .infinity,
+                liveCandle?.low ?? .infinity,
+                liveCandle?.close ?? .infinity,
+            ]
+
+        case let .series(series):
+            shapes = series.map { $0.data.livelineShape(lastValue: $0.value) }
+            identifiers = series.flatMap { [$0.id, $0.label ?? ""] }
+        }
+
+        return LivelineAccessibilityModelKey(
+            kind: semantics.identity.kind,
+            shapes: shapes,
+            identifiers: identifiers,
+            variants: variants,
+            hiddenSeries: hiddenSeries,
+            includeEntries: includeEntries,
+            loading: configuration.loading,
+            lineMode: configuration.lineMode,
+            emptyText: configuration.emptyText,
+            currentValue: semantics.currentValue,
+            momentum: semantics.momentum,
+            formatterProbe: [
+                configuration.formatValue(0),
+                configuration.formatValue(1234.5678),
+                configuration.formatValue(-9876.54321),
+                configuration.formatTime(0),
+                configuration.formatTime(1_700_000_000),
+            ]
+        )
+    }
+
+    private static func untimedShape<Element>(_ array: [Element], lastValue: Double) -> LivelineDataShape {
+        LivelineDataShape(
+            storage: array.livelineStorageIdentity,
+            count: array.count,
+            firstTime: 0,
+            lastTime: 0,
+            lastValue: lastValue
+        )
+    }
+}
+
 private extension LivelineChartKind {
     var accessibilityLabel: String {
         switch self {

@@ -543,4 +543,181 @@ final class LivelineCoreRegressionTests: XCTestCase {
 
         XCTAssertEqual(prepared.rangePoints.map(\.value), [14, 8])
     }
+
+    // MARK: - Per-frame memoization
+
+    func testBucketWidthMatchesUniqueSortedDeltaScan() {
+        // The previous implementation deduplicated, sorted, and materialized the
+        // deltas every frame. The single-pass scan must agree with it.
+        func reference(_ times: [TimeInterval], ratio: CGFloat, minimum: CGFloat, maximum: CGFloat) -> CGFloat {
+            let sorted = Array(Set(times)).sorted()
+            let deltas = zip(sorted, sorted.dropFirst())
+                .map { $1 - $0 }
+                .filter { $0 > 0 }
+            let fallbackCount = max(sorted.count, 8)
+            let bucket = deltas.min()
+                ?? (layout.rightEdge - layout.leftEdge) / Double(fallbackCount)
+            let width = CGFloat(bucket / max(layout.rightEdge - layout.leftEdge, 0.001)) * layout.chartWidth
+            return min(max(width * ratio, minimum), maximum)
+        }
+
+        let cases: [[TimeInterval]] = [
+            [],
+            [4],
+            [4, 4, 4],
+            [0, 1, 2, 3, 4],
+            [0, 0.25, 3, 3.5, 9],
+            [0, 1, 1, 2, 2, 3],
+            Array(stride(from: 0.0, through: 9.0, by: 0.5)),
+        ]
+
+        for times in cases {
+            for ratio in [CGFloat(0.2), 0.7, 1.0] {
+                XCTAssertEqual(
+                    LivelineRenderer.bucketWidth(
+                        sortedTimes: times,
+                        layout: layout,
+                        ratio: ratio,
+                        minimum: 1,
+                        maximum: 48
+                    ),
+                    reference(times, ratio: ratio, minimum: 1, maximum: 48),
+                    accuracy: 0.0001,
+                    "times: \(times) ratio: \(ratio)"
+                )
+            }
+        }
+    }
+
+    func testHoverNarrowingKeepsTheSameResolvedSelection() {
+        var configuration = LivelineChartConfiguration(scrub: true, paused: true)
+        configuration.formatValue = { String(format: "%.1f", $0) }
+
+        let points = (0..<24).map { LivelinePoint(time: Double($0) * 0.4, value: Double($0 % 7) - 3) }
+        let contents: [LivelineChartContent] = [
+            .bars(data: points, style: LivelineBarStyle()),
+            .scatter(data: points, value: points.last?.value ?? 0, style: LivelineScatterStyle()),
+            .lollipops(data: points, style: LivelineLollipopStyle()),
+            .waterfall(data: points, style: LivelineWaterfallStyle()),
+            .boxPlots(
+                data: points.map {
+                    LivelineBoxPlotPoint(
+                        time: $0.time,
+                        minimum: $0.value - 3,
+                        lowerQuartile: $0.value - 1,
+                        median: $0.value,
+                        upperQuartile: $0.value + 1,
+                        maximum: $0.value + 3
+                    )
+                },
+                style: LivelineBoxPlotStyle()
+            ),
+            .stackedBars(
+                data: points.map { LivelineStackedPoint(time: $0.time, values: [$0.value, 2, 1]) },
+                style: LivelineStackedBarStyle()
+            ),
+            .heatmap(
+                data: points.flatMap { point in
+                    (0..<3).map { LivelineHeatmapCell(time: point.time, row: $0, value: point.value + Double($0)) }
+                },
+                style: LivelineHeatmapStyle(rowLabels: ["A", "B", "C"])
+            ),
+        ]
+
+        for content in contents {
+            let prepared = LivelineChartPreparer.prepare(
+                for: content,
+                hiddenSeries: [],
+                leftEdge: layout.leftEdge,
+                rightEdge: layout.rightEdge,
+                config: configuration
+            )
+            let behavior = content.semantics().capabilities.hoverBehavior
+
+            func snapshot(targetLocation: CGPoint?) -> LivelineInteractionSnapshot {
+                LivelineInteractionBuilder.snapshot(
+                    content: content,
+                    prepared: prepared,
+                    layout: layout,
+                    palette: palette,
+                    configuration: configuration,
+                    hiddenSeries: [],
+                    behavior: behavior,
+                    targetLocation: targetLocation
+                )
+            }
+
+            let full = snapshot(targetLocation: nil)
+            for step in 0...20 {
+                let probe = CGPoint(
+                    x: layout.plotLeftX + layout.chartWidth * CGFloat(step) / 20,
+                    y: layout.padding.top + layout.chartHeight * 0.4
+                )
+                let narrowed = snapshot(targetLocation: probe)
+                // The point of narrowing: an active hover formats a handful of
+                // rows rather than one per visible datum.
+                XCTAssertLessThan(narrowed.targets.count, full.targets.count)
+                XCTAssertEqual(
+                    describe(LivelineHoverResolver.resolveSelection(location: probe, snapshot: narrowed)),
+                    describe(LivelineHoverResolver.resolveSelection(location: probe, snapshot: full)),
+                    "probe: \(probe) targets: \(narrowed.targets.count)"
+                )
+            }
+
+            // The idle snapshot still describes every visible datum.
+            XCTAssertEqual(snapshot(targetLocation: nil).targets.count, full.targets.count)
+        }
+    }
+
+    func testPaletteMemoReusesResolvedPalettesUntilInputsChange() {
+        let state = LivelineRenderState()
+        let first = state.palette(accent: .blue, mode: .dark, lineWidth: 2)
+        let repeated = state.palette(accent: .blue, mode: .dark, lineWidth: 2)
+        XCTAssertEqual(state.paletteBuildCount, 1)
+        XCTAssertEqual(describe(repeated), describe(first))
+        XCTAssertEqual(describe(first), describe(LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2)))
+
+        // Every input `resolve` reads has to invalidate the memo.
+        _ = state.palette(accent: .blue, mode: .light, lineWidth: 2)
+        XCTAssertEqual(state.paletteBuildCount, 2)
+        _ = state.palette(accent: .blue, mode: .dark, lineWidth: 3)
+        XCTAssertEqual(state.paletteBuildCount, 3)
+        let orange = state.palette(accent: .orange, mode: .dark, lineWidth: 2)
+        XCTAssertEqual(state.paletteBuildCount, 4)
+        XCTAssertEqual(describe(orange), describe(LivelinePalette.resolve(accent: .orange, mode: .dark, lineWidth: 2)))
+
+        // Interleaving accents, as a multi-series chart does, must still hit.
+        _ = state.palette(accent: .blue, mode: .dark, lineWidth: 2)
+        _ = state.palette(accent: .orange, mode: .dark, lineWidth: 2)
+        XCTAssertEqual(state.paletteBuildCount, 4)
+
+        state.reconcile(identity: LivelineChartIdentity(kind: .series), anchorValue: 0, window: 60)
+        _ = state.palette(accent: .blue, mode: .dark, lineWidth: 2)
+        XCTAssertEqual(state.paletteBuildCount, 5)
+    }
+
+    private func describe(_ selection: LivelineTooltipSelection?) -> String {
+        guard let selection else { return "none" }
+        let rows = selection.rows.map { "\($0.label)=\($0.value)" }.joined(separator: "|")
+        return [
+            selection.heading ?? "",
+            rows,
+            "\(selection.hover.time)",
+            "\(selection.hover.value)",
+            "\(selection.anchor.x),\(selection.anchor.y)",
+        ].joined(separator: ";")
+    }
+
+    private func describe(_ palette: LivelinePalette) -> String {
+        [
+            "\(palette.lineWidth)",
+            "\(palette.lineRGB?.red ?? -1),\(palette.lineRGB?.green ?? -1),\(palette.lineRGB?.blue ?? -1)",
+            "\(palette.gridLabelRGB)",
+            "\(palette.backgroundRGB)",
+            "\(palette.line)",
+            "\(palette.fillTop)",
+            "\(palette.tooltipBackground)",
+            "\(palette.timeLabel)",
+        ].joined(separator: ";")
+    }
 }

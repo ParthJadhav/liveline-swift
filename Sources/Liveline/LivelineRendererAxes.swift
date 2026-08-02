@@ -201,8 +201,9 @@ extension LivelineRenderer {
             let text = formatTime(key)
             if state.timeAxisLabels[key] == nil {
                 state.timeAxisLabels[key] = TimeAxisLabelState(alpha: fadeEffects ? 0 : 1, text: text)
-            } else {
+            } else if state.timeAxisLabels[key]?.text != text {
                 state.timeAxisLabels[key]?.text = text
+                state.timeAxisLabels[key]?.measuredWidth = nil
             }
             time += interval
         }
@@ -233,8 +234,16 @@ extension LivelineRenderer {
                 continue
             }
 
-            let font = Font.system(size: 11, weight: .regular, design: .monospaced)
-            let width = measureText(label.text, context: layer, font: font).width
+            // Measuring resolves the text through the graphics context, so keep
+            // the result until the label text itself changes.
+            let width: CGFloat
+            if let measured = label.measuredWidth {
+                width = measured
+            } else {
+                let font = Font.system(size: 11, weight: .regular, design: .monospaced)
+                width = measureText(label.text, context: layer, font: font).width
+                state.timeAxisLabels[key]?.measuredWidth = width
+            }
             labels.append((x, label.text, label.alpha, width))
         }
 

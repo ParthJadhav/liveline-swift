@@ -46,10 +46,66 @@ final class LivelineRenderState: ObservableObject {
     var settlesTransitionsImmediately = false
     var ditherGeometryCache: LivelineDitherGeometry?
     var ditherGeometryBuildCount = 0
+    var paletteBuildCount = 0
+    var legendGutterMeasureCount = 0
+    var accessibilityModelBuildCount = 0
     private var preparedChartKey: LivelinePreparedChartKey?
     private var preparedChartCache: LivelinePreparedChart?
     private var waterfallKey: LivelineWaterfallKey?
     private var waterfallCache: [LivelineWaterfallSegment] = []
+    private var paletteCache: [LivelinePaletteKey: LivelinePalette] = [:]
+    private var legendGutterCache: [LivelineLegendGutterKey: CGFloat] = [:]
+    private var accessibilityModelKey: LivelineAccessibilityModelKey?
+    private var accessibilityModelCache: LivelineChartAccessibilityModel?
+
+    /// Resolving a palette bridges the accent through `UIColor`/`NSColor` and
+    /// rebuilds every derived shade. That happens for the chart and for each
+    /// series on every frame, so memoize on the inputs `resolve` reads.
+    func palette(accent: Color, mode: LivelineThemeMode, lineWidth: CGFloat) -> LivelinePalette {
+        let key = LivelinePaletteKey(accent: accent, mode: mode, lineWidth: lineWidth)
+        if let cached = paletteCache[key] { return cached }
+        // A chart draws a handful of accents at most; a theme or accent flip
+        // should not let the table grow without bound.
+        if paletteCache.count >= 32 { paletteCache.removeAll(keepingCapacity: true) }
+        let palette = LivelinePalette.resolve(accent: accent, mode: mode, lineWidth: lineWidth)
+        paletteBuildCount += 1
+        paletteCache[key] = palette
+        return palette
+    }
+
+    /// Legend labels are measured through the graphics context, which is far
+    /// too expensive to repeat per frame for a gutter that only changes when
+    /// the label set does.
+    func legendGutterWidth(
+        labels: [String],
+        side: LivelineLegendSide,
+        measure: () -> CGFloat
+    ) -> CGFloat {
+        let key = LivelineLegendGutterKey(labels: labels, side: side)
+        if let cached = legendGutterCache[key] { return cached }
+        if legendGutterCache.count >= 8 { legendGutterCache.removeAll(keepingCapacity: true) }
+        let width = measure()
+        legendGutterMeasureCount += 1
+        legendGutterCache[key] = width
+        return width
+    }
+
+    /// The accessibility model formats a string per datum. Hover state lives in
+    /// `@State`, so every pointer move re-evaluates the body: without this the
+    /// whole dataset would be reformatted on each move while VoiceOver runs.
+    func accessibilityModel(
+        for key: LivelineAccessibilityModelKey,
+        make: () -> LivelineChartAccessibilityModel
+    ) -> LivelineChartAccessibilityModel {
+        if key == accessibilityModelKey, let cached = accessibilityModelCache {
+            return cached
+        }
+        let model = make()
+        accessibilityModelBuildCount += 1
+        accessibilityModelKey = key
+        accessibilityModelCache = model
+        return model
+    }
 
     /// Frames repeat far more often than data changes. Reuse the derived
     /// arrays whenever the identity behind them is untouched.
@@ -171,6 +227,10 @@ final class LivelineRenderState: ObservableObject {
         preparedChartCache = nil
         waterfallKey = nil
         waterfallCache.removeAll(keepingCapacity: true)
+        paletteCache.removeAll(keepingCapacity: true)
+        legendGutterCache.removeAll(keepingCapacity: true)
+        accessibilityModelKey = nil
+        accessibilityModelCache = nil
     }
 
     func nextRandom(seed: UInt32) -> Double {
@@ -240,8 +300,18 @@ struct LivelineAnimationFrame: Equatable {
     var elapsed: TimeInterval
 }
 
-struct Particle: Identifiable {
-    var id = UUID()
+struct LivelinePaletteKey: Hashable {
+    var accent: Color
+    var mode: LivelineThemeMode
+    var lineWidth: CGFloat
+}
+
+struct LivelineLegendGutterKey: Hashable {
+    var labels: [String]
+    var side: LivelineLegendSide
+}
+
+struct Particle {
     var position: CGPoint
     var velocity: CGVector
     var color: Color
@@ -263,6 +333,9 @@ struct OrderbookLabel: Identifiable {
 struct TimeAxisLabelState {
     var alpha: Double
     var text: String
+    /// Measured through the graphics context, which is expensive enough that
+    /// it must not repeat while the label text is unchanged.
+    var measuredWidth: CGFloat?
 }
 
 struct TimedTransition {

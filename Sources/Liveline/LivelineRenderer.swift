@@ -43,7 +43,7 @@ enum LivelineRenderer {
 
         state.settlesTransitionsImmediately = input.motion.settlesImmediately
         let config = input.configuration
-        let palette = LivelinePalette.resolve(accent: input.accent, mode: config.theme, lineWidth: config.lineWidth)
+        let palette = state.palette(accent: input.accent, mode: config.theme, lineWidth: config.lineWidth)
         let capabilities = input.semantics.capabilities
         let kind = input.semantics.identity.kind
         let isLine = kind == .line
@@ -61,8 +61,8 @@ enum LivelineRenderer {
         let anchor = anchorTime(latestTime: input.semantics.latestTime, timelineTimestamp: presentationTimestamp, window: input.activeWindow)
         let baseBuffer = isCandle ? windowBufferNoBadge : (showBadge ? windowBuffer : windowBufferNoBadge)
         let labelReveal = config.fadeEffects ? state.chartReveal : 1
-        let dataLeftReserve = dataReserve(for: input.content, side: .leading, config: config, context: context, reveal: labelReveal)
-        let dataRightReserve = dataReserve(for: input.content, side: .trailing, config: config, context: context, reveal: labelReveal)
+        let dataLeftReserve = dataReserve(for: input.content, side: .leading, config: config, context: context, state: state, reveal: labelReveal)
+        let dataRightReserve = dataReserve(for: input.content, side: .trailing, config: config, context: context, state: state, reveal: labelReveal)
         let chartWidth = max(1, input.size.width - resolvedPadding.left - resolvedPadding.right - dataLeftReserve - dataRightReserve)
         let needsArrowRoom = isLine && showBadge && (config.autoDetectMomentum || config.momentum != nil)
         let buffer = needsArrowRoom ? max(baseBuffer, Double(37 / chartWidth)) : baseBuffer
@@ -351,14 +351,25 @@ extension LivelineRenderer {
         )
     }
 
-    static func dataReserve(for content: LivelineChartContent, side: LivelineLegendSide, config: LivelineChartConfiguration, context: GraphicsContext, reveal: Double) -> CGFloat {
+    static func dataReserve(
+        for content: LivelineChartContent,
+        side: LivelineLegendSide,
+        config: LivelineChartConfiguration,
+        context: GraphicsContext,
+        state: LivelineRenderState,
+        reveal: Double
+    ) -> CGFloat {
         guard config.seriesLegendSide == side else { return 0 }
         guard case let .series(series) = content else { return 0 }
         let font = Font.system(size: 10, weight: .semibold)
         let labels = series.compactMap(\.label)
         guard !labels.isEmpty else { return 0 }
-        let maxLabelWidth = labels.reduce(CGFloat.zero) { current, label in
-            max(current, measureText(label, context: context, font: font).width)
+        // Text measurement goes through the graphics context. The gutter only
+        // moves when the labels do, so measure once per label set.
+        let maxLabelWidth = state.legendGutterWidth(labels: labels, side: side) {
+            labels.reduce(CGFloat.zero) { current, label in
+                max(current, measureText(label, context: context, font: font).width)
+            }
         }
         return max(0, maxLabelWidth - 2) * CGFloat(reveal)
     }

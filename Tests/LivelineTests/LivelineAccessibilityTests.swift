@@ -254,4 +254,62 @@ final class LivelineAccessibilityTests: XCTestCase {
             "Series 1 1.0, Series 2 -1.0, total 0.0"
         )
     }
+
+    func testAccessibilityModelIsMemoizedUntilItsInputsChange() {
+        var data = (0..<12).map { LivelinePoint(time: Double($0), value: Double($0)) }
+        var content = LivelineChartContent.line(data: data, value: data.last?.value ?? 0)
+        var configuration = LivelineChartConfiguration(
+            formatValue: { String(Int($0)) },
+            formatTime: { "T\(Int($0))" }
+        )
+        let state = LivelineRenderState()
+
+        func model(includeEntries: Bool = true) -> LivelineChartAccessibilityModel {
+            let semantics = content.semantics()
+            return state.accessibilityModel(
+                for: LivelineAccessibilityModelKey.make(
+                    content: content,
+                    semantics: semantics,
+                    configuration: configuration,
+                    hiddenSeries: [],
+                    includeEntries: includeEntries
+                )
+            ) {
+                LivelineChartAccessibilityModel.make(
+                    content: content,
+                    semantics: semantics,
+                    configuration: configuration,
+                    hiddenSeries: [],
+                    includeEntries: includeEntries
+                )
+            }
+        }
+
+        // Repeated body evaluations — a pointer moving over the chart — reuse
+        // the model instead of reformatting every datum.
+        let first = model()
+        XCTAssertEqual(model(), first)
+        XCTAssertEqual(model(), first)
+        XCTAssertEqual(state.accessibilityModelBuildCount, 1)
+
+        // VoiceOver switching on has to produce entries.
+        XCTAssertTrue(model(includeEntries: false).entries.isEmpty)
+        XCTAssertEqual(state.accessibilityModelBuildCount, 2)
+        XCTAssertEqual(model().entries.count, 12)
+        XCTAssertEqual(state.accessibilityModelBuildCount, 3)
+
+        // New samples, a new formatter, and loading all invalidate it.
+        data.append(LivelinePoint(time: 12, value: 40))
+        content = .line(data: data, value: 40)
+        XCTAssertEqual(model().entries.count, 13)
+        XCTAssertEqual(state.accessibilityModelBuildCount, 4)
+
+        configuration.formatValue = { "<\(Int($0))>" }
+        XCTAssertEqual(model().entries.last?.value, "<40>")
+        XCTAssertEqual(state.accessibilityModelBuildCount, 5)
+
+        configuration.loading = true
+        XCTAssertTrue(model().isLoading)
+        XCTAssertEqual(state.accessibilityModelBuildCount, 6)
+    }
 }

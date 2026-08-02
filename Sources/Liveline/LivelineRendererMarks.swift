@@ -23,7 +23,7 @@ extension LivelineRenderer {
         }
 
         let width = bucketWidth(
-            times: points.map(\.time),
+            sortedTimes: points.lazy.map(\.time),
             layout: layout,
             ratio: style.resolvedWidthRatio,
             minimum: 1,
@@ -346,7 +346,7 @@ extension LivelineRenderer {
         let progress = LivelineMath.easedReveal(reveal)
         guard !points.isEmpty, progress > 0.001 else { return }
         let width = bucketWidth(
-            times: points.map(\.time),
+            sortedTimes: points.lazy.map(\.time),
             layout: layout,
             ratio: style.resolvedWidthRatio,
             minimum: 3,
@@ -412,7 +412,7 @@ extension LivelineRenderer {
         let progress = LivelineMath.easedReveal(reveal)
         guard !segments.isEmpty, progress > 0.001 else { return }
         let width = bucketWidth(
-            times: segments.map(\.time),
+            sortedTimes: segments.lazy.map(\.time),
             layout: layout,
             ratio: style.resolvedWidthRatio,
             maximum: 48

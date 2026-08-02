@@ -143,8 +143,10 @@ extension LivelineRenderer {
         let visibleRowCount = (cells.map(\.row).max() ?? 0) + 1
         let rowCount = max(totalRowCount ?? visibleRowCount, visibleRowCount, style.rowLabels.count, 1)
         let rowHeight = layout.chartHeight / CGFloat(rowCount)
+        // Heatmap cells repeat a time per row and are not pre-sorted, so this
+        // kind still needs an explicit unique-and-sorted projection.
         let cellWidth = bucketWidth(
-            times: Array(Set(cells.map(\.time))).sorted(),
+            sortedTimes: Set(cells.map(\.time)).sorted(),
             layout: layout,
             ratio: style.resolvedCellWidthRatio,
             maximum: .greatestFiniteMagnitude

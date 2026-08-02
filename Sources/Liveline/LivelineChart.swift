@@ -296,15 +296,29 @@ public struct LivelineChart: View {
             hiddenSeries: hiddenSeries,
             activeWindow: activeWindow
         )
-        let accessibilityModel = LivelineChartAccessibilityModel.make(
-            content: content,
-            semantics: semantics,
-            configuration: configuration,
-            hiddenSeries: hiddenSeries,
-            includeEntries: accessibilityVoiceOverEnabled
-                || accessibilitySwitchControlEnabled
-                || accessibilityInspectionRequested
-        )
+        let includeAccessibilityEntries = accessibilityVoiceOverEnabled
+            || accessibilitySwitchControlEnabled
+            || accessibilityInspectionRequested
+        // Hover lives in view state, so every pointer move re-evaluates the
+        // body. Formatting an entry per datum on each of those moves is the
+        // dominant cost while VoiceOver is inspecting the chart.
+        let accessibilityModel = renderState.accessibilityModel(
+            for: LivelineAccessibilityModelKey.make(
+                content: content,
+                semantics: semantics,
+                configuration: configuration,
+                hiddenSeries: hiddenSeries,
+                includeEntries: includeAccessibilityEntries
+            )
+        ) {
+            LivelineChartAccessibilityModel.make(
+                content: content,
+                semantics: semantics,
+                configuration: configuration,
+                hiddenSeries: hiddenSeries,
+                includeEntries: includeAccessibilityEntries
+            )
+        }
         let resolvedSnapshotElapsedTime = snapshotElapsedTime
             ?? configuration.resolvedSnapshotElapsedTime
         let motion = LivelineMotionPolicy.resolve(
@@ -985,7 +999,7 @@ private extension LivelineChart {
             content: content,
             prepared: prepared,
             layout: current.layout,
-            palette: LivelinePalette.resolve(
+            palette: renderState.palette(
                 accent: accent,
                 mode: configuration.theme,
                 lineWidth: configuration.lineWidth
