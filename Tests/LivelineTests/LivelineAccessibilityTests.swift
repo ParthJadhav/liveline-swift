@@ -196,6 +196,85 @@ final class LivelineAccessibilityTests: XCTestCase {
         XCTAssertEqual(seriesModel.summary, configuration.emptyText)
     }
 
+    func testHistogramAccessibilityReadsEachBinAsARangeAndCount() {
+        let configuration = LivelineChartConfiguration(
+            formatValue: { String(Int($0)) },
+            formatTime: { "T\(Int($0))" }
+        )
+        let content = LivelineChartContent.histogram(
+            values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            style: LivelineHistogramStyle(binning: .count(5))
+        )
+        let model = LivelineChartAccessibilityModel.make(
+            content: content,
+            semantics: content.semantics(),
+            configuration: configuration,
+            hiddenSeries: []
+        )
+
+        XCTAssertEqual(model.label, "Histogram")
+        XCTAssertEqual(model.entryCount, 5)
+        XCTAssertEqual(model.entries.map(\.label), ["0 to 2", "2 to 4", "4 to 6", "6 to 8", "8 to 10"])
+        XCTAssertEqual(model.entries.map(\.value), ["2 values", "2 values", "2 values", "2 values", "3 values"])
+        XCTAssertEqual(model.value(at: 0), "0 to 2, 2 values, 1 of 5")
+
+        let empty = LivelineChartContent.histogram(values: [], style: LivelineHistogramStyle())
+        let emptyModel = LivelineChartAccessibilityModel.make(
+            content: empty,
+            semantics: empty.semantics(),
+            configuration: configuration,
+            hiddenSeries: []
+        )
+        XCTAssertEqual(emptyModel.entryCount, 0)
+        XCTAssertEqual(emptyModel.summary, configuration.emptyText)
+    }
+
+    func testBulletAccessibilitySummarizesMeasureAgainstTargetAndBand() {
+        let configuration = LivelineChartConfiguration(
+            formatValue: { String(Int($0)) },
+            formatTime: { "T\(Int($0))" }
+        )
+        let style = LivelineBulletStyle(
+            measure: 72,
+            target: 80,
+            ranges: [
+                LivelineBulletRange(value: 50, label: "poor"),
+                LivelineBulletRange(value: 75, label: "good"),
+                LivelineBulletRange(value: 100, label: "great"),
+            ],
+            label: "Conversion"
+        )
+        let content = LivelineChartContent.bullet(style: style)
+        let model = LivelineChartAccessibilityModel.make(
+            content: content,
+            semantics: content.semantics(),
+            configuration: configuration,
+            hiddenSeries: []
+        )
+
+        XCTAssertEqual(model.label, "Bullet chart")
+        XCTAssertEqual(content.semantics().currentValue, 72)
+        XCTAssertEqual(model.entryCount, 4)
+        XCTAssertEqual(model.entries.first?.label, "Conversion")
+        XCTAssertEqual(model.entries.first?.value, "72 of target 80, in 'good' range")
+        XCTAssertEqual(model.entries.dropFirst().map(\.label), ["poor", "good", "great"])
+        XCTAssertEqual(model.entries.last?.value, "Up to 100")
+
+        // A bare measure degrades to the value alone.
+        let bare = LivelineBulletStyle(measure: 72)
+        XCTAssertEqual(
+            LivelineChartAccessibilityModel.bulletSummary(style: bare, formatValue: configuration.formatValue),
+            "72"
+        )
+        XCTAssertEqual(
+            LivelineChartAccessibilityModel.bulletSummary(
+                style: LivelineBulletStyle(measure: 72, target: 80),
+                formatValue: configuration.formatValue
+            ),
+            "72 of target 80"
+        )
+    }
+
     func testSummaryOnlyAccessibilityModelAvoidsFormattingDenseEntries() {
         let points = (0..<10_000).map {
             LivelinePoint(time: Double($0), value: Double($0))
@@ -443,6 +522,54 @@ final class LivelineAccessibilityTests: XCTestCase {
         XCTAssertEqual(model.series.count, 1)
         XCTAssertEqual(model.series[0].points.map(\.category), ["Direct", "Search"])
         XCTAssertEqual(model.series[0].points.map(\.value), [40, 60])
+    }
+
+    func testAudioGraphDescribesHistogramBinsAndBulletBandsAsCategories() {
+        let configuration = LivelineChartConfiguration(
+            formatValue: { String(Int($0)) },
+            formatTime: { "T\(Int($0))" }
+        )
+        let histogram = LivelineChartContent.histogram(
+            values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            style: LivelineHistogramStyle(binning: .count(5))
+        )
+        let histogramModel = LivelineAudioGraphModel.make(
+            content: histogram,
+            semantics: histogram.semantics(),
+            configuration: configuration,
+            hiddenSeries: [],
+            activeWindow: 60,
+            title: "Histogram",
+            summary: "11 samples"
+        )
+
+        XCTAssertEqual(
+            histogramModel.xAxis,
+            .categories(["0 to 2", "2 to 4", "4 to 6", "6 to 8", "8 to 10"])
+        )
+        XCTAssertEqual(histogramModel.series.count, 1)
+        XCTAssertFalse(histogramModel.series[0].isContinuous)
+        XCTAssertEqual(histogramModel.series[0].points.map(\.value), [2, 2, 2, 2, 3])
+
+        let bullet = LivelineChartContent.bullet(style: LivelineBulletStyle(
+            measure: 72,
+            target: 80,
+            ranges: [LivelineBulletRange(value: 50, label: "poor"), LivelineBulletRange(value: 100, label: "good")],
+            axisRange: 0...100
+        ))
+        let bulletModel = LivelineAudioGraphModel.make(
+            content: bullet,
+            semantics: bullet.semantics(),
+            configuration: configuration,
+            hiddenSeries: [],
+            activeWindow: 60,
+            title: "Bullet chart",
+            summary: "72 of target 80"
+        )
+
+        XCTAssertEqual(bulletModel.xAxis, .categories(["Measure", "Target", "poor", "good"]))
+        XCTAssertEqual(bulletModel.series.first?.points.map(\.value), [72, 80, 50, 100])
+        XCTAssertEqual(bulletModel.valueRange, 0...100)
     }
 
     #if canImport(Accessibility)

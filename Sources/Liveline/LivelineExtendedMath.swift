@@ -123,6 +123,28 @@ extension LivelineMath {
         return LivelineGaugeGeometry(center: center, radius: radius, visualBounds: visualBounds)
     }
 
+    static func stackedSegments(
+        values: [Double],
+        mode: LivelineStackMode,
+        baseline: LivelineStackBaseline
+    ) -> [LivelineStackSegment] {
+        let segments = stackedSegments(values: values, mode: mode)
+        guard baseline == .centered else { return segments }
+        let offset = stackedCenteredOffset(segments: segments)
+        guard offset != 0 else { return segments }
+        return segments.map { LivelineStackSegment(lower: $0.lower + offset, upper: $0.upper + offset) }
+    }
+
+    /// Half the stack's own height, negated: applying it puts the middle of the
+    /// stack on the value axis' zero line, which is what makes a streamgraph
+    /// ripple symmetrically rather than grow off one edge.
+    static func stackedCenteredOffset(segments: [LivelineStackSegment]) -> Double {
+        guard !segments.isEmpty else { return 0 }
+        let upper = segments.map(\.upper).max() ?? 0
+        let lower = segments.map(\.lower).min() ?? 0
+        return -(upper + lower) / 2
+    }
+
     static func stackedSegments(values: [Double], mode: LivelineStackMode) -> [LivelineStackSegment] {
         let finite = values.map { $0.isFinite ? $0 : 0 }
         let positiveTotal = finite.filter { $0 > 0 }.reduce(0, +)
@@ -157,9 +179,13 @@ extension LivelineMath {
         }
     }
 
-    static func stackedRangePoints(points: [LivelineStackedPoint], mode: LivelineStackMode) -> [LivelinePoint] {
+    static func stackedRangePoints(
+        points: [LivelineStackedPoint],
+        mode: LivelineStackMode,
+        baseline: LivelineStackBaseline = .zero
+    ) -> [LivelinePoint] {
         points.flatMap { point in
-            let segments = stackedSegments(values: point.values, mode: mode)
+            let segments = stackedSegments(values: point.values, mode: mode, baseline: baseline)
             let lower = min(segments.map(\.lower).min() ?? 0, segments.map(\.upper).min() ?? 0, 0)
             let upper = max(segments.map(\.lower).max() ?? 0, segments.map(\.upper).max() ?? 0, 0)
             return [
@@ -179,6 +205,98 @@ extension LivelineMath {
             if point.values.contains(where: { $0 < 0 }) { return -1 }
             return 0
         }
+    }
+
+    /// Splits raw samples into contiguous frequency bins.
+    ///
+    /// Non-finite samples are dropped. An empty input produces no bins, and a
+    /// set of samples with no spread produces a single zero-width bin holding
+    /// all of them. Every bin is half-open except the last, which is closed so
+    /// the largest sample is counted.
+    static func histogramBins(
+        values: [Double],
+        binning: LivelineHistogramBinning
+    ) -> [LivelineHistogramBin] {
+        let samples = values.filter(\.isFinite).sorted()
+        guard let minimum = samples.first, let maximum = samples.last else { return [] }
+        guard maximum > minimum else {
+            return [LivelineHistogramBin(lowerBound: minimum, upperBound: maximum, count: samples.count)]
+        }
+
+        let binCount = histogramBinCount(sortedSamples: samples, binning: binning)
+        let width = (maximum - minimum) / Double(binCount)
+        var counts = [Int](repeating: 0, count: binCount)
+        for sample in samples {
+            let index = min(Int((sample - minimum) / width), binCount - 1)
+            counts[max(index, 0)] += 1
+        }
+        return (0..<binCount).map { index in
+            LivelineHistogramBin(
+                lowerBound: minimum + Double(index) * width,
+                upperBound: index == binCount - 1 ? maximum : minimum + Double(index + 1) * width,
+                count: counts[index]
+            )
+        }
+    }
+
+    /// Number of bins the rule asks for, clamped to something a canvas can draw.
+    static func histogramBinCount(
+        sortedSamples: [Double],
+        binning: LivelineHistogramBinning
+    ) -> Int {
+        let count = sortedSamples.count
+        guard count > 0 else { return 0 }
+
+        func sturges() -> Int {
+            count <= 1 ? 1 : Int(ceil(log2(Double(count)))) + 1
+        }
+
+        func freedmanDiaconis() -> Int? {
+            guard count >= 4,
+                  let minimum = sortedSamples.first,
+                  let maximum = sortedSamples.last,
+                  maximum > minimum
+            else {
+                return nil
+            }
+            let iqr = quantile(sortedSamples: sortedSamples, 0.75) - quantile(sortedSamples: sortedSamples, 0.25)
+            guard iqr > 0 else { return nil }
+            let width = 2 * iqr * pow(Double(count), -1.0 / 3.0)
+            guard width > 0 else { return nil }
+            let bins = Int(ceil((maximum - minimum) / width))
+            return bins > 0 ? bins : nil
+        }
+
+        let resolved: Int
+        switch binning {
+        case .automatic:
+            resolved = freedmanDiaconis() ?? sturges()
+        case .sturges:
+            resolved = sturges()
+        case .freedmanDiaconis:
+            resolved = freedmanDiaconis() ?? sturges()
+        case let .count(explicit):
+            resolved = explicit
+        }
+        return clamp(resolved, 1, 512)
+    }
+
+    /// Linear-interpolation quantile over already sorted samples.
+    static func quantile(sortedSamples: [Double], _ probability: Double) -> Double {
+        guard let first = sortedSamples.first, let last = sortedSamples.last else { return 0 }
+        guard sortedSamples.count > 1 else { return first }
+        let position = clamp(probability, 0, 1) * Double(sortedSamples.count - 1)
+        let lower = Int(position.rounded(.down))
+        let upper = min(lower + 1, sortedSamples.count - 1)
+        let fraction = position - Double(lower)
+        guard lower >= 0 else { return first }
+        guard upper < sortedSamples.count else { return last }
+        return sortedSamples[lower] + (sortedSamples[upper] - sortedSamples[lower]) * fraction
+    }
+
+    /// Fraction of the bullet axis a value sits at, clamped to the track.
+    static func bulletProgress(value: Double, range: ClosedRange<Double>) -> Double {
+        gaugeProgress(value: value, range: range)
     }
 
     static func gaugeProgress(value: Double, range: ClosedRange<Double>) -> Double {

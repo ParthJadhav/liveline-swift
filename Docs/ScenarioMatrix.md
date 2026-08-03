@@ -103,6 +103,9 @@ The machine-readable manifest at `Examples/LivelineDemo/Resources/storybook-scen
 | `gauge-target` | Gauge | Half-circle SLA gauge with target marker. |
 | `funnel-basic` | Funnel | Labeled conversion stages with values. |
 | `funnel-compact` | Funnel | Tight square stages with labels only. |
+| `stacked-area-stream` | Stacked area | Centered baseline streamgraph without a value axis. |
+| `histogram-basic` | Histogram | Automatically binned sample frequencies. |
+| `bullet-basic` | Bullet | Measure against a target across qualitative bands. |
 <!-- END GENERATED SCENARIO TABLE -->
 
 ## Parity Notes

@@ -37,6 +37,8 @@ enum LivelineStrings {
     static let chartKindDonut = localized("chart.kind.donut", "Donut chart", "VoiceOver name for a donut chart")
     static let chartKindGauge = localized("chart.kind.gauge", "Gauge chart", "VoiceOver name for a gauge chart")
     static let chartKindFunnel = localized("chart.kind.funnel", "Funnel chart", "VoiceOver name for a funnel chart")
+    static let chartKindHistogram = localized("chart.kind.histogram", "Histogram", "VoiceOver name for a histogram")
+    static let chartKindBullet = localized("chart.kind.bullet", "Bullet chart", "VoiceOver name for a bullet chart")
     static let chartKindCandle = localized("chart.kind.candle", "Candlestick chart", "VoiceOver name for a candlestick chart")
     static let chartKindSeries = localized("chart.kind.series", "Multi-series chart", "VoiceOver name for a chart with several series")
 
@@ -70,7 +72,21 @@ enum LivelineStrings {
     static let labelTime = localized("label.time", "Time", "Audio Graph axis title for the time axis")
     static let labelCategory = localized("label.category", "Category", "Audio Graph axis title for a categorical axis")
     static let labelGauge = localized("label.gauge", "Gauge", "Tooltip heading for a gauge")
+    static let labelCount = localized("label.count", "Count", "Label for the number of samples in a histogram bin")
+    static let labelMeasure = localized("label.measure", "Measure", "Label for the value a bullet chart reports")
+    static let labelBullet = localized("label.bullet", "Bullet", "Tooltip heading for a bullet chart")
     static let labelGaugeValue = localized("label.gaugeValue", "Gauge value", "Label for the value a gauge is showing")
+
+    /// A histogram bin's value interval. `%1$@` is the lower bound, `%2$@` the
+    /// upper bound.
+    static let labelBinRangeFormat = localized("label.binRange.format", "%1$@ to %2$@", "Tooltip heading naming a histogram bin's value interval")
+
+    /// Number of samples in a histogram bin. `%ld` is the count.
+    static let labelSampleCountFormat = localized("label.sampleCount.format", "%ld values", "Tooltip and VoiceOver phrase for how many samples fell in a histogram bin; %ld is the count")
+
+    /// Fallback name for a bullet band the caller did not label. `%ld` is the
+    /// one-based band number.
+    static let labelBandFormat = localized("label.band.format", "Band %ld", "Fallback name for an unlabelled bullet chart band; %ld is the band number")
 
     /// Fallback name for a heatmap row the caller did not label. `%ld` is the
     /// one-based row number.
@@ -146,6 +162,15 @@ enum LivelineStrings {
     /// `%1$@` is the value phrase, `%2$@` the range's lower bound, `%3$@` its
     /// upper bound.
     static let accessibilityGaugeValueFormat = localized("accessibility.gauge.value.format", "%1$@, range %2$@ to %3$@", "VoiceOver value for a gauge")
+
+    /// `%1$@` is the measure, `%2$@` the band's upper bound.
+    static let accessibilityBulletBandValueFormat = localized("accessibility.bullet.band.value.format", "Up to %1$@", "VoiceOver value for one qualitative band of a bullet chart; %1$@ is the band's upper bound")
+
+    /// `%1$@` is the measure, `%2$@` the target.
+    static let accessibilityBulletTargetFormat = localized("accessibility.bullet.target.format", "%1$@ of target %2$@", "VoiceOver phrase comparing a bullet chart's measure to its target")
+
+    /// `%1$@` is the measure phrase, `%2$@` the name of the band it falls in.
+    static let accessibilityBulletRangeFormat = localized("accessibility.bullet.range.format", "%1$@, in '%2$@' range", "VoiceOver phrase naming the band a bullet chart's measure falls in")
 
     /// `%1$@` open, `%2$@` high, `%3$@` low, `%4$@` close.
     static let accessibilityCandleValueFormat = localized("accessibility.candle.value.format", "Open %1$@, high %2$@, low %3$@, close %4$@", "VoiceOver value for a candle")

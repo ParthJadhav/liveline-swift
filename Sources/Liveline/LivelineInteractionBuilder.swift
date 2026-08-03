@@ -171,7 +171,7 @@ enum LivelineInteractionBuilder {
             return stackedTargets(data: data, mode: style.mode, colors: style.colors, layout: layout, palette: palette, targetLocation: targetLocation, value: value, time: time)
 
         case let .stackedAreas(data, style):
-            return stackedTargets(data: data, mode: style.mode, colors: style.colors, layout: layout, palette: palette, targetLocation: targetLocation, value: value, time: time)
+            return stackedTargets(data: data, mode: style.mode, baseline: style.baseline, colors: style.colors, layout: layout, palette: palette, targetLocation: targetLocation, value: value, time: time)
 
         case let .timeline(items, style):
             let visible = items.filter { $0.end >= layout.leftEdge - 2 && $0.start <= layout.rightEdge }
@@ -321,6 +321,63 @@ enum LivelineInteractionBuilder {
                 )
             }
 
+        case let .histogram(values, style):
+            let bins = LivelineMath.histogramBins(values: values, binning: style.binning)
+            let geometry = LivelineRenderer.histogramGeometry(
+                bins: bins,
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: 1
+            )
+            return interactionMarks(geometry.bars, nearestTo: targetLocation, rect: \.rect).map { bar in
+                target(
+                    time: bar.bin.midpoint,
+                    value: Double(bar.bin.count),
+                    anchor: CGPoint(x: bar.rect.midX, y: bar.rect.minY),
+                    heading: String(
+                        format: LivelineStrings.labelBinRangeFormat,
+                        value(bar.bin.lowerBound),
+                        value(bar.bin.upperBound)
+                    ),
+                    rows: [
+                        row(
+                            LivelineStrings.labelCount,
+                            String(format: LivelineStrings.labelSampleCountFormat, bar.bin.count),
+                            geometry.color
+                        ),
+                    ],
+                    region: .rect(bar.rect)
+                )
+            }
+
+        case let .bullet(style):
+            let geometry = LivelineRenderer.bulletGeometry(
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: 1
+            )
+            var rows = [row(LivelineStrings.labelMeasure, value(style.resolvedMeasure), style.measureColor ?? palette.line)]
+            if let targetValue = style.resolvedTarget {
+                rows.append(row(LivelineStrings.labelTarget, value(targetValue), style.targetColor ?? palette.tooltipText))
+            }
+            for (index, band) in geometry.bands.enumerated() {
+                rows.append(row(
+                    band.range.label ?? String(format: LivelineStrings.labelBandFormat, index + 1),
+                    value(band.range.value),
+                    band.color
+                ))
+            }
+            return [target(
+                time: 0,
+                value: style.resolvedMeasure,
+                anchor: CGPoint(x: geometry.measureRect.maxX, y: geometry.trackRect.minY),
+                heading: style.label ?? LivelineStrings.labelBullet,
+                rows: rows,
+                region: .rect(geometry.plotRect)
+            )]
+
         case let .candle(_, _, candles, candleWidth, liveCandle, lineData, _):
             // Once candles have morphed into line mode, the visible geometry is
             // the dense line series rather than the candle highs and bodies.
@@ -441,6 +498,7 @@ enum LivelineInteractionBuilder {
     private static func stackedTargets(
         data: [LivelineStackedPoint],
         mode: LivelineStackMode,
+        baseline: LivelineStackBaseline = .zero,
         colors: [Color],
         layout: LivelineLayout,
         palette: LivelinePalette,
@@ -450,7 +508,7 @@ enum LivelineInteractionBuilder {
     ) -> [LivelineInteractionTarget] {
         let visible = data.livelineVisible(in: (layout.leftEdge - 2)...layout.rightEdge)
         return interactionSlice(visible, nearestTo: targetLocation, layout: layout).map { point in
-            let segments = LivelineMath.stackedSegments(values: point.values, mode: mode)
+            let segments = LivelineMath.stackedSegments(values: point.values, mode: mode, baseline: baseline)
             let signedValues = zip(point.values, segments).map { rawValue, segment in
                 rawValue < 0
                     ? segment.lower - segment.upper
@@ -466,7 +524,10 @@ enum LivelineInteractionBuilder {
             let total = signedValues.reduce(0, +)
             rows.append(row(LivelineStrings.labelTotal, value(total), palette.tooltipText))
             return xTarget(
-                point: LivelinePoint(time: point.time, value: total),
+                point: LivelinePoint(
+                    time: point.time,
+                    value: baseline == .centered ? (segments.map(\.upper).max() ?? total) : total
+                ),
                 anchorValue: segments.map(\.upper).max() ?? total,
                 heading: time(point.time),
                 rows: rows,

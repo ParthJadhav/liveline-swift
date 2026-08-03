@@ -60,7 +60,7 @@ enum LivelineRenderer {
             config.padding,
             badgeEnabled: reservesBadgePadding,
             showValueAxis: config.grid && capabilities.usesValueAxis,
-            showTimeAxis: capabilities.usesTimeAxis
+            showTimeAxis: capabilities.usesTimeAxis || capabilities.reservesBottomAxisPadding
         )
         let presentationTimestamp = state.presentationTimestamp(for: input.timestamp, isPaused: input.motion.isPaused)
         let anchor = anchorTime(latestTime: input.semantics.latestTime, timelineTimestamp: presentationTimestamp, window: input.activeWindow)

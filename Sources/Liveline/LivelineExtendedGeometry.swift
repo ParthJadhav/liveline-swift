@@ -89,6 +89,40 @@ struct LivelineFunnelGeometry {
     var stages: [LivelineFunnelStage]
 }
 
+struct LivelineHistogramBar {
+    var bin: LivelineHistogramBin
+    var rect: CGRect
+    var reveal: Double
+}
+
+struct LivelineHistogramGeometry {
+    var progress: Double
+    /// The sample range the bars span, which is what the horizontal axis shows.
+    var valueRange: ClosedRange<Double>
+    var barWidth: CGFloat
+    var color: Color
+    var bars: [LivelineHistogramBar]
+}
+
+struct LivelineBulletBand {
+    var range: LivelineBulletRange
+    var rect: CGRect
+    var color: Color
+}
+
+struct LivelineBulletGeometry {
+    var progress: Double
+    var plotRect: CGRect
+    var trackRect: CGRect
+    var measureRect: CGRect
+    var bands: [LivelineBulletBand]
+    var axisRange: ClosedRange<Double>
+    var measureProgress: Double
+    var targetProgress: Double?
+    var targetX: CGFloat?
+    var displayedMeasure: Double
+}
+
 extension LivelineRenderer {
     static func timelineGeometry(
         items: [LivelineTimelineItem],
@@ -354,6 +388,124 @@ extension LivelineRenderer {
             )
         }
         return LivelineFunnelGeometry(progress: progress, stageHeight: stageHeight, stages: stages)
+    }
+
+    /// Bars sit side by side across the whole plot width — the horizontal axis
+    /// is the sample range, not time — and grow up from the value axis' zero.
+    static func histogramGeometry(
+        bins: [LivelineHistogramBin],
+        style: LivelineHistogramStyle,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        reveal: Double
+    ) -> LivelineHistogramGeometry {
+        let progress = LivelineMath.easedReveal(reveal)
+        let color = style.color ?? palette.line
+        let lower = bins.first?.lowerBound ?? 0
+        let upper = bins.last?.upperBound ?? lower
+        let valueRange = lower <= upper ? lower...upper : upper...lower
+        guard !bins.isEmpty else {
+            return LivelineHistogramGeometry(
+                progress: progress,
+                valueRange: valueRange,
+                barWidth: 0,
+                color: color,
+                bars: []
+            )
+        }
+
+        let slotWidth = layout.chartWidth / CGFloat(bins.count)
+        let barWidth = max(slotWidth - style.resolvedBarSpacing, 1)
+        let baselineY = LivelineMath.clamp(layout.y(for: 0), layout.padding.top, layout.bottomY)
+        let bars = bins.enumerated().compactMap { index, bin -> LivelineHistogramBar? in
+            let localReveal = LivelineMath.staggeredReveal(index: index, count: bins.count, reveal: reveal)
+            guard localReveal > 0.001 else { return nil }
+            let topY = layout.y(for: Double(bin.count))
+            let height = max((baselineY - topY) * CGFloat(localReveal), 0)
+            let x = layout.plotLeftX + CGFloat(index) * slotWidth + (slotWidth - barWidth) / 2
+            return LivelineHistogramBar(
+                bin: bin,
+                rect: CGRect(x: x, y: baselineY - height, width: barWidth, height: height),
+                reveal: localReveal
+            )
+        }
+        return LivelineHistogramGeometry(
+            progress: progress,
+            valueRange: valueRange,
+            barWidth: barWidth,
+            color: color,
+            bars: bars
+        )
+    }
+
+    /// Layered horizontal geometry: qualitative bands behind a thinner measure
+    /// bar, both anchored to the axis' lower bound, plus the target tick.
+    static func bulletGeometry(
+        style: LivelineBulletStyle,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        reveal: Double
+    ) -> LivelineBulletGeometry {
+        let progress = LivelineMath.easedReveal(reveal)
+        let plotRect = CGRect(
+            x: layout.plotLeftX,
+            y: layout.padding.top,
+            width: layout.chartWidth,
+            height: layout.chartHeight
+        )
+        let axisRange = style.resolvedAxisRange
+        let centerY = plotRect.midY
+        let trackHeight = max(plotRect.height * style.resolvedBarHeightRatio, 6)
+        let measureHeight = max(plotRect.height * style.resolvedMeasureHeightRatio, 3)
+        let trackRect = CGRect(
+            x: plotRect.minX,
+            y: centerY - trackHeight / 2,
+            width: plotRect.width,
+            height: trackHeight
+        )
+
+        func x(for value: Double) -> CGFloat {
+            plotRect.minX + CGFloat(LivelineMath.bulletProgress(value: value, range: axisRange)) * plotRect.width
+        }
+
+        let ranges = style.resolvedRanges
+        let bands = ranges.enumerated().map { index, range -> LivelineBulletBand in
+            let startValue = index == 0 ? axisRange.lowerBound : ranges[index - 1].value
+            let startX = x(for: startValue)
+            let endX = max(x(for: range.value), startX)
+            let color = range.color
+                ?? extendedSeriesColor(index: index, colors: [], palette: palette)
+            return LivelineBulletBand(
+                range: range,
+                rect: CGRect(x: startX, y: trackRect.minY, width: endX - startX, height: trackRect.height),
+                color: color
+            )
+        }
+
+        let measureProgress = LivelineMath.bulletProgress(value: style.resolvedMeasure, range: axisRange)
+        let measureWidth = plotRect.width * CGFloat(measureProgress) * CGFloat(progress)
+        let measureRect = CGRect(
+            x: plotRect.minX,
+            y: centerY - measureHeight / 2,
+            width: max(measureWidth, 0),
+            height: measureHeight
+        )
+        let targetProgress = style.resolvedTarget.map {
+            LivelineMath.bulletProgress(value: $0, range: axisRange)
+        }
+        return LivelineBulletGeometry(
+            progress: progress,
+            plotRect: plotRect,
+            trackRect: trackRect,
+            measureRect: measureRect,
+            bands: bands,
+            axisRange: axisRange,
+            measureProgress: measureProgress,
+            targetProgress: targetProgress,
+            targetX: style.resolvedTarget.map { x(for: $0) },
+            displayedMeasure: axisRange.lowerBound
+                + (style.resolvedMeasure - axisRange.lowerBound) * progress
+        )
     }
 
     static func plotCenter(_ layout: LivelineLayout) -> CGPoint {

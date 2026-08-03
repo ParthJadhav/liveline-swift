@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import Foundation
 import SwiftUI
 import XCTest
 @testable import Liveline
@@ -74,6 +75,22 @@ final class LivelineRendererSmokeTests: XCTestCase {
             ("donut", AnyView(LivelineChart(donut: categories, configuration: config))),
             ("gauge", AnyView(LivelineChart(gauge: 0.65, configuration: config))),
             ("funnel", AnyView(LivelineChart(funnel: categories, configuration: config))),
+            ("histogram", AnyView(LivelineChart(
+                histogram: [1, 2, 2, 3, 3, 3, 4, 4, 5, 9],
+                configuration: config
+            ))),
+            ("bullet", AnyView(LivelineChart(
+                bullet: LivelineBulletStyle(
+                    measure: 72,
+                    target: 80,
+                    ranges: [
+                        LivelineBulletRange(value: 50, label: "Poor"),
+                        LivelineBulletRange(value: 75, label: "OK"),
+                        LivelineBulletRange(value: 100, label: "Good"),
+                    ]
+                ),
+                configuration: config
+            ))),
             ("candle", AnyView(LivelineChart(
                 data: points,
                 value: 5,
@@ -113,6 +130,39 @@ final class LivelineRendererSmokeTests: XCTestCase {
                 XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000, name)
             }
         }
+    }
+
+    /// The streamgraph baseline is opt-in: a default stacked-area chart must
+    /// keep rendering exactly the pixels it rendered before the option existed,
+    /// while `.centered` visibly moves the stack.
+    @MainActor
+    func testStackedAreaBaselineDefaultsToUnchangedZeroRendering() throws {
+        let stacked = [
+            LivelineStackedPoint(time: 1, values: [2, 1]),
+            LivelineStackedPoint(time: 2, values: [3, 2]),
+            LivelineStackedPoint(time: 3, values: [1, 4]),
+        ]
+
+        func render(_ style: LivelineStackedAreaStyle) throws -> Data {
+            let renderer = ImageRenderer(
+                content: ZStack {
+                    Color.black
+                    LivelineChart(stackedAreas: stacked, style: style, configuration: configuration)
+                }
+                .frame(width: 320, height: 220)
+            )
+            renderer.proposedSize = ProposedViewSize(width: 320, height: 220)
+            renderer.scale = 1
+            let image: NSImage = try XCTUnwrap(renderer.nsImage)
+            return try XCTUnwrap(image.tiffRepresentation)
+        }
+
+        let implicit = try render(LivelineStackedAreaStyle())
+        let explicitZero = try render(LivelineStackedAreaStyle(baseline: .zero))
+        let centered = try render(LivelineStackedAreaStyle(baseline: .centered))
+
+        XCTAssertEqual(implicit, explicitZero)
+        XCTAssertNotEqual(implicit, centered)
     }
 
     @MainActor

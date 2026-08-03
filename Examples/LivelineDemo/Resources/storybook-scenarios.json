@@ -318,5 +318,20 @@
     "id": "funnel-compact",
     "area": "Funnel",
     "coverage": "Tight square stages with labels only."
+  },
+  {
+    "id": "stacked-area-stream",
+    "area": "Stacked area",
+    "coverage": "Centered baseline streamgraph without a value axis."
+  },
+  {
+    "id": "histogram-basic",
+    "area": "Histogram",
+    "coverage": "Automatically binned sample frequencies."
+  },
+  {
+    "id": "bullet-basic",
+    "area": "Bullet",
+    "coverage": "Measure against a target across qualitative bands."
   }
 ]

@@ -241,6 +241,45 @@ public struct LivelineChart: View {
         self.init(content: .funnel(data: funnel, style: style), accent: color, configuration: configuration)
     }
 
+    /// Creates a histogram of raw samples, binned by the style's rule.
+    ///
+    /// ```swift
+    /// LivelineChart(histogram: latencies, style: LivelineHistogramStyle(binning: .count(20)))
+    /// ```
+    ///
+    /// The horizontal axis spans the sample range rather than time, and the
+    /// value axis counts the samples that fell in each bin.
+    public init(
+        histogram values: [Double],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineHistogramStyle = LivelineHistogramStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .histogram(values: values, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a bullet chart: a compact horizontal KPI showing a measure
+    /// against a target and qualitative bands.
+    ///
+    /// ```swift
+    /// LivelineChart(bullet: LivelineBulletStyle(
+    ///     measure: 72,
+    ///     target: 80,
+    ///     ranges: [
+    ///         LivelineBulletRange(value: 50, label: "Poor"),
+    ///         LivelineBulletRange(value: 75, label: "OK"),
+    ///         LivelineBulletRange(value: 100, label: "Good"),
+    ///     ]
+    /// ))
+    /// ```
+    public init(
+        bullet style: LivelineBulletStyle,
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .bullet(style: style), accent: color, configuration: configuration)
+    }
+
     public init(
         series: [LivelineSeries],
         configuration: LivelineChartConfiguration = LivelineChartConfiguration()

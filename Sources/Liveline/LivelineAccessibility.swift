@@ -309,6 +309,39 @@ struct LivelineChartAccessibilityModel: Equatable {
                 )
             }
 
+        case let .histogram(values, style):
+            entries = LivelineMath.histogramBins(values: values, binning: style.binning)
+                .enumerated()
+                .map { index, bin in
+                    LivelineAccessibilityEntry(
+                        id: "histogram-\(index)-\(bin.lowerBound)",
+                        label: String(
+                            format: LivelineStrings.labelBinRangeFormat,
+                            formatValue(bin.lowerBound),
+                            formatValue(bin.upperBound)
+                        ),
+                        value: String(format: LivelineStrings.labelSampleCountFormat, bin.count)
+                    )
+                }
+
+        case let .bullet(style):
+            entries = [
+                LivelineAccessibilityEntry(
+                    id: "bullet-measure",
+                    label: style.label ?? LivelineStrings.labelMeasure,
+                    value: bulletSummary(style: style, formatValue: formatValue)
+                ),
+            ] + style.resolvedRanges.enumerated().map { index, range in
+                LivelineAccessibilityEntry(
+                    id: "bullet-band-\(index)-\(range.value)",
+                    label: range.label ?? String(format: LivelineStrings.labelBandFormat, index + 1),
+                    value: String(
+                        format: LivelineStrings.accessibilityBulletBandValueFormat,
+                        formatValue(range.value)
+                    )
+                )
+            }
+
         case let .candle(data, _, candles, _, liveCandle, lineData, _):
             if configuration.lineMode, !lineData.isEmpty {
                 entries = pointEntries(lineData)
@@ -373,6 +406,30 @@ struct LivelineChartAccessibilityModel: Equatable {
         )
     }
 
+    /// "72 of target 80, in 'good' range" — the one phrase a bullet chart is
+    /// read for, assembled from whichever of the three parts the caller gave.
+    static func bulletSummary(
+        style: LivelineBulletStyle,
+        formatValue: (Double) -> String
+    ) -> String {
+        var summary = formatValue(style.resolvedMeasure)
+        if let target = style.resolvedTarget {
+            summary = String(
+                format: LivelineStrings.accessibilityBulletTargetFormat,
+                summary,
+                formatValue(target)
+            )
+        }
+        if let band = style.containingRange, let label = band.label, !label.isEmpty {
+            summary = String(
+                format: LivelineStrings.accessibilityBulletRangeFormat,
+                summary,
+                label
+            )
+        }
+        return summary
+    }
+
     private static func accessibleEntryCount(
         content: LivelineChartContent,
         configuration: LivelineChartConfiguration,
@@ -411,6 +468,10 @@ struct LivelineChartAccessibilityModel: Equatable {
             }
         case .gauge:
             return 1
+        case let .histogram(values, style):
+            return LivelineMath.histogramBins(values: values, binning: style.binning).count
+        case let .bullet(style):
+            return 1 + style.resolvedRanges.count
         case let .candle(data, _, candles, _, liveCandle, lineData, _):
             if configuration.lineMode, !lineData.isEmpty {
                 return lineData.count
@@ -499,7 +560,7 @@ struct LivelineAccessibilityModelKey: Equatable {
 
         case let .stackedAreas(data, style):
             shapes = [data.livelineShape(lastValue: LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode))]
-            identifiers = [style.mode.rawValue]
+            identifiers = [style.mode.rawValue, style.baseline.rawValue]
 
         case let .timeline(data, _):
             shapes = [untimedShape(data, lastValue: data.last?.end ?? 0)]
@@ -517,6 +578,20 @@ struct LivelineAccessibilityModelKey: Equatable {
 
         case let .gauge(value, range, style):
             variants = [value, range.lowerBound, range.upperBound, style.resolvedTarget ?? .infinity]
+
+        case let .histogram(values, style):
+            shapes = [untimedShape(values, lastValue: values.last ?? 0)]
+            identifiers = [style.binning.cacheIdentifier]
+
+        case let .bullet(style):
+            let range = style.resolvedAxisRange
+            variants = [
+                style.resolvedMeasure,
+                style.resolvedTarget ?? .infinity,
+                range.lowerBound,
+                range.upperBound,
+            ] + style.resolvedRanges.map(\.value)
+            identifiers = [style.label ?? ""] + style.resolvedRanges.map { $0.label ?? "" }
 
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
             shapes = [
@@ -595,6 +670,8 @@ private extension LivelineChartKind {
         case .donut: return LivelineStrings.chartKindDonut
         case .gauge: return LivelineStrings.chartKindGauge
         case .funnel: return LivelineStrings.chartKindFunnel
+        case .histogram: return LivelineStrings.chartKindHistogram
+        case .bullet: return LivelineStrings.chartKindBullet
         case .candle: return LivelineStrings.chartKindCandle
         case .series: return LivelineStrings.chartKindSeries
         }

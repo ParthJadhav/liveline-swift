@@ -66,4 +66,7 @@ enum StorybookScenarioID: String, CaseIterable {
     case gaugeTarget = "gauge-target"
     case funnelBasic = "funnel-basic"
     case funnelCompact = "funnel-compact"
+    case stackedAreaStream = "stacked-area-stream"
+    case histogramBasic = "histogram-basic"
+    case bulletBasic = "bullet-basic"
 }

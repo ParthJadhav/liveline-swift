@@ -33,6 +33,8 @@ LivelineChart(radar:color:style:configuration:)
 LivelineChart(donut:color:style:configuration:)
 LivelineChart(gauge:range:color:style:configuration:)
 LivelineChart(funnel:color:style:configuration:)
+LivelineChart(histogram:color:style:configuration:)
+LivelineChart(bullet:color:configuration:)
 ```
 
 ## Data Types

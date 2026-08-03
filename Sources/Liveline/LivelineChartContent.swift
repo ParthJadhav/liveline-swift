@@ -20,6 +20,8 @@ enum LivelineChartContent {
     case donut(data: [LivelineCategoryValue], style: LivelineDonutStyle)
     case gauge(value: Double, range: ClosedRange<Double>, style: LivelineGaugeStyle)
     case funnel(data: [LivelineCategoryValue], style: LivelineFunnelStyle)
+    case histogram(values: [Double], style: LivelineHistogramStyle)
+    case bullet(style: LivelineBulletStyle)
     case candle(
         data: [LivelinePoint],
         value: Double,
@@ -52,6 +54,8 @@ enum LivelineChartKind: Hashable, CaseIterable {
     case donut
     case gauge
     case funnel
+    case histogram
+    case bullet
     case candle
     case series
 }
@@ -69,6 +73,9 @@ struct LivelineChartCapabilities: Equatable {
     var hoverBehavior: LivelineHoverBehavior
     var supportsLiveBadge: Bool = false
     var reservesBadgePadding: Bool = false
+    /// Reserves the bottom gutter the time axis would use for content that
+    /// draws its own horizontal axis labels there.
+    var reservesBottomAxisPadding: Bool = false
     var isRealtime: Bool = false
 }
 
@@ -182,6 +189,16 @@ extension LivelineChartContent {
         case let .funnel(data, style):
             return .funnel(data: LivelineInputNormalizer.categories(data), style: style)
 
+        case let .histogram(values, style):
+            let samples = LivelineInputNormalizer.samples(values)
+            guard samples.livelineSharesStorage(with: values) else {
+                return .histogram(values: samples, style: style)
+            }
+            return self
+
+        case .bullet:
+            return self
+
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
             let points = LivelineInputNormalizer.points(data)
             let linePoints = LivelineInputNormalizer.points(lineData)
@@ -293,7 +310,15 @@ extension LivelineChartContent {
 
         case let .stackedAreas(data, style):
             let points = data.map { LivelinePoint(time: $0.time, value: LivelineMath.stackedPrimaryValue(point: $0, mode: style.mode)) }
-            return semantics(kind: .stackedAreas, capabilities: .discreteCartesian, currentValue: points.last?.value ?? 0, momentumPoints: points, latestTime: data.last?.time)
+            // A centered stack is read by shape, not magnitude: the value axis
+            // and its grid would label offsets no reader can interpret.
+            return semantics(
+                kind: .stackedAreas,
+                capabilities: style.baseline == .centered ? .stream : .discreteCartesian,
+                currentValue: points.last?.value ?? 0,
+                momentumPoints: points,
+                latestTime: data.last?.time
+            )
 
         case let .timeline(data, _):
             let points = data.enumerated().map { LivelinePoint(time: Double($0.offset), value: $0.element.end - $0.element.start) }
@@ -322,6 +347,24 @@ extension LivelineChartContent {
 
         case let .funnel(data, _):
             return semantics(kind: .funnel, capabilities: .radial, currentValue: data.last(where: { $0.value > 0 })?.value ?? 0, momentumPoints: [], latestTime: nil)
+
+        case let .histogram(values, _):
+            return semantics(
+                kind: .histogram,
+                capabilities: .binned,
+                currentValue: Double(values.count),
+                momentumPoints: [],
+                latestTime: nil
+            )
+
+        case let .bullet(style):
+            return semantics(
+                kind: .bullet,
+                capabilities: .radial,
+                currentValue: style.resolvedMeasure,
+                momentumPoints: [],
+                latestTime: nil
+            )
 
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
             let points = lineData.isEmpty ? data : lineData
@@ -442,6 +485,25 @@ private extension LivelineChartCapabilities {
     static let discreteCartesian = LivelineChartCapabilities(
         usesValueAxis: true,
         usesCartesianGrid: true,
+        usesTimeAxis: true,
+        hoverBehavior: .discrete
+    )
+
+    /// Value axis with no time axis: the horizontal axis is a value range the
+    /// content draws itself.
+    static let binned = LivelineChartCapabilities(
+        usesValueAxis: true,
+        usesCartesianGrid: true,
+        usesTimeAxis: false,
+        hoverBehavior: .none,
+        reservesBottomAxisPadding: true
+    )
+
+    /// Time axis without a value axis, for stacks whose absolute values carry
+    /// no meaning.
+    static let stream = LivelineChartCapabilities(
+        usesValueAxis: false,
+        usesCartesianGrid: false,
         usesTimeAxis: true,
         hoverBehavior: .discrete
     )
@@ -751,6 +813,12 @@ enum LivelineInputNormalizer {
             guard !point.label.isEmpty, point.value.isFinite, seen.insert(point.label).inserted else { return nil }
             return LivelineRadarPoint(label: point.label, value: value(point.value, fallback: 0))
         }
+    }
+
+    /// Raw samples for a histogram: only the non-finite ones are dropped, since
+    /// binning does not care about order.
+    static func samples(_ source: [Double]) -> [Double] {
+        source.allSatisfy(\.isFinite) ? source : source.filter(\.isFinite)
     }
 
     static func categories(_ source: [LivelineCategoryValue]) -> [LivelineCategoryValue] {

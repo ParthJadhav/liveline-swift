@@ -120,6 +120,7 @@ extension LivelineRenderer {
         palette: LivelinePalette,
         points: [LivelineStackedPoint],
         style: LivelineStackedBarStyle,
+        baseline: LivelineStackBaseline = .zero,
         reveal: Double
     ) {
         let progress = LivelineMath.easedReveal(reveal)
@@ -138,7 +139,11 @@ extension LivelineRenderer {
             let localReveal = LivelineMath.staggeredReveal(index: pointIndex, count: points.count, reveal: reveal)
             guard localReveal > 0.001 else { continue }
             let x = layout.x(for: point.time)
-            for (index, segment) in LivelineMath.stackedSegments(values: point.values, mode: style.mode).enumerated() {
+            for (index, segment) in LivelineMath.stackedSegments(
+                values: point.values,
+                mode: style.mode,
+                baseline: baseline
+            ).enumerated() {
                 let lowerY = layout.y(for: segment.lower * localReveal)
                 let upperY = layout.y(for: segment.upper * localReveal)
                 let top = min(lowerY, upperY) + style.resolvedSegmentSpacing / 2
@@ -176,8 +181,9 @@ extension LivelineRenderer {
                     cornerRadius: 2,
                     segmentSpacing: 0,
                     colors: style.colors,
-                    showsBaseline: style.showsBaseline
+                    showsBaseline: style.showsBaseline && style.baseline == .zero
                 ),
+                baseline: style.baseline,
                 reveal: reveal
             )
             return
@@ -186,7 +192,8 @@ extension LivelineRenderer {
         var layer = context
         layer.clip(to: plotClip(layout))
 
-        if style.showsBaseline {
+        // A centered stack has no meaningful zero line to draw against.
+        if style.showsBaseline, style.baseline == .zero {
             var baselineLayer = layer
             baselineLayer.opacity *= min(progress * 2, 1)
             drawBaseline(context: &baselineLayer, layout: layout, palette: palette, value: 0)
@@ -194,8 +201,18 @@ extension LivelineRenderer {
 
         for index in 0..<maximumSegments {
             let bounds = sorted.map { point -> (time: TimeInterval, segment: LivelineStackSegment) in
-                let segments = LivelineMath.stackedSegments(values: point.values, mode: style.mode)
-                return (point.time, index < segments.count ? segments[index] : LivelineStackSegment(lower: 0, upper: 0))
+                let segments = LivelineMath.stackedSegments(
+                    values: point.values,
+                    mode: style.mode,
+                    baseline: style.baseline
+                )
+                // A point with fewer slots than the widest one contributes a
+                // zero-height sliver. Under `.zero` that is the axis' zero
+                // line, exactly as before; a centered stack has no zero line,
+                // so the sliver rides on top of that point's own stack.
+                let collapsed = style.baseline == .centered ? (segments.last?.upper ?? 0) : 0
+                let empty = LivelineStackSegment(lower: collapsed, upper: collapsed)
+                return (point.time, index < segments.count ? segments[index] : empty)
             }
             let upperPoints = bounds.map { CGPoint(x: layout.x(for: $0.time), y: layout.y(for: $0.segment.upper)) }
             let lowerPoints = bounds.map { CGPoint(x: layout.x(for: $0.time), y: layout.y(for: $0.segment.lower)) }
@@ -722,6 +739,202 @@ extension LivelineRenderer {
                 font: textScale.font(10, weight: .semibold)
             )
         }
+    }
+
+    static func drawHistogram(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        geometry: LivelineHistogramGeometry,
+        style: LivelineHistogramStyle,
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale,
+        drawLabels: Bool = true
+    ) {
+        guard !geometry.bars.isEmpty, geometry.progress > 0.001 else { return }
+        var layer = context
+        layer.clip(to: plotClip(layout))
+
+        if style.showsBaseline {
+            var baselineLayer = layer
+            baselineLayer.opacity *= min(geometry.progress * 2, 1)
+            drawBaseline(context: &baselineLayer, layout: layout, palette: palette, value: 0)
+        }
+
+        for bar in geometry.bars {
+            let radius = min(style.resolvedCornerRadius, bar.rect.width / 2, max(bar.rect.height / 2, 0))
+            layer.fill(
+                Path(roundedRect: bar.rect, cornerRadius: radius),
+                with: .color(geometry.color.opacity(style.resolvedFillOpacity))
+            )
+        }
+
+        if drawLabels {
+            drawHistogramLabels(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: formatValue,
+                textScale: textScale
+            )
+        }
+    }
+
+    static func drawHistogramLabels(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        geometry: LivelineHistogramGeometry,
+        style: LivelineHistogramStyle,
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale
+    ) {
+        guard !geometry.bars.isEmpty else { return }
+
+        if style.showsCounts, geometry.barWidth > textScale.scaled(22) {
+            var clipped = context
+            clipped.clip(to: plotClip(layout))
+            for bar in geometry.bars where bar.reveal > 0.8 && bar.rect.height > textScale.scaled(12) {
+                var countLayer = clipped
+                countLayer.opacity *= LivelineMath.easedReveal((bar.reveal - 0.8) / 0.2)
+                drawText(
+                    "\(bar.bin.count)",
+                    context: &countLayer,
+                    at: CGPoint(x: bar.rect.midX, y: bar.rect.minY + textScale.scaled(8)),
+                    anchor: .center,
+                    color: .white.opacity(0.92),
+                    font: textScale.font(9, weight: .semibold, design: .monospaced)
+                )
+            }
+        }
+
+        guard style.showsEdgeLabels else { return }
+        var labelLayer = context
+        labelLayer.opacity *= min(geometry.progress * 2, 1)
+        let font = textScale.font(10, weight: .regular, design: .monospaced)
+        let y = layout.bottomY + textScale.scaled(11)
+        let edges: [(value: Double, x: CGFloat, anchor: UnitPoint)] = [
+            (geometry.valueRange.lowerBound, layout.plotLeftX, .leading),
+            (
+                (geometry.valueRange.lowerBound + geometry.valueRange.upperBound) / 2,
+                layout.plotLeftX + layout.chartWidth / 2,
+                .center
+            ),
+            (geometry.valueRange.upperBound, layout.rightX, .trailing),
+        ]
+        // The middle label is the first to collide on a narrow chart.
+        let visible = layout.chartWidth > textScale.scaled(180) ? edges : [edges[0], edges[2]]
+        for edge in visible {
+            drawText(
+                formatValue(edge.value),
+                context: &labelLayer,
+                at: CGPoint(x: edge.x, y: y),
+                anchor: edge.anchor,
+                color: palette.timeLabel,
+                font: font
+            )
+        }
+    }
+
+    static func drawBullet(
+        context: inout GraphicsContext,
+        palette: LivelinePalette,
+        geometry: LivelineBulletGeometry,
+        style: LivelineBulletStyle,
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale,
+        drawLabels: Bool = true
+    ) {
+        guard geometry.progress > 0.001 else { return }
+        let layer = context
+
+        var trackLayer = layer
+        trackLayer.opacity *= min(geometry.progress * 2, 1)
+        let trackRadius = min(style.resolvedCornerRadius, geometry.trackRect.height / 2)
+        trackLayer.fill(
+            Path(roundedRect: geometry.trackRect, cornerRadius: trackRadius),
+            with: .color(palette.tooltipText.opacity(0.08))
+        )
+        for band in geometry.bands where band.rect.width > 0 {
+            trackLayer.fill(
+                Path(roundedRect: band.rect, cornerRadius: min(trackRadius, band.rect.width / 2)),
+                with: .color(band.color.opacity(style.resolvedBandOpacity))
+            )
+        }
+
+        if geometry.measureRect.width > 0 {
+            layer.fill(
+                Path(
+                    roundedRect: geometry.measureRect,
+                    cornerRadius: min(
+                        style.resolvedCornerRadius,
+                        geometry.measureRect.height / 2,
+                        geometry.measureRect.width / 2
+                    )
+                ),
+                with: .color(style.measureColor ?? palette.line)
+            )
+        }
+
+        if let targetX = geometry.targetX {
+            var targetLayer = layer
+            targetLayer.opacity *= LivelineMath.easedReveal((geometry.progress - 0.6) / 0.4)
+            let overhang = geometry.trackRect.height * 0.18
+            var tick = Path()
+            tick.move(to: CGPoint(x: targetX, y: geometry.trackRect.minY - overhang))
+            tick.addLine(to: CGPoint(x: targetX, y: geometry.trackRect.maxY + overhang))
+            targetLayer.stroke(
+                tick,
+                with: .color(style.targetColor ?? palette.tooltipText),
+                style: StrokeStyle(lineWidth: 3, lineCap: .round)
+            )
+        }
+
+        if drawLabels {
+            drawBulletLabels(
+                context: &context,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: formatValue,
+                textScale: textScale
+            )
+        }
+    }
+
+    static func drawBulletLabels(
+        context: inout GraphicsContext,
+        palette: LivelinePalette,
+        geometry: LivelineBulletGeometry,
+        style: LivelineBulletStyle,
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale
+    ) {
+        var labelLayer = context
+        labelLayer.opacity *= LivelineMath.easedReveal((geometry.progress - 0.35) / 0.65)
+
+        if let label = style.label, !label.isEmpty {
+            drawText(
+                label,
+                context: &labelLayer,
+                at: CGPoint(x: geometry.plotRect.minX, y: geometry.trackRect.minY - textScale.scaled(12)),
+                anchor: .leading,
+                color: palette.gridLabel,
+                font: textScale.font(11, weight: .medium)
+            )
+        }
+
+        guard style.showsValue else { return }
+        drawText(
+            formatValue(geometry.displayedMeasure),
+            context: &labelLayer,
+            at: CGPoint(x: geometry.plotRect.maxX, y: geometry.trackRect.minY - textScale.scaled(12)),
+            anchor: .trailing,
+            color: palette.tooltipText,
+            font: textScale.font(16, weight: .semibold, design: .rounded)
+        )
     }
 }
 

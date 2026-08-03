@@ -2,6 +2,191 @@ import XCTest
 @testable import Liveline
 
 final class LivelineMathTests: XCTestCase {
+    // MARK: - Histogram binning
+
+    func testHistogramBinsCountSamplesAgainstContiguousEdges() {
+        let bins = LivelineMath.histogramBins(
+            values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            binning: .count(5)
+        )
+
+        XCTAssertEqual(bins.count, 5)
+        XCTAssertEqual(bins.map(\.count), [2, 2, 2, 2, 3])
+        XCTAssertEqual(bins.map(\.lowerBound), [0, 2, 4, 6, 8])
+        XCTAssertEqual(bins.map(\.upperBound), [2, 4, 6, 8, 10])
+        // Edges are contiguous, and every sample lands in exactly one bin.
+        XCTAssertEqual(bins.map(\.count).reduce(0, +), 11)
+        for (previous, next) in zip(bins, bins.dropFirst()) {
+            XCTAssertEqual(previous.upperBound, next.lowerBound)
+        }
+    }
+
+    func testHistogramBinsPlaceBoundarySamplesInTheUpperBin() {
+        let bins = LivelineMath.histogramBins(values: [0, 5, 5, 10], binning: .count(2))
+
+        XCTAssertEqual(bins.map(\.count), [1, 3])
+        XCTAssertEqual(bins.first?.lowerBound, 0)
+        XCTAssertEqual(bins.last?.upperBound, 10)
+    }
+
+    func testHistogramBinsHandleEmptyAndDegenerateInput() {
+        XCTAssertTrue(LivelineMath.histogramBins(values: [], binning: .automatic).isEmpty)
+        XCTAssertTrue(LivelineMath.histogramBins(values: [.nan, .infinity], binning: .automatic).isEmpty)
+
+        let single = LivelineMath.histogramBins(values: [7], binning: .automatic)
+        XCTAssertEqual(single.count, 1)
+        XCTAssertEqual(single.first?.lowerBound, 7)
+        XCTAssertEqual(single.first?.upperBound, 7)
+        XCTAssertEqual(single.first?.count, 1)
+
+        let flat = LivelineMath.histogramBins(values: [3, 3, 3, 3], binning: .count(6))
+        XCTAssertEqual(flat.count, 1)
+        XCTAssertEqual(flat.first?.count, 4)
+    }
+
+    func testHistogramBinCountRulesFollowTheirDefinitions() {
+        let samples = (0..<32).map(Double.init)
+
+        XCTAssertEqual(
+            LivelineMath.histogramBinCount(sortedSamples: samples, binning: .sturges),
+            Int(ceil(log2(32.0))) + 1
+        )
+
+        // Freedman-Diaconis: width = 2 * IQR * n^(-1/3).
+        let iqr = LivelineMath.quantile(sortedSamples: samples, 0.75)
+            - LivelineMath.quantile(sortedSamples: samples, 0.25)
+        let width = 2 * iqr * pow(32.0, -1.0 / 3.0)
+        XCTAssertEqual(
+            LivelineMath.histogramBinCount(sortedSamples: samples, binning: .freedmanDiaconis),
+            Int(ceil(31 / width))
+        )
+
+        // No spread in the middle half leaves Freedman-Diaconis undefined, so
+        // `.automatic` falls back to Sturges.
+        let spiked = [Double](repeating: 1, count: 20) + [9]
+        XCTAssertEqual(
+            LivelineMath.histogramBinCount(sortedSamples: spiked.sorted(), binning: .automatic),
+            LivelineMath.histogramBinCount(sortedSamples: spiked.sorted(), binning: .sturges)
+        )
+
+        XCTAssertEqual(LivelineMath.histogramBinCount(sortedSamples: samples, binning: .count(0)), 1)
+        XCTAssertEqual(LivelineMath.histogramBinCount(sortedSamples: samples, binning: .count(9_999)), 512)
+        XCTAssertEqual(LivelineMath.histogramBinCount(sortedSamples: [], binning: .automatic), 0)
+    }
+
+    // MARK: - Streamgraph baseline
+
+    func testCenteredStackOffsetsHalveTheStackAroundZero() {
+        let values = [2.0, 3.0, 5.0]
+        let zero = LivelineMath.stackedSegments(values: values, mode: .standard, baseline: .zero)
+        let centered = LivelineMath.stackedSegments(values: values, mode: .standard, baseline: .centered)
+
+        XCTAssertEqual(zero, LivelineMath.stackedSegments(values: values, mode: .standard))
+        XCTAssertEqual(centered.count, zero.count)
+
+        let total = values.reduce(0, +)
+        XCTAssertEqual(centered.first?.lower ?? 0, -total / 2, accuracy: 1e-9)
+        XCTAssertEqual(centered.last?.upper ?? 0, total / 2, accuracy: 1e-9)
+        // Every layer keeps its own thickness; only the anchor moves.
+        for (offset, plain) in zip(centered, zero) {
+            XCTAssertEqual(offset.upper - offset.lower, plain.upper - plain.lower, accuracy: 1e-9)
+            XCTAssertEqual(offset.lower, plain.lower - total / 2, accuracy: 1e-9)
+        }
+    }
+
+    func testCenteredStackRangePointsCoverTheOffsetStack() {
+        let points = [
+            LivelineStackedPoint(time: 1, values: [2, 3]),
+            LivelineStackedPoint(time: 2, values: [4, 4]),
+        ]
+        let centered = LivelineMath.stackedRangePoints(points: points, mode: .standard, baseline: .centered)
+
+        XCTAssertEqual(centered.map(\.value), [-2.5, 2.5, -4, 4])
+        XCTAssertEqual(
+            LivelineMath.stackedRangePoints(points: points, mode: .standard, baseline: .zero),
+            LivelineMath.stackedRangePoints(points: points, mode: .standard)
+        )
+    }
+
+    func testZeroBaselineStackingIsUnchangedByTheBaselineOption() {
+        for values in [[2.0, 3.0], [-1.0, 4.0, -2.0], [0.0, 0.0]] {
+            for mode in LivelineStackMode.allCases {
+                XCTAssertEqual(
+                    LivelineMath.stackedSegments(values: values, mode: mode, baseline: .zero),
+                    LivelineMath.stackedSegments(values: values, mode: mode)
+                )
+            }
+        }
+        XCTAssertEqual(LivelineStackedAreaStyle().baseline, .zero)
+    }
+
+    // MARK: - Bullet geometry
+
+    func testBulletGeometryMapsBandsMeasureAndTargetOntoTheTrack() {
+        let style = LivelineBulletStyle(
+            measure: 72,
+            target: 80,
+            ranges: [
+                LivelineBulletRange(value: 100, label: "Good"),
+                LivelineBulletRange(value: 50, label: "Poor"),
+                LivelineBulletRange(value: 75, label: "OK"),
+            ],
+            axisRange: 0...100
+        )
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 120),
+            padding: LivelineResolvedPadding(top: 10, right: 20, bottom: 10, left: 20),
+            minValue: 0,
+            maxValue: 100,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let geometry = LivelineRenderer.bulletGeometry(
+            style: style,
+            layout: layout,
+            palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
+            reveal: 1
+        )
+
+        // Unordered bands are sorted worst to best and tile the axis end to end.
+        XCTAssertEqual(geometry.bands.map(\.range.label), ["Poor", "OK", "Good"])
+        XCTAssertEqual(geometry.bands.first?.rect.minX ?? 0, layout.plotLeftX, accuracy: 0.001)
+        XCTAssertEqual(geometry.bands.last?.rect.maxX ?? 0, layout.rightX, accuracy: 0.001)
+        for (previous, next) in zip(geometry.bands, geometry.bands.dropFirst()) {
+            XCTAssertEqual(previous.rect.maxX, next.rect.minX, accuracy: 0.001)
+        }
+
+        XCTAssertEqual(geometry.measureProgress, 0.72, accuracy: 1e-9)
+        XCTAssertEqual(geometry.measureRect.minX, layout.plotLeftX, accuracy: 0.001)
+        XCTAssertEqual(geometry.measureRect.width, layout.chartWidth * 0.72, accuracy: 0.001)
+        XCTAssertEqual(geometry.targetProgress ?? 0, 0.8, accuracy: 1e-9)
+        XCTAssertEqual(geometry.targetX ?? 0, layout.plotLeftX + layout.chartWidth * 0.8, accuracy: 0.001)
+        // The measure bar is thinner than the qualitative track it sits on.
+        XCTAssertLessThan(geometry.measureRect.height, geometry.trackRect.height)
+    }
+
+    func testBulletStyleDerivesItsAxisAndContainingBand() {
+        let style = LivelineBulletStyle(
+            measure: 72,
+            target: 80,
+            ranges: [
+                LivelineBulletRange(value: 50, label: "Poor"),
+                LivelineBulletRange(value: 75, label: "OK"),
+                LivelineBulletRange(value: 100, label: "Good"),
+            ]
+        )
+
+        XCTAssertEqual(style.resolvedAxisRange, 0...100)
+        XCTAssertEqual(style.containingRange?.label, "OK")
+
+        let overshoot = LivelineBulletStyle(measure: 140, ranges: [LivelineBulletRange(value: 100, label: "Good")])
+        XCTAssertEqual(overshoot.resolvedAxisRange, 0...140)
+        XCTAssertEqual(overshoot.containingRange?.label, "Good")
+
+        let degenerate = LivelineBulletStyle(measure: 0, axisRange: 5...5)
+        XCTAssertLessThan(degenerate.resolvedAxisRange.lowerBound, degenerate.resolvedAxisRange.upperBound)
+    }
+
     func testBarRangePointsOnlyAddBaselineToRealData() {
         XCTAssertTrue(LivelineMath.barRangePoints(points: [], baseline: 4).isEmpty)
 

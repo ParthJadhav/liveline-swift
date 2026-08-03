@@ -146,6 +146,137 @@ final class LivelinePreparationTests: XCTestCase {
         XCTAssertEqual(grown, LivelineMath.waterfallSegments(points: extended, initialValue: 20))
     }
 
+    func testHistogramPreparationBinsOnceAndSpansTheCountAxis() {
+        let values = [1.0, 2, 2, 3, 3, 3, 4, 9]
+        let content = LivelineChartContent.histogram(values: values, style: LivelineHistogramStyle(binning: .count(4)))
+        let configuration = LivelineChartConfiguration()
+        let state = LivelineRenderState()
+
+        let prepared = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 0,
+            rightEdge: 10,
+            config: configuration,
+            state: state
+        )
+        let bins = LivelineMath.histogramBins(values: values, binning: .count(4))
+
+        XCTAssertEqual(prepared.rangePoints.map(\.value), bins.map { Double($0.count) })
+        XCTAssertEqual(prepared.rangeOverride, 0...Double(bins.map(\.count).max() ?? 1))
+        XCTAssertEqual(prepared.primaryValue, Double(values.count))
+        XCTAssertTrue(prepared.hasData)
+
+        // Binning is cacheable: identical samples and rule reuse the buffer.
+        let repeated = state.histogramBins(values: values, binning: .count(4))
+        XCTAssertTrue(state.histogramBins(values: values, binning: .count(4)).livelineSharesStorage(with: repeated))
+        XCTAssertFalse(state.histogramBins(values: values, binning: .count(3)).livelineSharesStorage(with: repeated))
+
+        let key = try? XCTUnwrap(LivelineChartPreparer.cacheKey(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 0,
+            rightEdge: 10,
+            config: configuration
+        ))
+        XCTAssertNotNil(key ?? nil)
+        XCTAssertNotEqual(
+            key ?? nil,
+            LivelineChartPreparer.cacheKey(
+                for: .histogram(values: values, style: LivelineHistogramStyle(binning: .count(3))),
+                hiddenSeries: [],
+                leftEdge: 0,
+                rightEdge: 10,
+                config: configuration
+            )
+        )
+    }
+
+    func testHistogramNormalizationDropsNonFiniteSamplesAndReusesCleanInput() {
+        let clean = [1.0, 2, 3]
+        guard case let .histogram(values, _) = LivelineChartContent
+            .histogram(values: clean, style: LivelineHistogramStyle())
+            .normalized()
+        else {
+            return XCTFail("Expected normalized histogram content")
+        }
+        XCTAssertTrue(values.livelineSharesStorage(with: clean))
+
+        guard case let .histogram(repaired, _) = LivelineChartContent
+            .histogram(values: [1, .nan, 3, .infinity], style: LivelineHistogramStyle())
+            .normalized()
+        else {
+            return XCTFail("Expected normalized histogram content")
+        }
+        XCTAssertEqual(repaired, [1, 3])
+    }
+
+    func testCenteredStackedAreaPreparationCoversTheOffsetStackAndDropsTheValueAxis() {
+        let points = [
+            LivelineStackedPoint(time: 1, values: [2, 3]),
+            LivelineStackedPoint(time: 2, values: [4, 4]),
+        ]
+        let configuration = LivelineChartConfiguration()
+        let zero = LivelineChartContent.stackedAreas(data: points, style: LivelineStackedAreaStyle())
+        let centered = LivelineChartContent.stackedAreas(
+            data: points,
+            style: LivelineStackedAreaStyle(baseline: .centered)
+        )
+
+        let zeroPrepared = LivelineChartPreparer.prepare(
+            for: zero,
+            hiddenSeries: [],
+            leftEdge: 0,
+            rightEdge: 10,
+            config: configuration
+        )
+        let centeredPrepared = LivelineChartPreparer.prepare(
+            for: centered,
+            hiddenSeries: [],
+            leftEdge: 0,
+            rightEdge: 10,
+            config: configuration
+        )
+
+        XCTAssertEqual(zeroPrepared.rangePoints.map(\.value), [0, 5, 0, 8])
+        XCTAssertEqual(centeredPrepared.rangePoints.map(\.value), [-2.5, 2.5, -4, 4])
+        // The padded value range still has to cover the whole offset stack.
+        XCTAssertLessThanOrEqual(centeredPrepared.rangeOverride?.lowerBound ?? 0, -4)
+        XCTAssertGreaterThanOrEqual(centeredPrepared.rangeOverride?.upperBound ?? 0, 4)
+        // Layer magnitudes, and therefore the reported value, are untouched.
+        XCTAssertEqual(centeredPrepared.primaryValue, zeroPrepared.primaryValue)
+
+        XCTAssertTrue(zero.semantics().capabilities.usesValueAxis)
+        XCTAssertFalse(centered.semantics().capabilities.usesValueAxis)
+        XCTAssertFalse(centered.semantics().capabilities.usesCartesianGrid)
+        XCTAssertTrue(centered.semantics().capabilities.usesTimeAxis)
+
+        // The two baselines must not share a prepared-chart cache entry.
+        XCTAssertNotEqual(
+            LivelineChartPreparer.cacheKey(for: zero, hiddenSeries: [], leftEdge: 0, rightEdge: 10, config: configuration),
+            LivelineChartPreparer.cacheKey(for: centered, hiddenSeries: [], leftEdge: 0, rightEdge: 10, config: configuration)
+        )
+    }
+
+    func testBulletPreparationUsesTheMeasureAxisAsItsValueRange() {
+        let style = LivelineBulletStyle(
+            measure: 72,
+            target: 80,
+            ranges: [LivelineBulletRange(value: 50, label: "Poor"), LivelineBulletRange(value: 100, label: "Good")]
+        )
+        let prepared = LivelineChartPreparer.prepare(
+            for: .bullet(style: style),
+            hiddenSeries: [],
+            leftEdge: 0,
+            rightEdge: 10,
+            config: LivelineChartConfiguration()
+        )
+
+        XCTAssertEqual(prepared.primaryValue, 72)
+        XCTAssertEqual(prepared.rangeOverride, 0...100)
+        XCTAssertTrue(prepared.hasData)
+    }
+
     func testInterpolationNormalizesUnorderedInputAtItsSafeInterface() throws {
         let points = [
             LivelinePoint(time: 10, value: 10),

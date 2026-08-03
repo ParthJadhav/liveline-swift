@@ -212,6 +212,15 @@ enum StorybookData {
         }
     }
 
+    /// Deterministic right-skewed samples for the histogram scenario.
+    static var histogramSamples: [Double] {
+        (0..<240).map { index in
+            let t = Double(index)
+            let base = 120 + sin(t * 0.37) * 26 + cos(t * 0.11) * 14
+            return base + pow(sin(t * 0.07), 4) * 90
+        }
+    }
+
     static var timeline: [LivelineTimelineItem] {
         [
             LivelineTimelineItem(id: "design", label: "Design", start: baseTime - 170, end: baseTime - 118, lane: 0),

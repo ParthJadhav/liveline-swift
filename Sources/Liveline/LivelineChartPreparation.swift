@@ -306,7 +306,11 @@ enum LivelineChartPreparer {
         case let .stackedAreas(data, style):
             let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
             let source = visible.isEmpty ? Array(data.suffix(8)) : visible
-            let rangePoints = LivelineMath.stackedRangePoints(points: source, mode: style.mode)
+            let rangePoints = LivelineMath.stackedRangePoints(
+                points: source,
+                mode: style.mode,
+                baseline: style.baseline
+            )
             let primaryValue = LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode)
             return LivelinePreparedChart(
                 primaryVisible: visible.map {
@@ -383,6 +387,28 @@ enum LivelineChartPreparer {
                 rangePoints: positive.isEmpty ? [] : [LivelinePoint(time: 0, value: lastValue)],
                 rangeOverride: 0...max(positive.map(\.value).max() ?? 1, 1),
                 primaryValue: lastValue
+            )
+
+        case let .histogram(values, style):
+            let bins = state?.histogramBins(values: values, binning: style.binning)
+                ?? LivelineMath.histogramBins(values: values, binning: style.binning)
+            let maximumCount = bins.map(\.count).max() ?? 0
+            return LivelinePreparedChart(
+                primaryVisible: [],
+                rangePoints: bins.isEmpty
+                    ? []
+                    : bins.enumerated().map { LivelinePoint(time: Double($0.offset), value: Double($0.element.count)) },
+                rangeOverride: 0...Double(max(maximumCount, 1)),
+                primaryValue: Double(values.count)
+            )
+
+        case let .bullet(style):
+            let range = style.resolvedAxisRange
+            return LivelinePreparedChart(
+                primaryVisible: [],
+                rangePoints: [LivelinePoint(time: 0, value: style.resolvedMeasure)],
+                rangeOverride: range,
+                primaryValue: style.resolvedMeasure
             )
 
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
@@ -532,7 +558,7 @@ enum LivelineChartPreparer {
         case let .stackedAreas(data, style):
             kind = .stackedAreas
             shapes = [data.livelineShape(lastValue: LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode))]
-            identifiers = [style.mode.rawValue]
+            identifiers = [style.mode.rawValue, style.baseline.rawValue]
 
         case let .timeline(data, _):
             kind = .timeline
@@ -556,7 +582,20 @@ enum LivelineChartPreparer {
             shapes = series.map { $0.data.livelineShape(lastValue: $0.value) }
             identifiers = series.map(\.id)
 
-        case .radar, .donut, .gauge, .funnel, .candle:
+        case let .histogram(values, style):
+            kind = .histogram
+            shapes = [
+                LivelineDataShape(
+                    storage: values.livelineStorageIdentity,
+                    count: values.count,
+                    firstTime: values.first ?? 0,
+                    lastTime: values.last ?? 0,
+                    lastValue: 0
+                ),
+            ]
+            identifiers = [style.binning.cacheIdentifier]
+
+        case .radar, .donut, .gauge, .funnel, .bullet, .candle:
             // Aggregates over unordered data or a live candle: not worth a key
             // that would have to restate the whole payload.
             return nil

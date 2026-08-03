@@ -56,6 +56,8 @@ final class LivelineRenderState: ObservableObject {
     private var preparedChartCache: LivelinePreparedChart?
     private var waterfallKey: LivelineWaterfallKey?
     private var waterfallCache: [LivelineWaterfallSegment] = []
+    private var histogramKey: LivelineHistogramKey?
+    private var histogramCache: [LivelineHistogramBin] = []
     private var paletteCache: [LivelinePaletteKey: LivelinePalette] = [:]
     private var legendGutterCache: [LivelineLegendGutterKey: CGFloat] = [:]
     private var accessibilityModelKey: LivelineAccessibilityModelKey?
@@ -141,6 +143,27 @@ final class LivelineRenderState: ObservableObject {
         waterfallKey = key
         waterfallCache = segments
         return segments
+    }
+
+    /// Binning sorts and walks the whole sample set, which is far too much to
+    /// repeat per frame for an input that only changes when the caller's data
+    /// does. Memoize on the samples' identity and the rule applied to them.
+    func histogramBins(
+        values: [Double],
+        binning: LivelineHistogramBinning
+    ) -> [LivelineHistogramBin] {
+        let key = LivelineHistogramKey(
+            storage: values.livelineStorageIdentity,
+            count: values.count,
+            first: values.first ?? 0,
+            last: values.last ?? 0,
+            binning: binning
+        )
+        if histogramKey == key { return histogramCache }
+        let bins = LivelineMath.histogramBins(values: values, binning: binning)
+        histogramKey = key
+        histogramCache = bins
+        return bins
     }
 
     func frame(for timestamp: TimeInterval, isPaused: Bool) -> LivelineAnimationFrame {
@@ -241,6 +264,8 @@ final class LivelineRenderState: ObservableObject {
         preparedChartCache = nil
         waterfallKey = nil
         waterfallCache.removeAll(keepingCapacity: true)
+        histogramKey = nil
+        histogramCache.removeAll(keepingCapacity: true)
         paletteCache.removeAll(keepingCapacity: true)
         legendGutterCache.removeAll(keepingCapacity: true)
         accessibilityModelKey = nil
@@ -318,6 +343,14 @@ struct LivelinePaletteKey: Hashable {
     var accent: Color
     var mode: LivelineThemeMode
     var lineWidth: CGFloat
+}
+
+struct LivelineHistogramKey: Equatable {
+    var storage: UInt
+    var count: Int
+    var first: Double
+    var last: Double
+    var binning: LivelineHistogramBinning
 }
 
 struct LivelineLegendGutterKey: Hashable {

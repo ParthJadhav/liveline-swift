@@ -194,6 +194,7 @@ enum StorybookCatalog {
         stackedBarNormalized,
         stackedAreaBasic,
         stackedAreaNormalized,
+        stackedAreaStream,
         timelineBasic,
         timelineCompact,
         heatmapBasic,
@@ -206,6 +207,8 @@ enum StorybookCatalog {
         gaugeTarget,
         funnelBasic,
         funnelCompact,
+        histogramBasic,
+        bulletBasic,
     ]
 
     static let all = definitions

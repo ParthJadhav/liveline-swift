@@ -34,6 +34,8 @@ enum LivelineContentOverlay {
     case donut(LivelineDonutGeometry, LivelineDonutStyle)
     case gauge(LivelineGaugeRenderGeometry, LivelineGaugeStyle)
     case funnel(LivelineFunnelGeometry, LivelineFunnelStyle)
+    case histogram(LivelineHistogramGeometry, LivelineHistogramStyle)
+    case bullet(LivelineBulletGeometry, LivelineBulletStyle)
     case standard
 }
 
@@ -294,6 +296,39 @@ extension LivelineRenderer {
             drawFunnel(context: &context, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale, drawLabels: drawText)
             return .funnel(geometry, style)
 
+        case let .histogram(values, style):
+            let geometry = histogramGeometry(
+                bins: state.histogramBins(values: values, binning: style.binning),
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: reveal
+            )
+            drawHistogram(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale,
+                drawLabels: drawText
+            )
+            return .histogram(geometry, style)
+
+        case let .bullet(style):
+            let geometry = bulletGeometry(style: style, layout: layout, palette: palette, reveal: reveal)
+            drawBullet(
+                context: &context,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale,
+                drawLabels: drawText
+            )
+            return .bullet(geometry, style)
+
         case let .candle(_, _, candles, candleWidth, liveCandle, lineData, lineValue):
             return .candle(
                 drawCandleMode(
@@ -397,6 +432,25 @@ extension LivelineRenderer {
             drawGaugeLabel(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale)
         case let .funnel(geometry, style):
             drawFunnelLabels(context: &context, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale)
+        case let .histogram(geometry, style):
+            drawHistogramLabels(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale
+            )
+        case let .bullet(geometry, style):
+            drawBulletLabels(
+                context: &context,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale
+            )
         case let .series(_, endpoints):
             drawSeriesEndpoints(
                 context: &context,
@@ -485,12 +539,12 @@ extension LivelineRenderer {
                 alpha: scrubAmount
             )
 
-        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel:
+        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel, .histogram, .bullet:
             break
         }
 
         switch overlay {
-        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel:
+        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel, .histogram, .bullet:
             break
         default:
             drawActivePoint(

@@ -149,6 +149,8 @@ struct LivelineAudioGraphModel: Equatable {
             series = stackedSeries(data, mode: style.mode, isContinuous: false, timed: timed)
 
         case let .stackedAreas(data, style):
+            // Sonification reports each layer's own magnitude, which the
+            // baseline offset never changes.
             series = stackedSeries(data, mode: style.mode, isContinuous: true, timed: timed)
 
         case let .timeline(data, _):
@@ -194,6 +196,42 @@ struct LivelineAudioGraphModel: Equatable {
                 ? range.lowerBound...range.upperBound
                 : nil
             series = [categorical(LivelineStrings.labelValue, isContinuous: false, [(LivelineStrings.labelGaugeValue, value)])]
+
+        case let .histogram(values, style):
+            let bins = LivelineMath.histogramBins(values: values, binning: style.binning)
+            let names = bins.map { bin in
+                String(
+                    format: LivelineStrings.labelBinRangeFormat,
+                    configuration.formatValue(bin.lowerBound),
+                    configuration.formatValue(bin.upperBound)
+                )
+            }
+            isCategorical = true
+            categoryOrder = names
+            series = [
+                categorical(
+                    LivelineStrings.labelCount,
+                    isContinuous: false,
+                    zip(names, bins).map { ($0, Double($1.count)) }
+                ),
+            ]
+
+        case let .bullet(style):
+            isCategorical = true
+            var samples: [(String, Double)] = [(LivelineStrings.labelMeasure, style.resolvedMeasure)]
+            if let target = style.resolvedTarget {
+                samples.append((LivelineStrings.labelTarget, target))
+            }
+            for (index, range) in style.resolvedRanges.enumerated() {
+                samples.append((
+                    range.label ?? String(format: LivelineStrings.labelBandFormat, index + 1),
+                    range.value
+                ))
+            }
+            categoryOrder = samples.map(\.0)
+            let axisRange = style.resolvedAxisRange
+            explicitValueRange = axisRange.lowerBound < axisRange.upperBound ? axisRange : nil
+            series = [categorical(LivelineStrings.labelValue, isContinuous: false, samples)]
 
         case let .candle(data, _, candles, _, liveCandle, lineData, _):
             if configuration.lineMode, !lineData.isEmpty {
