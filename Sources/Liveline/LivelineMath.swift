@@ -442,6 +442,15 @@ struct LivelineLayout {
     var rightEdge: TimeInterval
     var dataLeftReserve: CGFloat = 0
     var dataRightReserve: CGFloat = 0
+    /// Right-to-left layouts read the time axis backwards: the newest sample
+    /// sits at the reading start — the left edge of the plot — and history
+    /// trails off to the right.
+    ///
+    /// The flip is an explicit coordinate reflection rather than a mirrored
+    /// graphics context so that glyphs stay upright: everything horizontal
+    /// passes through ``mirrored(_:)-(CGFloat)`` and every drawn label picks the
+    /// mirrored anchor instead of being flipped twice.
+    var isRTL: Bool = false
 
     var plotLeftX: CGFloat { padding.left + dataLeftReserve }
     var chartWidth: CGFloat { max(1, size.width - padding.left - padding.right - dataLeftReserve - dataRightReserve) }
@@ -449,10 +458,40 @@ struct LivelineLayout {
     var bottomY: CGFloat { size.height - padding.bottom }
     var rightX: CGFloat { size.width - padding.right - dataRightReserve }
 
+    /// Reflects a horizontal coordinate across the plot when the layout reads
+    /// right-to-left. The identity in a left-to-right layout, so call sites can
+    /// wrap unconditionally without changing LTR output by a single pixel.
+    func mirrored(_ x: CGFloat) -> CGFloat {
+        isRTL ? plotLeftX + rightX - x : x
+    }
+
+    /// The rectangle equivalent of ``mirrored(_:)-(CGFloat)``: same width, the
+    /// far edge becoming the near one.
+    func mirrored(_ rect: CGRect) -> CGRect {
+        guard isRTL else { return rect }
+        return CGRect(x: mirrored(rect.maxX), y: rect.minY, width: rect.width, height: rect.height)
+    }
+
+    /// Mirrors a whole path — used for shapes that are easier to build in
+    /// left-to-right coordinates and then reflect, such as the live badge.
+    func mirrored(_ path: Path) -> Path {
+        guard isRTL else { return path }
+        return path.applying(CGAffineTransform(a: -1, b: 0, c: 0, d: 1, tx: plotLeftX + rightX, ty: 0))
+    }
+
+    /// The edge the newest data hugs: the right in LTR, the left in RTL.
+    var liveEdgeX: CGFloat { isRTL ? plotLeftX : rightX }
+
+    /// The edge that data scrolls off: the left in LTR, the right in RTL.
+    var pastEdgeX: CGFloat { isRTL ? rightX : plotLeftX }
+
+    /// The horizontal step that moves toward newer data: `+1` in LTR, `-1` in RTL.
+    var forwardXDirection: CGFloat { isRTL ? -1 : 1 }
+
     func x(for time: TimeInterval) -> CGFloat {
         let denominator = max(0.001, rightEdge - leftEdge)
         let t = (time - leftEdge) / denominator
-        return plotLeftX + CGFloat(t) * chartWidth
+        return mirrored(plotLeftX + CGFloat(t) * chartWidth)
     }
 
     func y(for value: Double) -> CGFloat {
@@ -462,7 +501,25 @@ struct LivelineLayout {
     }
 
     func time(for x: CGFloat) -> TimeInterval {
-        let t = Double((x - plotLeftX) / chartWidth)
+        let t = Double((mirrored(x) - plotLeftX) / chartWidth)
         return leftEdge + (rightEdge - leftEdge) * t
+    }
+}
+
+extension LivelineResolvedPadding {
+    /// Swaps the horizontal insets. The value-axis gutter and the badge's room
+    /// are resolved in left-to-right terms; in an RTL layout they belong on the
+    /// other side, and swapping here keeps every downstream `plotLeftX` /
+    /// `rightX` computation honest.
+    func mirroredHorizontally() -> LivelineResolvedPadding {
+        LivelineResolvedPadding(top: top, right: left, bottom: bottom, left: right)
+    }
+}
+
+extension LivelineLegendSide {
+    /// The physical side this logical side lands on for a given direction.
+    func resolved(isRTL: Bool) -> LivelineLegendSide {
+        guard isRTL else { return self }
+        return self == .leading ? .trailing : .leading
     }
 }

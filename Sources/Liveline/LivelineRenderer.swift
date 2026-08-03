@@ -15,6 +15,10 @@ struct LivelineRenderInput {
     /// Canvas text does not inherit Dynamic Type on its own; the chart reads the
     /// environment and hands the resolved multiplier to every text site.
     var textScale: LivelineTextScale = .standard
+    /// Canvas drawing does not inherit `layoutDirection` either. The chart reads
+    /// it once per body evaluation so the render pipeline can mirror the time
+    /// axis, the gutters, and every hover coordinate.
+    var isRTL: Bool = false
 }
 
 enum LivelineRenderer {
@@ -56,18 +60,27 @@ enum LivelineRenderer {
         let isMultiSeries = kind == .series
         let showBadge = capabilities.supportsLiveBadge && config.badge
         let reservesBadgePadding = capabilities.reservesBadgePadding && config.badge
-        let resolvedPadding = LivelineMath.resolvedPadding(
+        let isRTL = input.isRTL
+        let ltrPadding = LivelineMath.resolvedPadding(
             config.padding,
             badgeEnabled: reservesBadgePadding,
             showValueAxis: config.grid && capabilities.usesValueAxis,
             showTimeAxis: capabilities.usesTimeAxis || capabilities.reservesBottomAxisPadding
         )
+        // The value-axis gutter and the badge's room are resolved on the right;
+        // in an RTL layout the live edge — and everything hanging off it — moves
+        // to the left, so the horizontal insets swap with it.
+        let resolvedPadding = isRTL ? ltrPadding.mirroredHorizontally() : ltrPadding
         let presentationTimestamp = state.presentationTimestamp(for: input.timestamp, isPaused: input.motion.isPaused)
         let anchor = anchorTime(latestTime: input.semantics.latestTime, timelineTimestamp: presentationTimestamp, window: input.activeWindow)
         let baseBuffer = isCandle ? windowBufferNoBadge : (showBadge ? windowBuffer : windowBufferNoBadge)
         let labelReveal = config.fadeEffects ? state.chartReveal : 1
-        let dataLeftReserve = dataReserve(for: input.content, side: .leading, config: config, context: context, state: state, textScale: textScale, reveal: labelReveal)
-        let dataRightReserve = dataReserve(for: input.content, side: .trailing, config: config, context: context, state: state, textScale: textScale, reveal: labelReveal)
+        // The legend gutter is requested on a logical side, so it follows the
+        // reading direction onto the physical edge that side maps to.
+        let leadingReserve = dataReserve(for: input.content, side: .leading, config: config, context: context, state: state, textScale: textScale, reveal: labelReveal)
+        let trailingReserve = dataReserve(for: input.content, side: .trailing, config: config, context: context, state: state, textScale: textScale, reveal: labelReveal)
+        let dataLeftReserve = isRTL ? trailingReserve : leadingReserve
+        let dataRightReserve = isRTL ? leadingReserve : trailingReserve
         let chartWidth = max(1, input.size.width - resolvedPadding.left - resolvedPadding.right - dataLeftReserve - dataRightReserve)
         let needsArrowRoom = isLine && showBadge && (config.autoDetectMomentum || config.momentum != nil)
         let buffer = needsArrowRoom ? max(baseBuffer, Double(37 / chartWidth)) : baseBuffer
@@ -170,7 +183,8 @@ enum LivelineRenderer {
             leftEdge: leftEdge,
             rightEdge: rightEdge,
             dataLeftReserve: dataLeftReserve,
-            dataRightReserve: dataRightReserve
+            dataRightReserve: dataRightReserve,
+            isRTL: isRTL
         )
         let swingMagnitude = renderData.swingMagnitude(valueRange: layout.maxValue - layout.minValue)
 
@@ -354,18 +368,20 @@ extension LivelineRenderer {
         from layout: LivelineLayout,
         input: LivelineRenderInput
     ) -> LivelineLayout {
-        LivelineLayout(
+        let padding = LivelineMath.resolvedPadding(
+            input.configuration.padding,
+            badgeEnabled: false,
+            showValueAxis: false,
+            showTimeAxis: false
+        )
+        return LivelineLayout(
             size: input.size,
-            padding: LivelineMath.resolvedPadding(
-                input.configuration.padding,
-                badgeEnabled: false,
-                showValueAxis: false,
-                showTimeAxis: false
-            ),
+            padding: input.isRTL ? padding.mirroredHorizontally() : padding,
             minValue: layout.minValue,
             maxValue: layout.maxValue,
             leftEdge: layout.leftEdge,
-            rightEdge: layout.rightEdge
+            rightEdge: layout.rightEdge,
+            isRTL: input.isRTL
         )
     }
 

@@ -121,6 +121,9 @@ struct LivelineBulletGeometry {
     var targetProgress: Double?
     var targetX: CGFloat?
     var displayedMeasure: Double
+    /// Carried on the geometry so the label pass — which never sees the layout
+    /// — can anchor the caption and the value on the right sides.
+    var isRTL: Bool = false
 }
 
 extension LivelineRenderer {
@@ -422,10 +425,12 @@ extension LivelineRenderer {
             guard localReveal > 0.001 else { return nil }
             let topY = layout.y(for: Double(bin.count))
             let height = max((baselineY - topY) * CGFloat(localReveal), 0)
+            // Bins ascend along the value axis, which follows the reading
+            // direction just like the time axis does.
             let x = layout.plotLeftX + CGFloat(index) * slotWidth + (slotWidth - barWidth) / 2
             return LivelineHistogramBar(
                 bin: bin,
-                rect: CGRect(x: x, y: baselineY - height, width: barWidth, height: height),
+                rect: layout.mirrored(CGRect(x: x, y: baselineY - height, width: barWidth, height: height)),
                 reveal: localReveal
             )
         }
@@ -464,31 +469,46 @@ extension LivelineRenderer {
             height: trackHeight
         )
 
+        // The measure grows from the axis' lower bound toward the reading
+        // direction: rightwards in LTR, leftwards in RTL.
         func x(for value: Double) -> CGFloat {
-            plotRect.minX + CGFloat(LivelineMath.bulletProgress(value: value, range: axisRange)) * plotRect.width
+            layout.mirrored(
+                plotRect.minX + CGFloat(LivelineMath.bulletProgress(value: value, range: axisRange)) * plotRect.width
+            )
         }
 
         let ranges = style.resolvedRanges
         let bands = ranges.enumerated().map { index, range -> LivelineBulletBand in
             let startValue = index == 0 ? axisRange.lowerBound : ranges[index - 1].value
             let startX = x(for: startValue)
-            let endX = max(x(for: range.value), startX)
+            // A band never runs backwards past its own start, whichever way
+            // "forward" points.
+            let endX = layout.isRTL
+                ? min(x(for: range.value), startX)
+                : max(x(for: range.value), startX)
             let color = range.color
                 ?? extendedSeriesColor(index: index, colors: [], palette: palette)
             return LivelineBulletBand(
                 range: range,
-                rect: CGRect(x: startX, y: trackRect.minY, width: endX - startX, height: trackRect.height),
+                rect: CGRect(
+                    x: min(startX, endX),
+                    y: trackRect.minY,
+                    width: abs(endX - startX),
+                    height: trackRect.height
+                ),
                 color: color
             )
         }
 
         let measureProgress = LivelineMath.bulletProgress(value: style.resolvedMeasure, range: axisRange)
         let measureWidth = plotRect.width * CGFloat(measureProgress) * CGFloat(progress)
-        let measureRect = CGRect(
-            x: plotRect.minX,
-            y: centerY - measureHeight / 2,
-            width: max(measureWidth, 0),
-            height: measureHeight
+        let measureRect = layout.mirrored(
+            CGRect(
+                x: plotRect.minX,
+                y: centerY - measureHeight / 2,
+                width: max(measureWidth, 0),
+                height: measureHeight
+            )
         )
         let targetProgress = style.resolvedTarget.map {
             LivelineMath.bulletProgress(value: $0, range: axisRange)
@@ -504,7 +524,8 @@ extension LivelineRenderer {
             targetProgress: targetProgress,
             targetX: style.resolvedTarget.map { x(for: $0) },
             displayedMeasure: axisRange.lowerBound
-                + (style.resolvedMeasure - axisRange.lowerBound) * progress
+                + (style.resolvedMeasure - axisRange.lowerBound) * progress,
+            isRTL: layout.isRTL
         )
     }
 

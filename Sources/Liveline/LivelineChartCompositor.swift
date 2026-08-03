@@ -375,7 +375,7 @@ extension LivelineRenderer {
                 alpha: reveal,
                 showPulse: config.pulse && reveal > 0.6 && state.pauseProgress < 0.5,
                 timestamp: input.animationTimestamp,
-                legendSide: config.seriesLegendSide,
+                legendSide: config.seriesLegendSide.resolved(isRTL: layout.isRTL),
                 textScale: input.textScale,
                 drawsLabel: drawText
             )
@@ -458,7 +458,7 @@ extension LivelineRenderer {
                 alpha: reveal,
                 showPulse: false,
                 timestamp: input.animationTimestamp,
-                legendSide: config.seriesLegendSide,
+                legendSide: config.seriesLegendSide.resolved(isRTL: layout.isRTL),
                 textScale: input.textScale,
                 drawsDot: false
             )

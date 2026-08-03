@@ -369,8 +369,8 @@ extension LivelineRenderer {
             drawText(
                 style.rowLabels[row],
                 context: &labelLayer,
-                at: CGPoint(x: layout.plotLeftX - 5, y: y),
-                anchor: .trailing,
+                at: CGPoint(x: layout.pastEdgeX - 5 * layout.forwardXDirection, y: y),
+                anchor: layout.isRTL ? .leading : .trailing,
                 color: palette.gridLabel,
                 font: textScale.font(9, weight: .medium)
             )
@@ -815,14 +815,20 @@ extension LivelineRenderer {
         labelLayer.opacity *= min(geometry.progress * 2, 1)
         let font = textScale.font(10, weight: .regular, design: .monospaced)
         let y = layout.bottomY + textScale.scaled(11)
+        // The low end of the range sits at the reading start, the high end at
+        // the reading end, with both captions anchored outward.
+        let lowX = layout.isRTL ? layout.rightX : layout.plotLeftX
+        let highX = layout.isRTL ? layout.plotLeftX : layout.rightX
+        let lowAnchor: UnitPoint = layout.isRTL ? .trailing : .leading
+        let highAnchor: UnitPoint = layout.isRTL ? .leading : .trailing
         let edges: [(value: Double, x: CGFloat, anchor: UnitPoint)] = [
-            (geometry.valueRange.lowerBound, layout.plotLeftX, .leading),
+            (geometry.valueRange.lowerBound, lowX, lowAnchor),
             (
                 (geometry.valueRange.lowerBound + geometry.valueRange.upperBound) / 2,
                 layout.plotLeftX + layout.chartWidth / 2,
                 .center
             ),
-            (geometry.valueRange.upperBound, layout.rightX, .trailing),
+            (geometry.valueRange.upperBound, highX, highAnchor),
         ]
         // The middle label is the first to collide on a narrow chart.
         let visible = layout.chartWidth > textScale.scaled(180) ? edges : [edges[0], edges[2]]
@@ -919,8 +925,11 @@ extension LivelineRenderer {
             drawText(
                 label,
                 context: &labelLayer,
-                at: CGPoint(x: geometry.plotRect.minX, y: geometry.trackRect.minY - textScale.scaled(12)),
-                anchor: .leading,
+                at: CGPoint(
+                    x: geometry.isRTL ? geometry.plotRect.maxX : geometry.plotRect.minX,
+                    y: geometry.trackRect.minY - textScale.scaled(12)
+                ),
+                anchor: geometry.isRTL ? .trailing : .leading,
                 color: palette.gridLabel,
                 font: textScale.font(11, weight: .medium)
             )
@@ -930,8 +939,11 @@ extension LivelineRenderer {
         drawText(
             formatValue(geometry.displayedMeasure),
             context: &labelLayer,
-            at: CGPoint(x: geometry.plotRect.maxX, y: geometry.trackRect.minY - textScale.scaled(12)),
-            anchor: .trailing,
+            at: CGPoint(
+                x: geometry.isRTL ? geometry.plotRect.minX : geometry.plotRect.maxX,
+                y: geometry.trackRect.minY - textScale.scaled(12)
+            ),
+            anchor: geometry.isRTL ? .leading : .trailing,
             color: palette.tooltipText,
             font: textScale.font(16, weight: .semibold, design: .rounded)
         )

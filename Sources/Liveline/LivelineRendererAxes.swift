@@ -161,11 +161,18 @@ extension LivelineRenderer {
             rowLayer.stroke(path, with: .color(palette.gridLine), style: StrokeStyle(lineWidth: 1, dash: [1, 3]))
 
             if labelKeys.contains(key) {
+                // The value axis lives in the gutter beside the live edge, so
+                // it moves — and its labels flip their anchor — in RTL.
                 drawText(
                     formatValue(value),
                     context: &rowLayer,
-                    at: CGPoint(x: layout.rightX + axisLabelOffsetX, y: y),
-                    anchor: .leading,
+                    at: CGPoint(
+                        x: layout.isRTL
+                            ? layout.plotLeftX - axisLabelOffsetX
+                            : layout.rightX + axisLabelOffsetX,
+                        y: y
+                    ),
+                    anchor: layout.isRTL ? .trailing : .leading,
                     color: palette.gridLabel,
                     font: textScale.font(11, weight: .regular, design: .monospaced)
                 )
@@ -238,7 +245,11 @@ extension LivelineRenderer {
             guard label.alpha > 0.02 else { continue }
             let time = key
             let x = layout.x(for: time)
-            guard x >= layout.plotLeftX - 20, x <= layout.rightX else {
+            // A label may hang slightly past the edge data scrolls off, but not
+            // past the live edge; both bounds follow the reading direction.
+            let slackMin = layout.isRTL ? layout.plotLeftX : layout.plotLeftX - 20
+            let slackMax = layout.isRTL ? layout.rightX + 20 : layout.rightX
+            guard x >= slackMin, x <= slackMax else {
                 continue
             }
 
@@ -361,8 +372,11 @@ extension LivelineRenderer {
             drawText(
                 label,
                 context: &layer,
-                at: CGPoint(x: rect.minX + 6, y: rect.minY + textScale.scaled(9)),
-                anchor: .leading,
+                at: CGPoint(
+                    x: layout.isRTL ? rect.maxX - 6 : rect.minX + 6,
+                    y: rect.minY + textScale.scaled(9)
+                ),
+                anchor: layout.isRTL ? .trailing : .leading,
                 color: palette.referenceLabel,
                 font: font
             )
@@ -400,8 +414,11 @@ extension LivelineRenderer {
                     drawText(
                         label,
                         context: &layer,
-                        at: CGPoint(x: layout.plotLeftX + 6, y: position - textScale.scaled(8)),
-                        anchor: .leading,
+                        at: CGPoint(
+                            x: layout.isRTL ? layout.rightX - 6 : layout.plotLeftX + 6,
+                            y: position - textScale.scaled(8)
+                        ),
+                        anchor: layout.isRTL ? .trailing : .leading,
                         color: palette.referenceLabel,
                         font: font
                     )
@@ -416,8 +433,11 @@ extension LivelineRenderer {
                     drawText(
                         label,
                         context: &layer,
-                        at: CGPoint(x: position + 4, y: layout.padding.top + textScale.scaled(8)),
-                        anchor: .leading,
+                        at: CGPoint(
+                            x: position + 4 * layout.forwardXDirection,
+                            y: layout.padding.top + textScale.scaled(8)
+                        ),
+                        anchor: layout.isRTL ? .trailing : .leading,
                         color: palette.referenceLabel,
                         font: font
                     )

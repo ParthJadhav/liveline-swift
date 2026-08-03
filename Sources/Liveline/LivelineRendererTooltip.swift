@@ -64,13 +64,19 @@ extension LivelineRenderer {
             lineWidth: 1.5
         )
 
+        // Tooltip rows read start-to-end like any other run of text, so the
+        // whole column layout — swatch, label, value — mirrors.
+        let isRTL = layout.isRTL
         var cursorY = rect.minY + 7
         if let heading {
             drawText(
                 heading,
                 context: &layer,
-                at: CGPoint(x: rect.minX + horizontalPadding, y: cursorY),
-                anchor: .topLeading,
+                at: CGPoint(
+                    x: isRTL ? rect.maxX - horizontalPadding : rect.minX + horizontalPadding,
+                    y: cursorY
+                ),
+                anchor: isRTL ? .topTrailing : .topLeading,
                 color: palette.gridLabel,
                 font: headingFont
             )
@@ -79,21 +85,29 @@ extension LivelineRenderer {
 
         for row in rows {
             let centerY = cursorY + rowHeight / 2
-            let swatch = CGRect(x: rect.minX + horizontalPadding, y: centerY - 3.5, width: 7, height: 7)
+            let swatch = CGRect(
+                x: isRTL ? rect.maxX - horizontalPadding - 7 : rect.minX + horizontalPadding,
+                y: centerY - 3.5,
+                width: 7,
+                height: 7
+            )
             layer.fill(Path(roundedRect: swatch, cornerRadius: 1.5), with: .color(row.color))
             drawText(
                 row.label,
                 context: &layer,
-                at: CGPoint(x: swatch.maxX + 7, y: centerY),
-                anchor: .leading,
+                at: CGPoint(x: isRTL ? swatch.minX - 7 : swatch.maxX + 7, y: centerY),
+                anchor: isRTL ? .trailing : .leading,
                 color: palette.gridLabel,
                 font: rowFont
             )
             drawText(
                 row.value,
                 context: &layer,
-                at: CGPoint(x: rect.maxX - horizontalPadding, y: centerY),
-                anchor: .trailing,
+                at: CGPoint(
+                    x: isRTL ? rect.minX + horizontalPadding : rect.maxX - horizontalPadding,
+                    y: centerY
+                ),
+                anchor: isRTL ? .leading : .trailing,
                 color: palette.tooltipText,
                 font: rowFont
             )
@@ -120,16 +134,20 @@ extension LivelineRenderer {
                 y: preferredAboveY
             )
         } else {
+            // Beside the anchor, the tooltip opens toward the reading
+            // direction first and falls back to the other side.
             let rightX = anchor.x + 12
             let leftX = anchor.x - size.width - 12
-            if rightX <= maximumX {
+            let preferred = layout.isRTL ? leftX : rightX
+            let fallback = layout.isRTL ? rightX : leftX
+            if layout.isRTL ? preferred >= minimumX : preferred <= maximumX {
                 origin = CGPoint(
-                    x: rightX,
+                    x: preferred,
                     y: LivelineMath.clamp(anchor.y - size.height / 2, minimumY, maximumY)
                 )
-            } else if leftX >= minimumX {
+            } else if layout.isRTL ? fallback <= maximumX : fallback >= minimumX {
                 origin = CGPoint(
-                    x: leftX,
+                    x: fallback,
                     y: LivelineMath.clamp(anchor.y - size.height / 2, minimumY, maximumY)
                 )
             } else {

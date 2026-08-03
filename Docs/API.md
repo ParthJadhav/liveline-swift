@@ -432,6 +432,38 @@ LivelineLegend(items: [
 `items(funnel:style:accent:)`, and `items(stacked:colors:accent:)` derive rows
 that match the colors those renderers resolve.
 
+## Right-to-left layouts
+
+The chart reads `\.layoutDirection` from the environment and mirrors the plot
+itself, so it matches the chrome around it in Arabic, Hebrew, and any other RTL
+locale — no per-call configuration:
+
+```swift
+LivelineChart(data: points, value: points.last?.value ?? 0)
+    .environment(\.layoutDirection, .rightToLeft) // usually inherited
+```
+
+What mirrors:
+
+- **Time runs right to left.** The newest sample hugs the left edge — the
+  reading start — and history trails off to the right, where the fade sits.
+- **Everything anchored to the live edge follows it**: the value-axis gutter and
+  its labels, the live badge and its tail, momentum arrows, the series legend
+  gutter (`seriesLegendSide` is a *logical* side), the orderbook ticker, and the
+  tooltip, which opens toward the reading direction first.
+- **Canvas text stays upright.** Mirroring is an explicit coordinate reflection,
+  not a flipped graphics context, so glyphs are never reversed; labels simply
+  switch to the mirrored anchor.
+- **Hit testing mirrors with it.** Pointer, scrub, and tvOS remote coordinates
+  convert through the same transform, so hovering still selects the sample under
+  the finger, and a leftward remote swipe steps toward newer data.
+- **Value-ordered kinds mirror too** — the histogram's value axis and the bullet
+  chart's measure both grow toward the reading direction.
+- **Radial kinds are unchanged**: donut, gauge, radar, and the funnel read the
+  same in either direction, as does the vertical value axis everywhere.
+
+A left-to-right chart renders exactly as it did before, pixel for pixel.
+
 ## Streaming data
 
 `LivelineDataStream` is a `@MainActor` `ObservableObject` holding a bounded,

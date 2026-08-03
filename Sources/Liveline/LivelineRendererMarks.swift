@@ -434,8 +434,10 @@ extension LivelineRenderer {
                 let current = pair.0
                 let next = pair.1
                 let y = layout.y(for: current.end)
-                let startX = layout.x(for: current.time) + width / 2
-                let targetX = layout.x(for: next.time) - width / 2
+                // The connector leaves one bar's far edge and meets the next
+                // bar's near edge, which swap sides in an RTL layout.
+                let startX = layout.x(for: current.time) + width / 2 * layout.forwardXDirection
+                let targetX = layout.x(for: next.time) - width / 2 * layout.forwardXDirection
                 var connector = Path()
                 connector.move(to: CGPoint(x: startX, y: y))
                 connector.addLine(to: CGPoint(

@@ -33,7 +33,7 @@ extension LivelineRenderer {
 
         func morphY(_ rawY: CGFloat, x: CGFloat) -> CGFloat {
             guard reveal < 1 else { return LivelineMath.clamp(rawY, layout.padding.top, layout.bottomY) }
-            let progress = LivelineMath.clamp((x - layout.plotLeftX) / layout.chartWidth, 0, 1)
+            let progress = LivelineMath.clamp((layout.mirrored(x) - layout.plotLeftX) / layout.chartWidth, 0, 1)
             let centerDistance = abs(progress - 0.5) * 2
             let localReveal = LivelineMath.clamp((CGFloat(reveal) - centerDistance * 0.4) / 0.6, 0, 1)
             let loading = LivelineMath.loadingY(progress: progress, centerY: centerY, amplitude: amplitude, phase: phase)
@@ -47,8 +47,10 @@ extension LivelineRenderer {
         }
 
         let tipX = layout.x(for: now)
-        let fullRight = layout.plotLeftX + layout.chartWidth
-        let displayedTipX = reveal < 1 ? tipX + (fullRight - tipX) * CGFloat(1 - reveal) : tipX
+        // The reveal animation grows the line out to the live edge, whichever
+        // side of the plot that edge is on.
+        let fullEdge = layout.isRTL ? layout.plotLeftX : layout.plotLeftX + layout.chartWidth
+        let displayedTipX = reveal < 1 ? tipX + (fullEdge - tipX) * CGFloat(1 - reveal) : tipX
         screenPoints.append(CGPoint(x: displayedTipX, y: morphY(layout.y(for: smoothValue), x: displayedTipX)))
 
         guard screenPoints.count >= 2 else { return screenPoints }
@@ -102,13 +104,17 @@ extension LivelineRenderer {
         }
 
         if let hoverX, scrubAmount > 0 {
+            // The stretch newer than the cursor dims; which physical half that
+            // is depends on the reading direction.
+            let pastOpacity = lineAlpha
+            let futureOpacity = lineAlpha * (1 - scrubFadeAmount * 0.6)
             var left = clipped
             left.clip(to: Path(CGRect(x: 0, y: 0, width: hoverX, height: layout.size.height)))
-            stroke(&left, opacity: lineAlpha)
+            stroke(&left, opacity: layout.isRTL ? futureOpacity : pastOpacity)
 
             var right = clipped
             right.clip(to: Path(CGRect(x: hoverX, y: 0, width: layout.size.width - hoverX, height: layout.size.height)))
-            stroke(&right, opacity: lineAlpha * (1 - scrubFadeAmount * 0.6))
+            stroke(&right, opacity: layout.isRTL ? pastOpacity : futureOpacity)
         } else {
             stroke(&clipped, opacity: lineAlpha)
         }
@@ -154,7 +160,7 @@ extension LivelineRenderer {
         }
 
         if config.endpointDecorations && (config.autoDetectMomentum || config.momentum != nil) {
-            drawMomentumArrows(context: &context, state: state, at: lastPoint, palette: palette, momentum: momentum, alpha: revealRamp(state.chartReveal, 0.60, 1) * (1 - state.pauseProgress), deltaTime: deltaTime, timestamp: timestamp)
+            drawMomentumArrows(context: &context, state: state, at: lastPoint, palette: palette, momentum: momentum, alpha: revealRamp(state.chartReveal, 0.60, 1) * (1 - state.pauseProgress), deltaTime: deltaTime, timestamp: timestamp, horizontalDirection: layout.forwardXDirection)
         }
 
         if let degen = config.degen, state.chartReveal > 0.9 {
@@ -267,7 +273,10 @@ extension LivelineRenderer {
         momentum: LivelineMomentum,
         alpha: Double,
         deltaTime: TimeInterval,
-        timestamp: TimeInterval
+        timestamp: TimeInterval,
+        /// `+1` when the line grows to the right, `-1` in an RTL layout where
+        /// the arrows sit on the other side of the endpoint dot.
+        horizontalDirection: CGFloat = 1
     ) {
         guard alpha > 0.01, momentum != .flat else { return }
         let upTarget = momentum == .up ? 1.0 : 0.0
@@ -292,7 +301,7 @@ extension LivelineRenderer {
             var arrowLayer = layer
             arrowLayer.opacity *= pulse
             var path = Path()
-            let centerX = point.x + 19
+            let centerX = point.x + 19 * horizontalDirection
             let nudge = momentum == .up ? CGFloat(-3) : CGFloat(3)
             let centerY = point.y + direction * (CGFloat(index) * 8 - 4) + nudge
             path.move(to: CGPoint(x: centerX - 5, y: centerY - direction * 3.5))
@@ -324,6 +333,8 @@ extension LivelineRenderer {
         let pillWidth = size.width + badgePaddingX * 2
         let pillHeight = textScale.scaled(badgeLineHeight) + badgePaddingY * 2
         let totalWidth = tailLength + pillWidth
+        // Built in left-to-right coordinates hanging off the right edge, then
+        // reflected as a whole so the tail keeps pointing at the live edge.
         let x = layout.rightX + 8 - badgePaddingX - tailLength
         let badgeY = LivelineMath.clamp(y - pillHeight / 2, layout.padding.top, layout.bottomY - pillHeight)
         var layer = context
@@ -349,9 +360,9 @@ extension LivelineRenderer {
         let path = config.badgeTail
             ? badgePath(origin: CGPoint(x: x, y: badgeY), pillWidth: pillWidth, pillHeight: pillHeight, tailLength: badgeTailLength, tailSpread: badgeTailSpread)
             : badgePillPath(origin: CGPoint(x: x, y: badgeY), pillWidth: pillWidth, pillHeight: pillHeight)
-        layer.fill(path, with: .color(background))
+        layer.fill(layout.mirrored(path), with: .color(background))
 
-        let textX = x + tailLength + pillWidth / 2
+        let textX = layout.mirrored(x + tailLength + pillWidth / 2)
         drawText(text, context: &layer, at: CGPoint(x: textX, y: badgeY + pillHeight / 2 - 1), anchor: .center, color: textColor, font: font)
         _ = totalWidth
     }
@@ -394,7 +405,7 @@ extension LivelineRenderer {
         alpha: Double
     ) {
         guard alpha > 0.01 else { return }
-        let distanceToLive = livePoint.x - hover.x
+        let distanceToLive = (livePoint.x - hover.x) * layout.forwardXDirection
         let fadeStart = min(80, layout.chartWidth * 0.3)
         let opacity: Double
         if !config.fadeEffects || distanceToLive >= fadeStart {

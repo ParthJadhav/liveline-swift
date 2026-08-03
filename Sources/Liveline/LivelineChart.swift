@@ -19,6 +19,7 @@ public struct LivelineChart: View {
     @Environment(\.accessibilityVoiceOverEnabled) private var accessibilityVoiceOverEnabled
     @Environment(\.accessibilitySwitchControlEnabled) private var accessibilitySwitchControlEnabled
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.layoutDirection) private var layoutDirection
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.livelineSnapshotElapsedTime) private var snapshotElapsedTime
     @Environment(\.livelineRendersSettledFrame) private var rendersSettledFrame
@@ -705,7 +706,8 @@ private extension LivelineChart {
                     hoverLocation: interactionSessions.activeLocation,
                     timestamp: timestamp,
                     size: size,
-                    textScale: textScale
+                    textScale: textScale,
+                    isRTL: isRTL
                 )
             )
         }
@@ -717,6 +719,17 @@ private extension LivelineChart {
     /// resolved here and handed to the renderer explicitly.
     var textScale: LivelineTextScale {
         LivelineTextScale.resolve(dynamicTypeSize)
+    }
+
+    /// SwiftUI mirrors the chrome around the chart in an RTL locale but leaves
+    /// Canvas coordinates alone, so the reading direction has to be handed to
+    /// the renderer explicitly and mirrored there.
+    ///
+    /// Pointer and scrub locations stay in physical Canvas coordinates and are
+    /// converted through the same mirrored `LivelineLayout`, so hit testing
+    /// keeps selecting the datum under the finger.
+    var isRTL: Bool {
+        layoutDirection == .rightToLeft
     }
 
     /// Every consumer of the theme — palette, renderer, interaction snapshot,
@@ -1164,12 +1177,14 @@ private extension LivelineChart {
             return
         }
 
+        // A remote swipe moves the selection the way the data runs: rightwards
+        // steps forward in time in LTR, leftwards in RTL.
         let step: LivelineRemoteSelectionStep
         switch direction {
         case .left:
-            step = .backward
+            step = isRTL ? .forward : .backward
         case .right:
-            step = .forward
+            step = isRTL ? .backward : .forward
         case .up, .down:
             endRemoteInspection(configuration: configuration)
             return
