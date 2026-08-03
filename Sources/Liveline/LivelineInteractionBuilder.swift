@@ -47,7 +47,7 @@ enum LivelineInteractionBuilder {
         case .line:
             return interactionSlice(prepared.primaryVisible, nearestTo: targetLocation, layout: layout).map {
                 xTarget(point: $0, anchorValue: $0.value, heading: time($0.time), rows: [
-                    row("Value", value($0.value), palette.line),
+                    row(LivelineStrings.labelValue, value($0.value), palette.line),
                 ], layout: layout)
             }
 
@@ -55,7 +55,7 @@ enum LivelineInteractionBuilder {
             return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 let color = $0.value >= style.resolvedBaseline ? (style.positiveColor ?? palette.line) : style.negativeColor
                 return xTarget(point: $0, anchorValue: $0.value, heading: time($0.time), rows: [
-                    row("Value", value($0.value), color),
+                    row(LivelineStrings.labelValue, value($0.value), color),
                 ], layout: layout)
             }
 
@@ -66,8 +66,8 @@ enum LivelineInteractionBuilder {
                     anchorValue: $0.upper,
                     heading: time($0.time),
                     rows: [
-                        row("Lower", value($0.lower), palette.line.opacity(0.65)),
-                        row("Upper", value($0.upper), palette.line),
+                        row(LivelineStrings.labelLower, value($0.lower), palette.line.opacity(0.65)),
+                        row(LivelineStrings.labelUpper, value($0.upper), palette.line),
                     ],
                     layout: layout
                 )
@@ -76,7 +76,7 @@ enum LivelineInteractionBuilder {
         case let .scatter(data, _, _), let .steps(data, _, _):
             return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 xTarget(point: $0, anchorValue: $0.value, heading: time($0.time), rows: [
-                    row("Value", value($0.value), palette.line),
+                    row(LivelineStrings.labelValue, value($0.value), palette.line),
                 ], layout: layout)
             }
 
@@ -84,7 +84,7 @@ enum LivelineInteractionBuilder {
             return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 let color = $0.value >= style.resolvedBaseline ? (style.positiveColor ?? palette.line) : style.negativeColor
                 return xTarget(point: $0, anchorValue: $0.value, heading: time($0.time), rows: [
-                    row("Value", value($0.value), color),
+                    row(LivelineStrings.labelValue, value($0.value), color),
                 ], layout: layout)
             }
 
@@ -95,8 +95,8 @@ enum LivelineInteractionBuilder {
                     anchorValue: $0.value,
                     heading: time($0.time),
                     rows: [
-                        row("Value", value($0.value), palette.line),
-                        row("Magnitude", value($0.magnitude), palette.line.opacity(0.65)),
+                        row(LivelineStrings.labelValue, value($0.value), palette.line),
+                        row(LivelineStrings.labelMagnitude, value($0.magnitude), palette.line.opacity(0.65)),
                     ],
                     layout: layout
                 )
@@ -109,11 +109,11 @@ enum LivelineInteractionBuilder {
                     anchorValue: $0.maximum,
                     heading: time($0.time),
                     rows: [
-                        row("Maximum", value($0.maximum), palette.line),
-                        row("Q3", value($0.upperQuartile), palette.line.opacity(0.82)),
-                        row("Median", value($0.median), palette.line),
-                        row("Q1", value($0.lowerQuartile), palette.line.opacity(0.82)),
-                        row("Minimum", value($0.minimum), palette.line.opacity(0.65)),
+                        row(LivelineStrings.labelMaximum, value($0.maximum), palette.line),
+                        row(LivelineStrings.labelUpperQuartile, value($0.upperQuartile), palette.line.opacity(0.82)),
+                        row(LivelineStrings.labelMedian, value($0.median), palette.line),
+                        row(LivelineStrings.labelLowerQuartile, value($0.lowerQuartile), palette.line.opacity(0.82)),
+                        row(LivelineStrings.labelMinimum, value($0.minimum), palette.line.opacity(0.65)),
                     ],
                     layout: layout
                 )
@@ -130,9 +130,9 @@ enum LivelineInteractionBuilder {
                         anchorValue: max(segment.start, segment.end),
                         heading: time(segment.time),
                         rows: [
-                            row("Start", value(segment.start), palette.gridLabel),
-                            row("Change", value(segment.delta), color),
-                            row("End", value(segment.end), color),
+                            row(LivelineStrings.labelStart, value(segment.start), palette.gridLabel),
+                            row(LivelineStrings.labelChange, value(segment.delta), color),
+                            row(LivelineStrings.labelEnd, value(segment.end), color),
                         ],
                         layout: layout
                     )
@@ -145,9 +145,9 @@ enum LivelineInteractionBuilder {
                     anchorValue: $0.upper,
                     heading: time($0.time),
                     rows: [
-                        row("Upper", value($0.upper), palette.line.opacity(0.72)),
-                        row("Value", value($0.value), palette.line),
-                        row("Lower", value($0.lower), palette.line.opacity(0.72)),
+                        row(LivelineStrings.labelUpper, value($0.upper), palette.line.opacity(0.72)),
+                        row(LivelineStrings.labelValue, value($0.value), palette.line),
+                        row(LivelineStrings.labelLower, value($0.lower), palette.line.opacity(0.72)),
                     ],
                     layout: layout
                 )
@@ -160,8 +160,8 @@ enum LivelineInteractionBuilder {
                     anchorValue: max($0.start, $0.end),
                     heading: time($0.time),
                     rows: [
-                        row("Start", value($0.start), style.startColor ?? palette.gridLabel),
-                        row("End", value($0.end), style.endColor ?? palette.line),
+                        row(LivelineStrings.labelStart, value($0.start), style.startColor ?? palette.gridLabel),
+                        row(LivelineStrings.labelEnd, value($0.end), style.endColor ?? palette.line),
                     ],
                     layout: layout
                 )
@@ -190,9 +190,9 @@ enum LivelineInteractionBuilder {
                     anchor: CGPoint(x: mark.rect.midX, y: mark.rect.minY),
                     heading: mark.item.label,
                     rows: [
-                        row("Start", time(mark.item.start), mark.color.opacity(0.7)),
-                        row("End", time(mark.item.end), mark.color),
-                        row("Duration", value(mark.item.end - mark.item.start), mark.color),
+                        row(LivelineStrings.labelStart, time(mark.item.start), mark.color.opacity(0.7)),
+                        row(LivelineStrings.labelEnd, time(mark.item.end), mark.color),
+                        row(LivelineStrings.labelDuration, value(mark.item.end - mark.item.start), mark.color),
                     ],
                     region: .rect(mark.rect)
                 )
@@ -211,7 +211,7 @@ enum LivelineInteractionBuilder {
             return interactionMarks(geometry.marks, nearestTo: targetLocation, rect: \.rect).map { mark in
                 let label = style.rowLabels.indices.contains(mark.cell.row)
                     ? style.rowLabels[mark.cell.row]
-                    : "Row \(mark.cell.row + 1)"
+                    : String(format: LivelineStrings.labelRowFormat, mark.cell.row + 1)
                 return target(
                     time: mark.cell.time,
                     value: mark.cell.value,
@@ -232,7 +232,7 @@ enum LivelineInteractionBuilder {
                     value: point.value,
                     anchor: geometry.valuePoints[index],
                     heading: point.label,
-                    rows: [row("Value", value(point.value), palette.line)],
+                    rows: [row(LivelineStrings.labelValue, value(point.value), palette.line)],
                     region: .sector(
                         center: geometry.center,
                         innerRadius: 0,
@@ -263,9 +263,9 @@ enum LivelineInteractionBuilder {
                     ),
                     heading: segment.entry.label,
                     rows: [
-                        row("Value", value(segment.entry.value), segment.color),
+                        row(LivelineStrings.labelValue, value(segment.entry.value), segment.color),
                         row(
-                            "Share",
+                            LivelineStrings.labelShare,
                             (segment.entry.value / geometry.total * 100).formatted(.number.precision(.fractionLength(1))) + "%",
                             segment.color
                         ),
@@ -289,15 +289,15 @@ enum LivelineInteractionBuilder {
                 reveal: 1
             )
             let angle = (geometry.startDegrees + style.resolvedSweepDegrees * geometry.valueProgress) * Double.pi / 180
-            var rows = [row("Value", value(gaugeValue), style.progressColor ?? palette.line)]
+            var rows = [row(LivelineStrings.labelValue, value(gaugeValue), style.progressColor ?? palette.line)]
             if let targetValue = style.resolvedTarget {
-                rows.append(row("Target", value(targetValue), style.targetColor ?? palette.tooltipText))
+                rows.append(row(LivelineStrings.labelTarget, value(targetValue), style.targetColor ?? palette.tooltipText))
             }
             return [target(
                 time: 0,
                 value: gaugeValue,
                 anchor: LivelineMath.polarPoint(center: geometry.gauge.center, radius: geometry.gauge.radius, angle: angle),
-                heading: "Gauge",
+                heading: LivelineStrings.labelGauge,
                 rows: rows,
                 region: .rect(geometry.plotRect)
             )]
@@ -316,7 +316,7 @@ enum LivelineInteractionBuilder {
                     value: stage.entry.value,
                     anchor: CGPoint(x: stage.rect.midX, y: stage.rect.minY),
                     heading: stage.entry.label,
-                    rows: [row("Value", value(stage.entry.value), stage.color)],
+                    rows: [row(LivelineStrings.labelValue, value(stage.entry.value), stage.color)],
                     region: .rect(stage.rect)
                 )
             }
@@ -333,7 +333,7 @@ enum LivelineInteractionBuilder {
                         point: point,
                         anchorValue: point.value,
                         heading: time(point.time),
-                        rows: [row("Value", value(point.value), palette.line)],
+                        rows: [row(LivelineStrings.labelValue, value(point.value), palette.line)],
                         layout: layout
                     )
                 }
@@ -355,10 +355,10 @@ enum LivelineInteractionBuilder {
                     anchorValue: candle.high,
                     heading: time(candle.time),
                     rows: [
-                        row("Open", value(candle.open), color.opacity(0.72)),
-                        row("High", value(candle.high), color),
-                        row("Low", value(candle.low), color.opacity(0.72)),
-                        row("Close", value(candle.close), color),
+                        row(LivelineStrings.labelOpen, value(candle.open), color.opacity(0.72)),
+                        row(LivelineStrings.labelHigh, value(candle.high), color),
+                        row(LivelineStrings.labelLow, value(candle.low), color.opacity(0.72)),
+                        row(LivelineStrings.labelClose, value(candle.close), color),
                     ],
                     layout: layout
                 )
@@ -458,13 +458,13 @@ enum LivelineInteractionBuilder {
             }
             var rows = signedValues.enumerated().map { index, signedValue in
                 row(
-                    "Series \(index + 1)",
+                    String(format: LivelineStrings.labelSeriesFormat, index + 1),
                     value(signedValue),
                     LivelineRenderer.extendedSeriesColor(index: index, colors: colors, palette: palette)
                 )
             }
             let total = signedValues.reduce(0, +)
-            rows.append(row("Total", value(total), palette.tooltipText))
+            rows.append(row(LivelineStrings.labelTotal, value(total), palette.tooltipText))
             return xTarget(
                 point: LivelinePoint(time: point.time, value: total),
                 anchorValue: segments.map(\.upper).max() ?? total,

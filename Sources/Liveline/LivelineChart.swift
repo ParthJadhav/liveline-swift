@@ -561,7 +561,7 @@ private extension LivelineChart {
                 break
             }
         }
-        .accessibilityAction(named: Text("Show chart summary")) {
+        .accessibilityAction(named: Text(LivelineStrings.controlShowSummary)) {
             accessibilityIndex = nil
         }
         // Audio Graph. The representable is cheap to build; the descriptor
@@ -751,7 +751,7 @@ private extension LivelineChart {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("liveline-window-\(option.label)")
                     .accessibilityLabel(Text(option.label))
-                    .accessibilityValue(Text(active ? "Selected" : "Not selected"))
+                    .accessibilityValue(Text(active ? LivelineStrings.controlSelected : LivelineStrings.controlNotSelected))
                     .accessibilityAddTraits(active ? .isSelected : [])
                 }
             }
@@ -789,8 +789,8 @@ private extension LivelineChart {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(mode == .line ? "liveline-mode-line" : "liveline-mode-candle")
-        .accessibilityLabel(mode == .line ? "Line" : "Candle")
-        .accessibilityValue(active ? "Selected" : "Not selected")
+        .accessibilityLabel(mode == .line ? LivelineStrings.controlModeLine : LivelineStrings.controlModeCandle)
+        .accessibilityValue(active ? LivelineStrings.controlSelected : LivelineStrings.controlNotSelected)
         .accessibilityAddTraits(active ? .isSelected : [])
     }
 
@@ -838,13 +838,13 @@ private extension LivelineChart {
                     .accessibilityLabel(Text(entry.label ?? entry.id))
                     .accessibilityValue(Text(
                         visible
-                            ? (canToggle ? "Visible" : "Visible, required")
-                            : "Hidden"
+                            ? (canToggle ? LivelineStrings.controlSeriesVisible : LivelineStrings.controlSeriesVisibleRequired)
+                            : LivelineStrings.controlSeriesHidden
                     ))
                     .accessibilityHint(Text(
                         canToggle
-                            ? (visible ? "Hides this series" : "Shows this series")
-                            : "At least one series must remain visible"
+                            ? (visible ? LivelineStrings.controlSeriesHintHide : LivelineStrings.controlSeriesHintShow)
+                            : LivelineStrings.controlSeriesHintLocked
                     ))
                     .accessibilityAddTraits(visible ? .isSelected : [])
                 }

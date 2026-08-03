@@ -23,21 +23,29 @@ struct LivelineChartAccessibilityModel: Equatable {
 
     var hint: String {
         if isLoading {
-            return "Chart data is loading."
+            return LivelineStrings.accessibilityHintLoading
         }
         return entryCount == 0
-            ? "No chart data is available."
-            : "Adjust to inspect data points."
+            ? LivelineStrings.accessibilityHintEmpty
+            : LivelineStrings.accessibilityHintAdjustable
     }
 
     func value(at index: Int?) -> String {
         guard let index, entries.indices.contains(index) else {
             guard entryCount > 0 else { return summary }
-            let count = entryCount == 1 ? "1 data point" : "\(entryCount) data points"
-            return "\(summary). \(count)"
+            let count = entryCount == 1
+                ? LivelineStrings.accessibilityCountOne
+                : String(format: LivelineStrings.accessibilityCountOtherFormat, entryCount)
+            return String(format: LivelineStrings.accessibilitySummaryWithCountFormat, summary, count)
         }
         let entry = entries[index]
-        return "\(entry.label), \(entry.value), \(index + 1) of \(entryCount)"
+        return String(
+            format: LivelineStrings.accessibilityEntryFormat,
+            entry.label,
+            entry.value,
+            index + 1,
+            entryCount
+        )
     }
 
     func adjustedIndex(
@@ -63,7 +71,7 @@ struct LivelineChartAccessibilityModel: Equatable {
         if configuration.loading {
             return LivelineChartAccessibilityModel(
                 label: semantics.identity.kind.accessibilityLabel,
-                summary: "Loading chart data",
+                summary: LivelineStrings.accessibilitySummaryLoading,
                 entries: [],
                 entryCount: 0,
                 isLoading: true
@@ -102,12 +110,22 @@ struct LivelineChartAccessibilityModel: Equatable {
                         : segment.upper - segment.lower
                 }
                 let values = signedValues.enumerated()
-                    .map { "Series \($0.offset + 1) \(formatValue($0.element))" }
+                    .map {
+                        String(
+                            format: LivelineStrings.accessibilityStackedSeriesFormat,
+                            $0.offset + 1,
+                            formatValue($0.element)
+                        )
+                    }
                     .joined(separator: ", ")
                 return LivelineAccessibilityEntry(
                     id: "stack-\(point.time)-\(index)",
                     label: formatTime(point.time),
-                    value: "\(values), total \(formatValue(signedValues.reduce(0, +)))"
+                    value: String(
+                        format: LivelineStrings.accessibilityStackedValueFormat,
+                        values,
+                        formatValue(signedValues.reduce(0, +))
+                    )
                 )
             }
         }
@@ -125,7 +143,11 @@ struct LivelineChartAccessibilityModel: Equatable {
                 LivelineAccessibilityEntry(
                     id: "range-\(point.time)-\(index)",
                     label: formatTime(point.time),
-                    value: "Lower \(formatValue(point.lower)), upper \(formatValue(point.upper))"
+                    value: String(
+                        format: LivelineStrings.accessibilityRangeValueFormat,
+                        formatValue(point.lower),
+                        formatValue(point.upper)
+                    )
                 )
             }
 
@@ -134,7 +156,11 @@ struct LivelineChartAccessibilityModel: Equatable {
                 LivelineAccessibilityEntry(
                     id: "bubble-\(point.time)-\(index)",
                     label: formatTime(point.time),
-                    value: "Value \(formatValue(point.value)), magnitude \(formatValue(point.magnitude))"
+                    value: String(
+                        format: LivelineStrings.accessibilityBubbleValueFormat,
+                        formatValue(point.value),
+                        formatValue(point.magnitude)
+                    )
                 )
             }
 
@@ -144,11 +170,11 @@ struct LivelineChartAccessibilityModel: Equatable {
                     id: "box-\(point.time)-\(index)",
                     label: formatTime(point.time),
                     value: [
-                        "Minimum \(formatValue(point.minimum))",
-                        "first quartile \(formatValue(point.lowerQuartile))",
-                        "median \(formatValue(point.median))",
-                        "third quartile \(formatValue(point.upperQuartile))",
-                        "maximum \(formatValue(point.maximum))",
+                        String(format: LivelineStrings.accessibilityBoxMinimumFormat, formatValue(point.minimum)),
+                        String(format: LivelineStrings.accessibilityBoxLowerQuartileFormat, formatValue(point.lowerQuartile)),
+                        String(format: LivelineStrings.accessibilityBoxMedianFormat, formatValue(point.median)),
+                        String(format: LivelineStrings.accessibilityBoxUpperQuartileFormat, formatValue(point.upperQuartile)),
+                        String(format: LivelineStrings.accessibilityBoxMaximumFormat, formatValue(point.maximum)),
                     ].joined(separator: ", ")
                 )
             }
@@ -160,7 +186,11 @@ struct LivelineChartAccessibilityModel: Equatable {
                     LivelineAccessibilityEntry(
                         id: "waterfall-\(segment.time)-\(index)",
                         label: formatTime(segment.time),
-                        value: "Change \(formatValue(segment.delta)), total \(formatValue(segment.end))"
+                        value: String(
+                            format: LivelineStrings.accessibilityWaterfallValueFormat,
+                            formatValue(segment.delta),
+                            formatValue(segment.end)
+                        )
                     )
                 }
 
@@ -169,7 +199,12 @@ struct LivelineChartAccessibilityModel: Equatable {
                 LivelineAccessibilityEntry(
                     id: "error-\(point.time)-\(index)",
                     label: formatTime(point.time),
-                    value: "Value \(formatValue(point.value)), lower \(formatValue(point.lower)), upper \(formatValue(point.upper))"
+                    value: String(
+                        format: LivelineStrings.accessibilityErrorBarValueFormat,
+                        formatValue(point.value),
+                        formatValue(point.lower),
+                        formatValue(point.upper)
+                    )
                 )
             }
 
@@ -178,7 +213,11 @@ struct LivelineChartAccessibilityModel: Equatable {
                 LivelineAccessibilityEntry(
                     id: "dumbbell-\(point.time)-\(index)",
                     label: formatTime(point.time),
-                    value: "Start \(formatValue(point.start)), end \(formatValue(point.end))"
+                    value: String(
+                        format: LivelineStrings.accessibilityDumbbellValueFormat,
+                        formatValue(point.start),
+                        formatValue(point.end)
+                    )
                 )
             }
 
@@ -193,7 +232,12 @@ struct LivelineChartAccessibilityModel: Equatable {
                 LivelineAccessibilityEntry(
                     id: item.id,
                     label: item.label,
-                    value: "Start \(formatTime(item.start)), end \(formatTime(item.end)), duration \(formatValue(item.end - item.start))"
+                    value: String(
+                        format: LivelineStrings.accessibilityTimelineValueFormat,
+                        formatTime(item.start),
+                        formatTime(item.end),
+                        formatValue(item.end - item.start)
+                    )
                 )
             }
 
@@ -201,10 +245,10 @@ struct LivelineChartAccessibilityModel: Equatable {
             entries = data.enumerated().map { index, cell in
                 let row = style.rowLabels.indices.contains(cell.row)
                     ? style.rowLabels[cell.row]
-                    : "Row \(cell.row + 1)"
+                    : String(format: LivelineStrings.labelRowFormat, cell.row + 1)
                 return LivelineAccessibilityEntry(
                     id: "heatmap-\(cell.id)-\(index)",
-                    label: "\(row), \(formatTime(cell.time))",
+                    label: String(format: LivelineStrings.accessibilityHeatmapLabelFormat, row, formatTime(cell.time)),
                     value: formatValue(cell.value)
                 )
             }
@@ -226,20 +270,33 @@ struct LivelineChartAccessibilityModel: Equatable {
                 return LivelineAccessibilityEntry(
                     id: "donut-\(entry.id)-\(index)",
                     label: entry.label,
-                    value: "\(formatValue(entry.value)), \(share.formatted(.number.precision(.fractionLength(1)))) percent"
+                    value: String(
+                        format: LivelineStrings.accessibilityDonutValueFormat,
+                        formatValue(entry.value),
+                        share.formatted(.number.precision(.fractionLength(1)))
+                    )
                 )
             }
 
         case let .gauge(value, range, style):
             var valueDescription = formatValue(value)
             if let target = style.resolvedTarget {
-                valueDescription += ", target \(formatValue(target))"
+                valueDescription = String(
+                    format: LivelineStrings.accessibilityGaugeTargetFormat,
+                    valueDescription,
+                    formatValue(target)
+                )
             }
             entries = [
                 LivelineAccessibilityEntry(
                     id: "gauge",
-                    label: "Gauge value",
-                    value: "\(valueDescription), range \(formatValue(range.lowerBound)) to \(formatValue(range.upperBound))"
+                    label: LivelineStrings.labelGaugeValue,
+                    value: String(
+                        format: LivelineStrings.accessibilityGaugeValueFormat,
+                        valueDescription,
+                        formatValue(range.lowerBound),
+                        formatValue(range.upperBound)
+                    )
                 ),
             ]
 
@@ -268,7 +325,13 @@ struct LivelineChartAccessibilityModel: Equatable {
                     LivelineAccessibilityEntry(
                         id: "candle-\(candle.time)-\(index)",
                         label: formatTime(candle.time),
-                        value: "Open \(formatValue(candle.open)), high \(formatValue(candle.high)), low \(formatValue(candle.low)), close \(formatValue(candle.close))"
+                        value: String(
+                            format: LivelineStrings.accessibilityCandleValueFormat,
+                            formatValue(candle.open),
+                            formatValue(candle.high),
+                            formatValue(candle.low),
+                            formatValue(candle.close)
+                        )
                     )
                 }
             } else {
@@ -290,16 +353,16 @@ struct LivelineChartAccessibilityModel: Equatable {
         if entryCount == 0 {
             summary = configuration.emptyText
         } else {
-            let momentum: String
+            let format: String
             switch semantics.momentum {
             case .up:
-                momentum = ", trending up"
+                format = LivelineStrings.accessibilityCurrentValueUpFormat
             case .down:
-                momentum = ", trending down"
+                format = LivelineStrings.accessibilityCurrentValueDownFormat
             case .flat:
-                momentum = ""
+                format = LivelineStrings.accessibilityCurrentValueFormat
             }
-            summary = "Current value \(formatValue(semantics.currentValue))\(momentum)"
+            summary = String(format: format, formatValue(semantics.currentValue))
         }
 
         return LivelineChartAccessibilityModel(
@@ -513,27 +576,27 @@ struct LivelineAccessibilityModelKey: Equatable {
 private extension LivelineChartKind {
     var accessibilityLabel: String {
         switch self {
-        case .line: return "Line chart"
-        case .bars: return "Bar chart"
-        case .range: return "Range chart"
-        case .scatter: return "Scatter chart"
-        case .steps: return "Step chart"
-        case .lollipops: return "Lollipop chart"
-        case .bubbles: return "Bubble chart"
-        case .boxPlots: return "Box plot chart"
-        case .waterfall: return "Waterfall chart"
-        case .errorBars: return "Error bar chart"
-        case .dumbbells: return "Dumbbell chart"
-        case .stackedBars: return "Stacked bar chart"
-        case .stackedAreas: return "Stacked area chart"
-        case .timeline: return "Timeline chart"
-        case .heatmap: return "Heatmap chart"
-        case .radar: return "Radar chart"
-        case .donut: return "Donut chart"
-        case .gauge: return "Gauge chart"
-        case .funnel: return "Funnel chart"
-        case .candle: return "Candlestick chart"
-        case .series: return "Multi-series chart"
+        case .line: return LivelineStrings.chartKindLine
+        case .bars: return LivelineStrings.chartKindBars
+        case .range: return LivelineStrings.chartKindRange
+        case .scatter: return LivelineStrings.chartKindScatter
+        case .steps: return LivelineStrings.chartKindSteps
+        case .lollipops: return LivelineStrings.chartKindLollipops
+        case .bubbles: return LivelineStrings.chartKindBubbles
+        case .boxPlots: return LivelineStrings.chartKindBoxPlots
+        case .waterfall: return LivelineStrings.chartKindWaterfall
+        case .errorBars: return LivelineStrings.chartKindErrorBars
+        case .dumbbells: return LivelineStrings.chartKindDumbbells
+        case .stackedBars: return LivelineStrings.chartKindStackedBars
+        case .stackedAreas: return LivelineStrings.chartKindStackedAreas
+        case .timeline: return LivelineStrings.chartKindTimeline
+        case .heatmap: return LivelineStrings.chartKindHeatmap
+        case .radar: return LivelineStrings.chartKindRadar
+        case .donut: return LivelineStrings.chartKindDonut
+        case .gauge: return LivelineStrings.chartKindGauge
+        case .funnel: return LivelineStrings.chartKindFunnel
+        case .candle: return LivelineStrings.chartKindCandle
+        case .series: return LivelineStrings.chartKindSeries
         }
     }
 }

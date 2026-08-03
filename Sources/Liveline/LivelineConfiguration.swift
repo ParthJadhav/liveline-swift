@@ -19,7 +19,7 @@ public struct LivelineChartAppearance {
         lineWidth: CGFloat = 2,
         showValue: Bool = false,
         valueMomentumColor: Bool = false,
-        emptyText: String = "No data to display",
+        emptyText: String = LivelineLocalizedDefaults.emptyText,
         padding: LivelinePadding = LivelinePadding()
     ) {
         self.theme = theme
@@ -41,7 +41,7 @@ public struct LivelineChartAppearance {
         lineWidth: CGFloat = 2,
         showValue: Bool = false,
         valueMomentumColor: Bool = false,
-        emptyText: String = "No data to display",
+        emptyText: String = LivelineLocalizedDefaults.emptyText,
         padding: LivelinePadding = LivelinePadding()
     ) {
         self.theme = theme
@@ -280,7 +280,7 @@ public struct LivelineChartConfiguration {
         degen: LivelineDegenOptions? = nil,
         loading: Bool = false,
         paused: Bool = false,
-        emptyText: String = "No data to display",
+        emptyText: String = LivelineLocalizedDefaults.emptyText,
         windowStyle: LivelineWindowStyle = .default,
         tooltipY: CGFloat = 14,
         tooltipOutline: Bool = true,
@@ -368,7 +368,7 @@ public struct LivelineChartConfiguration {
         degen: LivelineDegenOptions? = nil,
         loading: Bool = false,
         paused: Bool = false,
-        emptyText: String = "No data to display",
+        emptyText: String = LivelineLocalizedDefaults.emptyText,
         windowStyle: LivelineWindowStyle = .default,
         tooltipY: CGFloat = 14,
         tooltipOutline: Bool = true,

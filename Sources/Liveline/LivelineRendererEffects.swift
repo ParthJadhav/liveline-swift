@@ -159,14 +159,18 @@ extension LivelineRenderer {
         }
     }
 
-    static func formatOrderSize(_ size: Double) -> String {
+    /// The orderbook overlay's size label. `currencySymbol` defaults to `"$"`
+    /// rather than the locale's symbol so that snapshot renders stay
+    /// byte-identical across machines; pass
+    /// `LivelineFormatters.currencySymbol()` for a locale-aware label.
+    static func formatOrderSize(_ size: Double, currencySymbol: String = "$") -> String {
         // `Double(Int.max)` rounds to 2^63 on 64-bit platforms, which is one
         // greater than the largest representable Int. Converting that exact
         // boundary traps, so keep it on the floating-point formatting path.
-        if size >= Double(Int.max) { return String(format: "$%.2e", size) }
-        if size >= 10 { return "$\(Int(size.rounded()))" }
-        if size >= 1 { return String(format: "$%.1f", size) }
-        return String(format: "$%.2f", size)
+        if size >= Double(Int.max) { return currencySymbol + String(format: "%.2e", size) }
+        if size >= 10 { return "\(currencySymbol)\(Int(size.rounded()))" }
+        if size >= 1 { return currencySymbol + String(format: "%.1f", size) }
+        return currencySymbol + String(format: "%.2f", size)
     }
 
     static func drawOrderbookText(

@@ -93,36 +93,36 @@ struct LivelineAudioGraphModel: Equatable {
 
         switch content {
         case let .line(data, _):
-            series = [timed("Value", isContinuous: true, data.map { ($0.time, $0.value) })]
+            series = [timed(LivelineStrings.labelValue, isContinuous: true, data.map { ($0.time, $0.value) })]
 
         case let .steps(data, _, _):
-            series = [timed("Value", isContinuous: true, data.map { ($0.time, $0.value) })]
+            series = [timed(LivelineStrings.labelValue, isContinuous: true, data.map { ($0.time, $0.value) })]
 
         case let .bars(data, _), let .lollipops(data, _):
-            series = [timed("Value", isContinuous: false, data.map { ($0.time, $0.value) })]
+            series = [timed(LivelineStrings.labelValue, isContinuous: false, data.map { ($0.time, $0.value) })]
 
         case let .scatter(data, _, _):
-            series = [timed("Value", isContinuous: false, data.map { ($0.time, $0.value) })]
+            series = [timed(LivelineStrings.labelValue, isContinuous: false, data.map { ($0.time, $0.value) })]
 
         case let .range(data, _):
             series = [
-                timed("Lower", isContinuous: true, data.map { ($0.time, $0.lower) }),
-                timed("Upper", isContinuous: true, data.map { ($0.time, $0.upper) }),
+                timed(LivelineStrings.labelLower, isContinuous: true, data.map { ($0.time, $0.lower) }),
+                timed(LivelineStrings.labelUpper, isContinuous: true, data.map { ($0.time, $0.upper) }),
             ]
 
         case let .bubbles(data, _):
             series = [
-                timed("Value", isContinuous: false, data.map { ($0.time, $0.value) }),
-                timed("Magnitude", isContinuous: false, data.map { ($0.time, $0.magnitude) }),
+                timed(LivelineStrings.labelValue, isContinuous: false, data.map { ($0.time, $0.value) }),
+                timed(LivelineStrings.labelMagnitude, isContinuous: false, data.map { ($0.time, $0.magnitude) }),
             ]
 
         case let .boxPlots(data, _):
             series = [
-                timed("Median", isContinuous: false, data.map { ($0.time, $0.median) }),
-                timed("Minimum", isContinuous: false, data.map { ($0.time, $0.minimum) }),
-                timed("First quartile", isContinuous: false, data.map { ($0.time, $0.lowerQuartile) }),
-                timed("Third quartile", isContinuous: false, data.map { ($0.time, $0.upperQuartile) }),
-                timed("Maximum", isContinuous: false, data.map { ($0.time, $0.maximum) }),
+                timed(LivelineStrings.labelMedian, isContinuous: false, data.map { ($0.time, $0.median) }),
+                timed(LivelineStrings.labelMinimum, isContinuous: false, data.map { ($0.time, $0.minimum) }),
+                timed(LivelineStrings.labelFirstQuartile, isContinuous: false, data.map { ($0.time, $0.lowerQuartile) }),
+                timed(LivelineStrings.labelThirdQuartile, isContinuous: false, data.map { ($0.time, $0.upperQuartile) }),
+                timed(LivelineStrings.labelMaximum, isContinuous: false, data.map { ($0.time, $0.maximum) }),
             ]
 
         case let .waterfall(data, style):
@@ -130,19 +130,19 @@ struct LivelineAudioGraphModel: Equatable {
                 points: data,
                 initialValue: style.resolvedInitialValue
             )
-            series = [timed("Total", isContinuous: false, segments.map { ($0.time, $0.end) })]
+            series = [timed(LivelineStrings.labelTotal, isContinuous: false, segments.map { ($0.time, $0.end) })]
 
         case let .errorBars(data, _):
             series = [
-                timed("Value", isContinuous: false, data.map { ($0.time, $0.value) }),
-                timed("Lower", isContinuous: false, data.map { ($0.time, $0.lower) }),
-                timed("Upper", isContinuous: false, data.map { ($0.time, $0.upper) }),
+                timed(LivelineStrings.labelValue, isContinuous: false, data.map { ($0.time, $0.value) }),
+                timed(LivelineStrings.labelLower, isContinuous: false, data.map { ($0.time, $0.lower) }),
+                timed(LivelineStrings.labelUpper, isContinuous: false, data.map { ($0.time, $0.upper) }),
             ]
 
         case let .dumbbells(data, _):
             series = [
-                timed("Start", isContinuous: false, data.map { ($0.time, $0.start) }),
-                timed("End", isContinuous: false, data.map { ($0.time, $0.end) }),
+                timed(LivelineStrings.labelStart, isContinuous: false, data.map { ($0.time, $0.start) }),
+                timed(LivelineStrings.labelEnd, isContinuous: false, data.map { ($0.time, $0.end) }),
             ]
 
         case let .stackedBars(data, style):
@@ -154,7 +154,7 @@ struct LivelineAudioGraphModel: Equatable {
         case let .timeline(data, _):
             series = [
                 timed(
-                    "Duration",
+                    LivelineStrings.labelDuration,
                     isContinuous: false,
                     data.map { ($0.start, $0.end - $0.start) }
                 ),
@@ -165,7 +165,7 @@ struct LivelineAudioGraphModel: Equatable {
             series = (0..<max(rowCount, 0)).map { row in
                 let name = style.rowLabels.indices.contains(row)
                     ? style.rowLabels[row]
-                    : "Row \(row + 1)"
+                    : String(format: LivelineStrings.labelRowFormat, row + 1)
                 return timed(
                     name,
                     isContinuous: false,
@@ -177,27 +177,27 @@ struct LivelineAudioGraphModel: Equatable {
             let points = data.count >= 3 ? data : []
             isCategorical = true
             categoryOrder = points.map(\.label)
-            series = [categorical("Value", isContinuous: false, points.map { ($0.label, $0.value) })]
+            series = [categorical(LivelineStrings.labelValue, isContinuous: false, points.map { ($0.label, $0.value) })]
 
         case let .donut(data, _), let .funnel(data, _):
             let positive = data.filter { $0.value > 0 }
             isCategorical = true
             categoryOrder = positive.map(\.label)
-            series = [categorical("Value", isContinuous: false, positive.map { ($0.label, $0.value) })]
+            series = [categorical(LivelineStrings.labelValue, isContinuous: false, positive.map { ($0.label, $0.value) })]
 
         case let .gauge(value, range, _):
             isCategorical = true
-            categoryOrder = ["Gauge value"]
+            categoryOrder = [LivelineStrings.labelGaugeValue]
             // A degenerate configured range would sonify as a divide-by-zero;
             // fall back to the padded range the value itself produces.
             explicitValueRange = range.lowerBound < range.upperBound
                 ? range.lowerBound...range.upperBound
                 : nil
-            series = [categorical("Value", isContinuous: false, [("Gauge value", value)])]
+            series = [categorical(LivelineStrings.labelValue, isContinuous: false, [(LivelineStrings.labelGaugeValue, value)])]
 
         case let .candle(data, _, candles, _, liveCandle, lineData, _):
             if configuration.lineMode, !lineData.isEmpty {
-                series = [timed("Price", isContinuous: true, lineData.map { ($0.time, $0.value) })]
+                series = [timed(LivelineStrings.labelPrice, isContinuous: true, lineData.map { ($0.time, $0.value) })]
             } else if !candles.isEmpty || liveCandle != nil {
                 var values = candles
                 if let liveCandle {
@@ -209,13 +209,13 @@ struct LivelineAudioGraphModel: Equatable {
                 }
                 values.sort { $0.time < $1.time }
                 series = [
-                    timed("Close", isContinuous: true, values.map { ($0.time, $0.close) }),
-                    timed("Open", isContinuous: false, values.map { ($0.time, $0.open) }),
-                    timed("High", isContinuous: false, values.map { ($0.time, $0.high) }),
-                    timed("Low", isContinuous: false, values.map { ($0.time, $0.low) }),
+                    timed(LivelineStrings.labelClose, isContinuous: true, values.map { ($0.time, $0.close) }),
+                    timed(LivelineStrings.labelOpen, isContinuous: false, values.map { ($0.time, $0.open) }),
+                    timed(LivelineStrings.labelHigh, isContinuous: false, values.map { ($0.time, $0.high) }),
+                    timed(LivelineStrings.labelLow, isContinuous: false, values.map { ($0.time, $0.low) }),
                 ]
             } else {
-                series = [timed("Price", isContinuous: true, data.map { ($0.time, $0.value) })]
+                series = [timed(LivelineStrings.labelPrice, isContinuous: true, data.map { ($0.time, $0.value) })]
             }
 
         case let .series(entries):
@@ -272,7 +272,7 @@ struct LivelineAudioGraphModel: Equatable {
         }
         return (0..<depth).map { index in
             timed(
-                "Series \(index + 1)",
+                String(format: LivelineStrings.labelSeriesFormat, index + 1),
                 isContinuous,
                 signed.compactMap { time, values in
                     values.indices.contains(index) ? (time, values[index]) : nil
@@ -305,7 +305,7 @@ extension LivelineAudioGraphModel {
             summary: summary,
             xAxis: makeXAxisDescriptor(formatTime: formatTime),
             yAxis: AXNumericDataAxisDescriptor(
-                title: "Value",
+                title: LivelineStrings.labelValue,
                 range: valueRange,
                 gridlinePositions: [],
                 valueDescriptionProvider: formatValue
@@ -331,13 +331,13 @@ extension LivelineAudioGraphModel {
         switch xAxis {
         case let .time(range):
             return AXNumericDataAxisDescriptor(
-                title: "Time",
+                title: LivelineStrings.labelTime,
                 range: range,
                 gridlinePositions: [],
                 valueDescriptionProvider: formatTime
             )
         case let .categories(categories):
-            return AXCategoricalDataAxisDescriptor(title: "Category", categoryOrder: categories)
+            return AXCategoricalDataAxisDescriptor(title: LivelineStrings.labelCategory, categoryOrder: categories)
         }
     }
 }

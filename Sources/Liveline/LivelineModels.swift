@@ -520,20 +520,96 @@ public struct LivelineDegenOptions: Hashable, Sendable {
 }
 
 
+/// The axis, tooltip, and VoiceOver formatters a chart uses when the caller
+/// supplies none.
+///
+/// Two families are available. The `fixed` pair is locale-independent and
+/// byte-stable, which is what snapshot tests and the `liveline-render` CLI
+/// need; it is what `value` and `time` — and therefore every default argument
+/// in this package — resolve to. The `localized` pair honours the reader's
+/// number, date, and 12/24-hour settings and is what a shipping app should
+/// pass instead:
+///
+/// ```swift
+/// LivelineChartConfiguration(
+///     formatValue: LivelineFormatters.localizedValue,
+///     formatTime: LivelineFormatters.localizedTime
+/// )
+/// ```
 public enum LivelineFormatters {
-    private static let timeFormatter: DateFormatter = {
+    private static let fixedTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "HH:mm:ss"
         return formatter
     }()
 
-    public static func value(_ value: Double) -> String {
+    /// Two fraction digits, a `.` decimal separator, and no grouping,
+    /// regardless of locale.
+    public static func fixedValue(_ value: Double) -> String {
         String(format: "%.2f", value)
     }
 
-    public static func time(_ time: TimeInterval) -> String {
+    /// Zero-padded 24-hour `HH:mm:ss` in the current time zone, regardless of
+    /// locale.
+    public static func fixedTime(_ time: TimeInterval) -> String {
         let date = Date(timeIntervalSince1970: time)
-        return timeFormatter.string(from: date)
+        return fixedTimeFormatter.string(from: date)
+    }
+
+    /// Two fraction digits with the reader's decimal separator and grouping —
+    /// `1.234,57` where `fixedValue` gives `1234.57`.
+    public static func localizedValue(_ value: Double) -> String {
+        localizedValue(value, locale: .autoupdatingCurrent)
+    }
+
+    /// Two fraction digits in an explicit locale. Pass a fixed locale to make
+    /// the result deterministic.
+    public static func localizedValue(_ value: Double, locale: Locale) -> String {
+        value.formatted(
+            .number
+                .precision(.fractionLength(2))
+                .locale(locale)
+        )
+    }
+
+    /// Hours, minutes, and seconds in the reader's locale, honouring their
+    /// 12- or 24-hour preference.
+    public static func localizedTime(_ time: TimeInterval) -> String {
+        localizedTime(time, locale: .autoupdatingCurrent)
+    }
+
+    /// Hours, minutes, and seconds in an explicit locale. Pass a fixed locale
+    /// to make the result deterministic.
+    public static func localizedTime(_ time: TimeInterval, locale: Locale) -> String {
+        Date(timeIntervalSince1970: time).formatted(
+            .dateTime
+                .hour(.defaultDigits(amPM: .abbreviated))
+                .minute(.twoDigits)
+                .second(.twoDigits)
+                .locale(locale)
+        )
+    }
+
+    /// The default value formatter. An alias for ``fixedValue(_:)`` so that
+    /// charts render identically everywhere; prefer ``localizedValue(_:)`` in
+    /// a user-facing app.
+    public static func value(_ value: Double) -> String {
+        fixedValue(value)
+    }
+
+    /// The default time formatter. An alias for ``fixedTime(_:)`` so that
+    /// charts render identically everywhere; prefer ``localizedTime(_:)`` in
+    /// a user-facing app.
+    public static func time(_ time: TimeInterval) -> String {
+        fixedTime(time)
+    }
+
+    /// Currency symbol for the orderbook overlay's size labels. The renderer
+    /// hardcodes `"$"` to keep deterministic snapshots stable; a caller that
+    /// wants locale currency can pass this through
+    /// ``LivelineRenderer/formatOrderSize(_:currencySymbol:)``.
+    static func currencySymbol(for locale: Locale = .autoupdatingCurrent) -> String {
+        locale.currencySymbol ?? "$"
     }
 }
