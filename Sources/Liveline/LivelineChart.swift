@@ -19,6 +19,7 @@ public struct LivelineChart: View {
     @Environment(\.accessibilityVoiceOverEnabled) private var accessibilityVoiceOverEnabled
     @Environment(\.accessibilitySwitchControlEnabled) private var accessibilitySwitchControlEnabled
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.livelineSnapshotElapsedTime) private var snapshotElapsedTime
     @Environment(\.livelineChartStyleOverride) private var chartStyleOverride
     @ScaledMetric(relativeTo: .caption) private var scaledControlHitDimension: CGFloat = LivelineControlMetrics.minimumHitDimension
@@ -677,8 +678,12 @@ private extension LivelineChart {
         LivelineTextScale.resolve(dynamicTypeSize)
     }
 
+    /// Every consumer of the theme — palette, renderer, interaction snapshot,
+    /// accessibility, audio graph — reads it from here, so `.automatic` is
+    /// resolved once against the environment and never travels further.
     var effectiveConfiguration: LivelineChartConfiguration {
         var configuration = baseConfiguration
+        configuration.theme = baseConfiguration.theme.resolved(colorScheme: colorScheme)
         configuration.lineMode = lineMode
         if let chartStyleOverride {
             configuration.style = chartStyleOverride.normalizedForRendering()

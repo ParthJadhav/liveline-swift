@@ -696,6 +696,38 @@ final class LivelineCoreRegressionTests: XCTestCase {
         XCTAssertEqual(state.paletteBuildCount, 5)
     }
 
+    func testAutomaticThemeResolvesAgainstColorSchemeAndExplicitModesIgnoreIt() {
+        XCTAssertEqual(LivelineThemeMode.automatic.resolved(colorScheme: .light), .light)
+        XCTAssertEqual(LivelineThemeMode.automatic.resolved(colorScheme: .dark), .dark)
+
+        // An explicit mode is a promise, not a preference.
+        XCTAssertEqual(LivelineThemeMode.light.resolved(colorScheme: .dark), .light)
+        XCTAssertEqual(LivelineThemeMode.dark.resolved(colorScheme: .light), .dark)
+
+        // `.dark` stays the default so existing callers render unchanged.
+        XCTAssertEqual(LivelineChartConfiguration().theme, .dark)
+    }
+
+    func testAutomaticThemeProducesTheSamePaletteAsTheMatchingExplicitMode() {
+        let state = LivelineRenderState()
+        let automaticLight = state.palette(
+            accent: .blue,
+            mode: LivelineThemeMode.automatic.resolved(colorScheme: .light),
+            lineWidth: 2
+        )
+        XCTAssertEqual(describe(automaticLight), describe(LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)))
+
+        // A scheme flip has to reach the canvas, so it must miss the memo.
+        let automaticDark = state.palette(
+            accent: .blue,
+            mode: LivelineThemeMode.automatic.resolved(colorScheme: .dark),
+            lineWidth: 2
+        )
+        XCTAssertEqual(state.paletteBuildCount, 2)
+        XCTAssertEqual(describe(automaticDark), describe(LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2)))
+        XCTAssertNotEqual(describe(automaticLight), describe(automaticDark))
+    }
+
     private func describe(_ selection: LivelineTooltipSelection?) -> String {
         guard let selection else { return "none" }
         let rows = selection.rows.map { "\($0.label)=\($0.value)" }.joined(separator: "|")

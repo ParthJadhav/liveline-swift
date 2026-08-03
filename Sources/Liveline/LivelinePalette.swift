@@ -67,7 +67,7 @@ struct LivelinePalette {
 extension LivelinePalette {
     static func resolve(accent: Color, mode: LivelineThemeMode, lineWidth: CGFloat) -> LivelinePalette {
         let accentRGB = accent.livelineRGBA()
-        let isDark = mode == .dark
+        let isDark = mode.prefersDarkAppearance
 
         return LivelinePalette(
             line: accent,

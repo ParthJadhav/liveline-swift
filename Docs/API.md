@@ -312,7 +312,7 @@ Important options:
 
 | Option | Default | Notes |
 | --- | --- | --- |
-| `theme` | `.dark` | Controls grid, label, tooltip, and badge colors. |
+| `theme` | `.dark` | Controls grid, label, tooltip, and badge colors. Use `.automatic` to follow the system `colorScheme`. |
 | `style` | `.standard` | Applies `.dither(LivelineDitherStyle)` universally to line, cartesian, radial, categorical, and financial chart marks. |
 | `window` | `30` | Visible time span in seconds. |
 | `windows` | `[]` | Adds built-in time horizon buttons. |

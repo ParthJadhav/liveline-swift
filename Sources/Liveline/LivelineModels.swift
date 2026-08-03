@@ -383,6 +383,35 @@ public struct LivelineSeries: Identifiable {
 public enum LivelineThemeMode: String, CaseIterable, Sendable {
     case light
     case dark
+    /// Follows the system appearance.
+    ///
+    /// `LivelineChart` reads `\.colorScheme` from the environment and resolves
+    /// this case to `.light` or `.dark` before the palette is built, so nothing
+    /// downstream — renderer, interaction snapshot, accessibility, audio graph —
+    /// ever sees `.automatic`. The chart re-renders when the system flips
+    /// because the environment change re-evaluates `body`.
+    ///
+    /// Configurations still default to `.dark`; opt in explicitly with
+    /// `LivelineChartConfiguration(theme: .automatic)`.
+    case automatic
+}
+
+extension LivelineThemeMode {
+    /// Resolves `.automatic` against a color scheme. Explicit modes ignore the
+    /// scheme, and the result is never `.automatic`.
+    public func resolved(colorScheme: ColorScheme) -> LivelineThemeMode {
+        switch self {
+        case .light, .dark:
+            return self
+        case .automatic:
+            return colorScheme == .dark ? .dark : .light
+        }
+    }
+
+    /// Whether the mode paints dark surfaces. There is no environment to consult
+    /// here, so an unresolved `.automatic` falls back to the library default,
+    /// `.dark`; `LivelineChart` resolves it before the palette is built.
+    var prefersDarkAppearance: Bool { self != .light }
 }
 
 public enum LivelineMomentum: String, CaseIterable, Sendable {
