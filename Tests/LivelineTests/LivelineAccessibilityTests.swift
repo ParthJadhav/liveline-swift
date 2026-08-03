@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import XCTest
 @testable import Liveline
 
@@ -311,5 +312,244 @@ final class LivelineAccessibilityTests: XCTestCase {
         configuration.loading = true
         XCTAssertTrue(model().isLoading)
         XCTAssertEqual(state.accessibilityModelBuildCount, 6)
+    }
+
+    // MARK: - Audio Graph
+
+    func testAudioGraphDescribesVisibleWindowAndContinuousLineSeries() {
+        let data = (0...20).map { LivelinePoint(time: TimeInterval($0), value: Double($0) * 2) }
+        let content = LivelineChartContent.line(data: data, value: 40)
+        let configuration = LivelineChartConfiguration(
+            formatValue: { String(Int($0)) },
+            formatTime: { "T\(Int($0))" }
+        )
+        let model = LivelineAudioGraphModel.make(
+            content: content,
+            semantics: content.semantics(activeWindow: 5),
+            configuration: configuration,
+            hiddenSeries: [],
+            activeWindow: 5,
+            title: "Line chart",
+            summary: "Current value 40"
+        )
+
+        XCTAssertEqual(model.title, "Line chart")
+        XCTAssertEqual(model.summary, "Current value 40")
+        XCTAssertEqual(model.xAxis, .time(15...20))
+        // Only the trailing window is rendered, so only it is described.
+        XCTAssertEqual(model.series.count, 1)
+        XCTAssertEqual(model.series[0].name, "Value")
+        XCTAssertTrue(model.series[0].isContinuous)
+        XCTAssertEqual(model.series[0].points.map(\.value), [30, 32, 34, 36, 38, 40])
+        XCTAssertEqual(model.valueRange, 30...40)
+    }
+
+    func testAudioGraphMarksDiscreteContentAndPadsFlatSeries() {
+        let content = LivelineChartContent.bars(
+            data: [
+                LivelinePoint(time: 1, value: 7),
+                LivelinePoint(time: 2, value: 7),
+            ],
+            style: LivelineBarStyle()
+        )
+        let model = LivelineAudioGraphModel.make(
+            content: content,
+            semantics: content.semantics(activeWindow: 10),
+            configuration: LivelineChartConfiguration(),
+            hiddenSeries: [],
+            activeWindow: 10,
+            title: "Bar chart",
+            summary: "Current value 7"
+        )
+
+        XCTAssertEqual(model.series.count, 1)
+        XCTAssertFalse(model.series[0].isContinuous)
+        // A flat series would sonify as a divide-by-zero without padding.
+        XCTAssertLessThan(model.valueRange.lowerBound, 7)
+        XCTAssertGreaterThan(model.valueRange.upperBound, 7)
+    }
+
+    func testAudioGraphEmitsOneSeriesPerVisibleMultiSeriesEntry() {
+        let content = LivelineChartContent.series([
+            LivelineSeries(
+                id: "revenue",
+                data: [
+                    LivelinePoint(time: 1, value: 12),
+                    LivelinePoint(time: 2, value: 14),
+                ],
+                value: 14,
+                color: .blue,
+                label: "Revenue"
+            ),
+            LivelineSeries(
+                id: "cost",
+                data: [
+                    LivelinePoint(time: 1, value: 8),
+                    LivelinePoint(time: 2, value: 9),
+                ],
+                value: 9,
+                color: .red,
+                label: "Cost"
+            ),
+        ])
+
+        let all = LivelineAudioGraphModel.make(
+            content: content,
+            semantics: content.semantics(activeWindow: 10),
+            configuration: LivelineChartConfiguration(),
+            hiddenSeries: [],
+            activeWindow: 10,
+            title: "Multi-series chart",
+            summary: "2 series"
+        )
+        XCTAssertEqual(all.series.map(\.name), ["Revenue", "Cost"])
+        XCTAssertEqual(all.series.map { $0.points.map(\.value) }, [[12, 14], [8, 9]])
+        XCTAssertTrue(all.series.allSatisfy(\.isContinuous))
+        XCTAssertEqual(all.valueRange, 8...14)
+
+        // Toggling a series off in the legend removes it from the Audio Graph.
+        let visible = LivelineAudioGraphModel.make(
+            content: content,
+            semantics: content.semantics(hiddenSeries: ["cost"], activeWindow: 10),
+            configuration: LivelineChartConfiguration(),
+            hiddenSeries: ["cost"],
+            activeWindow: 10,
+            title: "Multi-series chart",
+            summary: "1 series"
+        )
+        XCTAssertEqual(visible.series.map(\.name), ["Revenue"])
+    }
+
+    func testAudioGraphDescribesCategoricalContentByLabel() {
+        let content = LivelineChartContent.donut(
+            data: [
+                LivelineCategoryValue(id: "direct", label: "Direct", value: 40),
+                LivelineCategoryValue(id: "search", label: "Search", value: 60),
+                LivelineCategoryValue(id: "empty", label: "Empty", value: 0),
+            ],
+            style: LivelineDonutStyle()
+        )
+        let model = LivelineAudioGraphModel.make(
+            content: content,
+            semantics: content.semantics(),
+            configuration: LivelineChartConfiguration(),
+            hiddenSeries: [],
+            activeWindow: 60,
+            title: "Donut chart",
+            summary: "Total 100"
+        )
+
+        XCTAssertEqual(model.xAxis, .categories(["Direct", "Search"]))
+        XCTAssertEqual(model.series.count, 1)
+        XCTAssertEqual(model.series[0].points.map(\.category), ["Direct", "Search"])
+        XCTAssertEqual(model.series[0].points.map(\.value), [40, 60])
+    }
+
+    #if canImport(Accessibility)
+    @MainActor
+    func testChartDescriptorBuildsAxesAndSeriesForVoiceOver() {
+        let content = LivelineChartContent.line(
+            data: (0...4).map { LivelinePoint(time: TimeInterval($0), value: Double($0) * 3) },
+            value: 12
+        )
+        let configuration = LivelineChartConfiguration(
+            formatValue: { String(Int($0)) },
+            formatTime: { "T\(Int($0))" }
+        )
+        let representable = LivelineChartDescriptor(
+            content: content,
+            semantics: content.semantics(activeWindow: 4),
+            configuration: configuration,
+            hiddenSeries: [],
+            activeWindow: 4,
+            title: "Line chart",
+            summary: "Current value 12"
+        )
+
+        let descriptor = representable.makeChartDescriptor()
+        XCTAssertEqual(descriptor.title, "Line chart")
+        XCTAssertEqual(descriptor.summary, "Current value 12")
+        XCTAssertEqual(descriptor.series.count, 1)
+        XCTAssertTrue(descriptor.series[0].isContinuous)
+        XCTAssertEqual(descriptor.series[0].dataPoints.count, 5)
+        // Point labels and axis descriptions go through the chart's formatters.
+        XCTAssertEqual(descriptor.series[0].dataPoints.first?.label, "T0")
+
+        let xAxis = descriptor.xAxis as? AXNumericDataAxisDescriptor
+        XCTAssertEqual(xAxis?.range, 0...4)
+        XCTAssertEqual(xAxis?.valueDescriptionProvider(4), "T4")
+        XCTAssertEqual(descriptor.yAxis?.range, 0...12)
+        XCTAssertEqual(descriptor.yAxis?.valueDescriptionProvider(12), "12")
+
+        // Updating in place must not leave the previous shape behind.
+        var updated = representable
+        updated.content = .series([
+            LivelineSeries(
+                id: "a",
+                data: [LivelinePoint(time: 1, value: 5), LivelinePoint(time: 2, value: 6)],
+                value: 6,
+                color: .blue,
+                label: "A"
+            ),
+            LivelineSeries(
+                id: "b",
+                data: [LivelinePoint(time: 1, value: 9), LivelinePoint(time: 2, value: 11)],
+                value: 11,
+                color: .red,
+                label: "B"
+            ),
+        ])
+        updated.title = "Multi-series chart"
+        updated.updateChartDescriptor(descriptor)
+        XCTAssertEqual(descriptor.title, "Multi-series chart")
+        XCTAssertEqual(descriptor.series.map(\.name), ["A", "B"])
+    }
+    #endif
+
+    // MARK: - Dynamic Type
+
+    func testTextScaleIsExactlyOneAtStandardTypeSizes() {
+        for size in [DynamicTypeSize.xSmall, .small, .medium, .large] {
+            let scale = LivelineTextScale.resolve(size)
+            XCTAssertTrue(scale.isStandard, "\(size) must not perturb deterministic rendering")
+            XCTAssertEqual(scale.factor, 1)
+            XCTAssertEqual(scale.font(11), Font.system(size: 11, weight: .regular, design: .default))
+            XCTAssertEqual(scale.scaled(15), 15)
+        }
+    }
+
+    func testTextScaleGrowsMonotonicallyAndStaysClamped() {
+        let ordered = DynamicTypeSize.allCases.map { LivelineTextScale.resolve($0).factor }
+        for (previous, next) in zip(ordered, ordered.dropFirst()) {
+            XCTAssertGreaterThanOrEqual(next, previous)
+        }
+
+        XCTAssertGreaterThan(LivelineTextScale.resolve(.accessibility1).factor, 1)
+        XCTAssertEqual(LivelineTextScale.resolve(.accessibility5).factor, LivelineTextScale.maximumFactor)
+        // Out-of-band factors are clamped rather than trusted.
+        XCTAssertEqual(LivelineTextScale(factor: 12).factor, LivelineTextScale.maximumFactor)
+        XCTAssertEqual(LivelineTextScale(factor: 0.2).factor, 1)
+        XCTAssertEqual(LivelineTextScale(factor: .nan).factor, 1)
+    }
+
+    @MainActor
+    func testTextScaleChangeInvalidatesCachedTextMeasurements() {
+        let state = LivelineRenderState()
+        state.timeAxisLabels[1] = TimeAxisLabelState(alpha: 1, text: "T1", measuredWidth: 18)
+        let measured = state.legendGutterWidth(labels: ["Revenue"], side: .trailing) { 40 }
+        XCTAssertEqual(measured, 40)
+        XCTAssertEqual(state.legendGutterMeasureCount, 1)
+
+        // Same scale: the measurements stand.
+        state.adoptTextScale(.standard)
+        XCTAssertEqual(state.timeAxisLabels[1]?.measuredWidth, 18)
+        _ = state.legendGutterWidth(labels: ["Revenue"], side: .trailing) { 40 }
+        XCTAssertEqual(state.legendGutterMeasureCount, 1)
+
+        // A Dynamic Type change makes every stored width a lie.
+        state.adoptTextScale(LivelineTextScale.resolve(.accessibility3))
+        XCTAssertNil(state.timeAxisLabels[1]?.measuredWidth)
+        _ = state.legendGutterWidth(labels: ["Revenue"], side: .trailing) { 60 }
+        XCTAssertEqual(state.legendGutterMeasureCount, 2)
     }
 }

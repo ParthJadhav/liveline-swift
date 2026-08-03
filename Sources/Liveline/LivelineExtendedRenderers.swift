@@ -228,6 +228,7 @@ extension LivelineRenderer {
         palette: LivelinePalette,
         geometry: LivelineTimelineGeometry,
         style: LivelineTimelineStyle,
+        textScale: LivelineTextScale,
         drawLabels: Bool = true
     ) {
         guard !geometry.marks.isEmpty, geometry.progress > 0.001 else { return }
@@ -254,14 +255,15 @@ extension LivelineRenderer {
             )
         }
         if drawLabels {
-            drawTimelineLabels(context: &bars, geometry: geometry, style: style)
+            drawTimelineLabels(context: &bars, geometry: geometry, style: style, textScale: textScale)
         }
     }
 
     static func drawTimelineLabels(
         context: inout GraphicsContext,
         geometry: LivelineTimelineGeometry,
-        style: LivelineTimelineStyle
+        style: LivelineTimelineStyle,
+        textScale: LivelineTextScale
     ) {
         guard style.showsLabels else { return }
         for mark in geometry.marks where mark.reveal > 0.72 && mark.rect.width > 30 {
@@ -273,7 +275,7 @@ extension LivelineRenderer {
                 at: CGPoint(x: mark.rect.midX, y: mark.rect.midY),
                 anchor: .center,
                 color: .white.opacity(0.92),
-                font: .system(size: 9, weight: .semibold)
+                font: textScale.font(9, weight: .semibold)
             )
         }
     }
@@ -285,6 +287,7 @@ extension LivelineRenderer {
         geometry: LivelineHeatmapGeometry,
         style: LivelineHeatmapStyle,
         formatValue: (Double) -> String,
+        textScale: LivelineTextScale,
         drawLabels: Bool = true
     ) {
         guard !geometry.marks.isEmpty, geometry.progress > 0.001 else { return }
@@ -310,7 +313,8 @@ extension LivelineRenderer {
                 palette: palette,
                 geometry: geometry,
                 style: style,
-                formatValue: formatValue
+                formatValue: formatValue,
+                textScale: textScale
             )
         }
     }
@@ -321,7 +325,8 @@ extension LivelineRenderer {
         palette: LivelinePalette,
         geometry: LivelineHeatmapGeometry,
         style: LivelineHeatmapStyle,
-        formatValue: (Double) -> String
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale
     ) {
         if style.showsValues, geometry.cellWidth > 25, geometry.cellHeight > 14 {
             var clipped = context
@@ -335,7 +340,7 @@ extension LivelineRenderer {
                     at: CGPoint(x: mark.rect.midX, y: mark.rect.midY),
                     anchor: .center,
                     color: mark.opacity > 0.55 ? .white.opacity(0.9) : palette.gridLabel,
-                    font: .system(size: 8, weight: .medium, design: .monospaced)
+                    font: textScale.font(8, weight: .medium, design: .monospaced)
                 )
             }
         }
@@ -350,7 +355,7 @@ extension LivelineRenderer {
                 at: CGPoint(x: layout.plotLeftX - 5, y: y),
                 anchor: .trailing,
                 color: palette.gridLabel,
-                font: .system(size: 9, weight: .medium)
+                font: textScale.font(9, weight: .medium)
             )
         }
     }
@@ -361,6 +366,7 @@ extension LivelineRenderer {
         geometry: LivelineRadarGeometry,
         points: [LivelineRadarPoint],
         style: LivelineRadarStyle,
+        textScale: LivelineTextScale,
         drawLabels: Bool = true
     ) {
         guard points.count >= 3, geometry.progress > 0.001 else { return }
@@ -415,7 +421,7 @@ extension LivelineRenderer {
         }
 
         if drawLabels {
-            drawRadarLabels(context: &context, palette: palette, geometry: geometry, points: points, style: style)
+            drawRadarLabels(context: &context, palette: palette, geometry: geometry, points: points, style: style, textScale: textScale)
         }
     }
 
@@ -424,7 +430,8 @@ extension LivelineRenderer {
         palette: LivelinePalette,
         geometry: LivelineRadarGeometry,
         points: [LivelineRadarPoint],
-        style: LivelineRadarStyle
+        style: LivelineRadarStyle,
+        textScale: LivelineTextScale
     ) {
         guard style.showsLabels else { return }
         var labelLayer = context
@@ -438,7 +445,7 @@ extension LivelineRenderer {
                 at: labelPoint,
                 anchor: extendedRadialAnchor(angle: angle),
                 color: palette.gridLabel,
-                font: .system(size: 9, weight: .medium)
+                font: textScale.font(9, weight: .medium)
             )
         }
     }
@@ -449,6 +456,7 @@ extension LivelineRenderer {
         geometry: LivelineDonutGeometry,
         style: LivelineDonutStyle,
         formatValue: (Double) -> String,
+        textScale: LivelineTextScale,
         drawLabels: Bool = true
     ) {
         guard !geometry.segments.isEmpty, geometry.total > 0, geometry.progress > 0.001 else { return }
@@ -476,7 +484,8 @@ extension LivelineRenderer {
                 palette: palette,
                 geometry: geometry,
                 style: style,
-                formatValue: formatValue
+                formatValue: formatValue,
+                textScale: textScale
             )
         }
     }
@@ -486,7 +495,8 @@ extension LivelineRenderer {
         palette: LivelinePalette,
         geometry: LivelineDonutGeometry,
         style: LivelineDonutStyle,
-        formatValue: (Double) -> String
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale
     ) {
         if style.showsLabels {
             for segment in geometry.segments where segment.isFullyRevealed {
@@ -504,7 +514,7 @@ extension LivelineRenderer {
                     at: labelPoint,
                     anchor: extendedRadialAnchor(angle: segment.middleAngle),
                     color: palette.gridLabel,
-                    font: .system(size: 9, weight: .medium)
+                    font: textScale.font(9, weight: .medium)
                 )
             }
         }
@@ -517,7 +527,7 @@ extension LivelineRenderer {
             at: geometry.center,
             anchor: .center,
             color: palette.tooltipText,
-            font: .system(size: 15, weight: .semibold, design: .rounded)
+            font: textScale.font(15, weight: .semibold, design: .rounded)
         )
     }
 
@@ -527,6 +537,7 @@ extension LivelineRenderer {
         geometry: LivelineGaugeRenderGeometry,
         style: LivelineGaugeStyle,
         formatValue: (Double) -> String,
+        textScale: LivelineTextScale,
         drawLabels: Bool = true
     ) {
         guard geometry.revealProgress > 0.001 else { return }
@@ -621,7 +632,8 @@ extension LivelineRenderer {
                 palette: palette,
                 geometry: geometry,
                 style: style,
-                formatValue: formatValue
+                formatValue: formatValue,
+                textScale: textScale
             )
         }
     }
@@ -631,7 +643,8 @@ extension LivelineRenderer {
         palette: LivelinePalette,
         geometry: LivelineGaugeRenderGeometry,
         style: LivelineGaugeStyle,
-        formatValue: (Double) -> String
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale
     ) {
         guard style.showsValue else { return }
         var valueLayer = context
@@ -645,7 +658,7 @@ extension LivelineRenderer {
             ),
             anchor: .center,
             color: palette.tooltipText,
-            font: .system(size: 24, weight: .semibold, design: .rounded)
+            font: textScale.font(24, weight: .semibold, design: .rounded)
         )
     }
 
@@ -654,6 +667,7 @@ extension LivelineRenderer {
         geometry: LivelineFunnelGeometry,
         style: LivelineFunnelStyle,
         formatValue: (Double) -> String,
+        textScale: LivelineTextScale,
         drawLabels: Bool = true
     ) {
         guard !geometry.stages.isEmpty, geometry.progress > 0.001 else { return }
@@ -674,7 +688,8 @@ extension LivelineRenderer {
                 context: &context,
                 geometry: geometry,
                 style: style,
-                formatValue: formatValue
+                formatValue: formatValue,
+                textScale: textScale
             )
         }
     }
@@ -683,7 +698,8 @@ extension LivelineRenderer {
         context: inout GraphicsContext,
         geometry: LivelineFunnelGeometry,
         style: LivelineFunnelStyle,
-        formatValue: (Double) -> String
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale
     ) {
         guard style.showsLabels || style.showsValues else { return }
         for stage in geometry.stages where stage.reveal > 0.65 {
@@ -703,7 +719,7 @@ extension LivelineRenderer {
                 at: CGPoint(x: stage.rect.midX, y: stage.rect.midY),
                 anchor: .center,
                 color: .white.opacity(0.94),
-                font: .system(size: 10, weight: .semibold)
+                font: textScale.font(10, weight: .semibold)
             )
         }
     }

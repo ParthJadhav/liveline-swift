@@ -34,7 +34,7 @@ extension LivelineRenderer {
         )
 
         if showText {
-            let font = Font.system(size: 12, weight: .regular)
+            let font = input.textScale.font(12, weight: .regular)
             let size = measureText(input.configuration.emptyText, context: context, font: font)
             let gapHalf = size.width / 2 + 20
             let fadeWidth: CGFloat = 30
@@ -71,6 +71,7 @@ extension LivelineRenderer {
         palette: LivelinePalette,
         state: LivelineRenderState,
         formatValue: (Double) -> String,
+        textScale: LivelineTextScale,
         alpha: Double,
         fadeEffects: Bool,
         deltaTime: TimeInterval
@@ -82,7 +83,13 @@ extension LivelineRenderer {
         let valueRange = layout.maxValue - layout.minValue
         guard valueRange > 0, layout.chartHeight > 0 else { return }
         let pxPerUnit = Double(layout.chartHeight) / valueRange
-        let coarse = pickGridInterval(valueRange: valueRange, pxPerUnit: pxPerUnit, minGap: 36, previous: state.gridInterval)
+        // Taller labels need proportionally more room before they collide.
+        let coarse = pickGridInterval(
+            valueRange: valueRange,
+            pxPerUnit: pxPerUnit,
+            minGap: Double(textScale.scaled(36)),
+            previous: state.gridInterval
+        )
         state.gridInterval = coarse
         let fine = coarse / 2
         let finePx = fine * pxPerUnit
@@ -160,7 +167,7 @@ extension LivelineRenderer {
                     at: CGPoint(x: layout.rightX + axisLabelOffsetX, y: y),
                     anchor: .leading,
                     color: palette.gridLabel,
-                    font: .system(size: 11, weight: .regular, design: .monospaced)
+                    font: textScale.font(11, weight: .regular, design: .monospaced)
                 )
             }
         }
@@ -173,6 +180,7 @@ extension LivelineRenderer {
         state: LivelineRenderState,
         window: TimeInterval,
         formatTime: (TimeInterval) -> String,
+        textScale: LivelineTextScale,
         alpha: Double,
         fadeEffects: Bool,
         deltaTime: TimeInterval
@@ -188,7 +196,7 @@ extension LivelineRenderer {
 
         var interval = niceTimeInterval(window)
         let pxPerSecond = layout.chartWidth / CGFloat(max(window, 0.001))
-        while CGFloat(interval) * pxPerSecond < 60, interval < window {
+        while CGFloat(interval) * pxPerSecond < textScale.scaled(60), interval < window {
             interval *= 2
         }
 
@@ -235,12 +243,14 @@ extension LivelineRenderer {
             }
 
             // Measuring resolves the text through the graphics context, so keep
-            // the result until the label text itself changes.
+            // the result until the label text — or the type size behind it —
+            // changes. `LivelineRenderState.adoptTextScale` drops the widths on
+            // a Dynamic Type change so this never returns a stale measurement.
             let width: CGFloat
             if let measured = label.measuredWidth {
                 width = measured
             } else {
-                let font = Font.system(size: 11, weight: .regular, design: .monospaced)
+                let font = textScale.font(11, weight: .regular, design: .monospaced)
                 width = measureText(label.text, context: layer, font: font).width
                 state.timeAxisLabels[key]?.measuredWidth = width
             }
@@ -252,7 +262,7 @@ extension LivelineRenderer {
             if let previous = drawn.last {
                 let left = label.x - label.width / 2
                 let previousRight = previous.x + previous.width / 2
-                if left < previousRight + 8 {
+                if left < previousRight + textScale.scaled(8) {
                     if label.alpha > previous.alpha {
                         drawn[drawn.count - 1] = label
                     }
@@ -277,7 +287,7 @@ extension LivelineRenderer {
                 at: CGPoint(x: label.x, y: layout.bottomY + 15),
                 anchor: .center,
                 color: palette.timeLabel,
-                font: .system(size: 11, weight: .regular, design: .monospaced)
+                font: textScale.font(11, weight: .regular, design: .monospaced)
             )
         }
     }
@@ -333,6 +343,7 @@ extension LivelineRenderer {
         palette: LivelinePalette,
         referenceLine: LivelineReferenceLine,
         formatValue: (Double) -> String,
+        textScale: LivelineTextScale,
         alpha: Double
     ) {
         let y = layout.y(for: referenceLine.value)
@@ -349,7 +360,7 @@ extension LivelineRenderer {
             return
         }
 
-        let font = Font.system(size: 11, weight: .medium)
+        let font = textScale.font(11, weight: .medium)
         let labelWidth = measureText(label, context: layer, font: font).width
         let centerX = layout.plotLeftX + layout.chartWidth / 2
         let gapPad: CGFloat = 8

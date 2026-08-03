@@ -9,6 +9,7 @@ extension LivelineRenderer {
         state: LivelineRenderState,
         orderbook: LivelineOrderbookData,
         randomSeed: UInt32?,
+        textScale: LivelineTextScale,
         deltaTime: TimeInterval,
         swingMagnitude: Double,
         alpha: Double
@@ -87,7 +88,8 @@ extension LivelineRenderer {
                 context: &layer,
                 at: CGPoint(x: layout.plotLeftX + 8, y: label.y),
                 fill: fill,
-                outline: palette.backgroundRGB
+                outline: palette.backgroundRGB,
+                textScale: textScale
             )
         }
     }
@@ -172,7 +174,8 @@ extension LivelineRenderer {
         context: inout GraphicsContext,
         at point: CGPoint,
         fill: LivelineRGBA,
-        outline: LivelineRGBA
+        outline: LivelineRGBA,
+        textScale: LivelineTextScale
     ) {
         drawOutlinedText(
             text,
@@ -184,7 +187,7 @@ extension LivelineRenderer {
             anchor: .leading,
             fill: fill.color,
             outline: outline.color,
-            font: .system(size: 13, weight: .semibold, design: .monospaced)
+            font: textScale.font(13, weight: .semibold, design: .monospaced)
         )
     }
 

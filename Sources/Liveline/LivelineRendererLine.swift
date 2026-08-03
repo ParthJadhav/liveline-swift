@@ -142,6 +142,7 @@ extension LivelineRenderer {
         scrubAmount: Double,
         smoothValue: Double,
         swingMagnitude: Double,
+        textScale: LivelineTextScale,
         timestamp: TimeInterval,
         deltaTime: TimeInterval
     ) {
@@ -171,7 +172,7 @@ extension LivelineRenderer {
         }
 
         if config.badge {
-            drawBadge(context: &context, layout: layout, palette: palette, value: smoothValue, momentum: momentum, y: lastPoint.y, config: config, alpha: state.chartReveal)
+            drawBadge(context: &context, layout: layout, palette: palette, value: smoothValue, momentum: momentum, y: lastPoint.y, config: config, textScale: textScale, alpha: state.chartReveal)
         }
 
     }
@@ -311,16 +312,17 @@ extension LivelineRenderer {
         momentum: LivelineMomentum,
         y: CGFloat,
         config: LivelineChartConfiguration,
+        textScale: LivelineTextScale,
         alpha: Double
     ) {
         guard alpha > 0.25 else { return }
         let text = config.formatValue(value)
         let template = text.map { $0.isNumber ? "8" : String($0) }.joined()
-        let font = Font.system(size: 11, weight: .regular, design: .monospaced)
+        let font = textScale.font(11, weight: .regular, design: .monospaced)
         let size = measureText(template, context: context, font: font)
         let tailLength = config.badgeTail ? badgeTailLength : 0
         let pillWidth = size.width + badgePaddingX * 2
-        let pillHeight = badgeLineHeight + badgePaddingY * 2
+        let pillHeight = textScale.scaled(badgeLineHeight) + badgePaddingY * 2
         let totalWidth = tailLength + pillWidth
         let x = layout.rightX + 8 - badgePaddingX - tailLength
         let badgeY = LivelineMath.clamp(y - pillHeight / 2, layout.padding.top, layout.bottomY - pillHeight)

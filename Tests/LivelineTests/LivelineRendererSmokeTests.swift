@@ -226,6 +226,7 @@ final class LivelineRendererSmokeTests: XCTestCase {
                         anchor: CGPoint(x: 120, y: 80)
                     ),
                     configuration: LivelineChartConfiguration(),
+                    textScale: .standard,
                     alpha: 1
                 )
             }
@@ -512,6 +513,65 @@ final class LivelineRendererSmokeTests: XCTestCase {
         XCTAssertEqual(state.legendGutterMeasureCount, 2)
         XCTAssertFalse(state.timeAxisLabels.isEmpty)
         XCTAssertTrue(state.timeAxisLabels.values.contains { $0.measuredWidth != nil })
+    }
+
+    @MainActor
+    func testTextScaleReachesCanvasTextAndLeavesStandardSizesUntouched() throws {
+        let content = LivelineChartContent.line(
+            data: (0..<20).map { LivelinePoint(time: Double($0), value: Double($0 % 5) + 1) },
+            value: 1
+        )
+        let semantics = content.semantics()
+        let configuration = LivelineChartConfiguration(
+            window: 20,
+            badge: true,
+            pulse: false,
+            fadeEffects: false,
+            paused: true
+        )
+        .normalizedForRendering()
+
+        func render(_ textScale: LivelineTextScale) throws -> Data {
+            let state = LivelineRenderState()
+            let renderer = ImageRenderer(
+                content: Canvas { context, size in
+                    var pass = context
+                    LivelineRenderer.draw(
+                        context: &pass,
+                        state: state,
+                        input: LivelineRenderInput(
+                            content: content,
+                            semantics: semantics,
+                            accent: .blue,
+                            configuration: configuration,
+                            motion: LivelineMotionPolicy(
+                                isPaused: true,
+                                requiresTimeline: false,
+                                settlesImmediately: true,
+                                minimumInterval: 1.0 / 60.0
+                            ),
+                            activeWindow: 20,
+                            hiddenSeries: [],
+                            hoverLocation: nil,
+                            timestamp: 1_000,
+                            size: size,
+                            textScale: textScale
+                        )
+                    )
+                }
+                .frame(width: 320, height: 200)
+                .background(Color.black)
+            )
+            renderer.proposedSize = ProposedViewSize(width: 320, height: 200)
+            let image: NSImage = try XCTUnwrap(renderer.nsImage)
+            return try XCTUnwrap(image.tiffRepresentation)
+        }
+
+        let standard = try render(.standard)
+        // The default input and an explicit standard scale must be the same
+        // pixels, which is what keeps the deterministic snapshots stable.
+        XCTAssertEqual(try render(LivelineTextScale.resolve(.large)), standard)
+        XCTAssertNotEqual(try render(LivelineTextScale.resolve(.accessibility5)), standard)
     }
 
     private var configuration: LivelineChartConfiguration {

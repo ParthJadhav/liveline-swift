@@ -49,6 +49,9 @@ final class LivelineRenderState: ObservableObject {
     var paletteBuildCount = 0
     var legendGutterMeasureCount = 0
     var accessibilityModelBuildCount = 0
+    /// Every cached text measurement was taken at this scale; a Dynamic Type
+    /// change invalidates them all.
+    private(set) var textScale: LivelineTextScale = .standard
     private var preparedChartKey: LivelinePreparedChartKey?
     private var preparedChartCache: LivelinePreparedChart?
     private var waterfallKey: LivelineWaterfallKey?
@@ -71,6 +74,17 @@ final class LivelineRenderState: ObservableObject {
         paletteBuildCount += 1
         paletteCache[key] = palette
         return palette
+    }
+
+    /// Text measured at one Dynamic Type size says nothing about its width at
+    /// another, so a scale change drops every measurement the caches hold.
+    func adoptTextScale(_ scale: LivelineTextScale) {
+        guard scale != textScale else { return }
+        textScale = scale
+        legendGutterCache.removeAll(keepingCapacity: true)
+        for key in timeAxisLabels.keys {
+            timeAxisLabels[key]?.measuredWidth = nil
+        }
     }
 
     /// Legend labels are measured through the graphics context, which is far

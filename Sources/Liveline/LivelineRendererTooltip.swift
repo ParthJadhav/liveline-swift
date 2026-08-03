@@ -7,21 +7,23 @@ extension LivelineRenderer {
         palette: LivelinePalette,
         selection: LivelineTooltipSelection?,
         configuration: LivelineChartConfiguration,
+        textScale: LivelineTextScale,
         alpha: Double
     ) {
         guard let selection, !selection.rows.isEmpty, alpha > 0.01 else { return }
         let rows = Array(selection.rows.prefix(7))
         let heading = selection.heading?.isEmpty == false ? selection.heading : nil
-        let headingFont = Font.system(size: 10, weight: .medium, design: .monospaced)
-        let rowFont = Font.system(size: 11, weight: .medium, design: .monospaced)
+        let headingFont = textScale.font(10, weight: .medium, design: .monospaced)
+        let rowFont = textScale.font(11, weight: .medium, design: .monospaced)
         let labelWidth = rows.map { measureText($0.label, context: context, font: rowFont).width }.max() ?? 0
         let valueWidth = rows.map { measureText($0.value, context: context, font: rowFont).width }.max() ?? 0
         let headingWidth = heading.map { measureText($0, context: context, font: headingFont).width } ?? 0
         let horizontalPadding: CGFloat = 9
         let swatchAndGap: CGFloat = 14
         let columnGap: CGFloat = 14
-        let rowHeight: CGFloat = 15
-        let headingHeight: CGFloat = heading == nil ? 0 : 15
+        // Rows are sized off the text they contain, so they have to grow with it.
+        let rowHeight = textScale.scaled(15)
+        let headingHeight: CGFloat = heading == nil ? 0 : textScale.scaled(15)
         let width = min(
             max(40, layout.chartWidth - 8),
             max(96, headingWidth + horizontalPadding * 2, labelWidth + valueWidth + swatchAndGap + columnGap + horizontalPadding * 2)

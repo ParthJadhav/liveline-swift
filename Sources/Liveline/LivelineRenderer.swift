@@ -12,6 +12,9 @@ struct LivelineRenderInput {
     var hoverLocation: CGPoint?
     var timestamp: TimeInterval
     var size: CGSize
+    /// Canvas text does not inherit Dynamic Type on its own; the chart reads the
+    /// environment and hands the resolved multiplier to every text site.
+    var textScale: LivelineTextScale = .standard
 }
 
 enum LivelineRenderer {
@@ -42,6 +45,8 @@ enum LivelineRenderer {
         }
 
         state.settlesTransitionsImmediately = input.motion.settlesImmediately
+        state.adoptTextScale(input.textScale)
+        let textScale = input.textScale
         let config = input.configuration
         let palette = state.palette(accent: input.accent, mode: config.theme, lineWidth: config.lineWidth)
         let capabilities = input.semantics.capabilities
@@ -61,8 +66,8 @@ enum LivelineRenderer {
         let anchor = anchorTime(latestTime: input.semantics.latestTime, timelineTimestamp: presentationTimestamp, window: input.activeWindow)
         let baseBuffer = isCandle ? windowBufferNoBadge : (showBadge ? windowBuffer : windowBufferNoBadge)
         let labelReveal = config.fadeEffects ? state.chartReveal : 1
-        let dataLeftReserve = dataReserve(for: input.content, side: .leading, config: config, context: context, state: state, reveal: labelReveal)
-        let dataRightReserve = dataReserve(for: input.content, side: .trailing, config: config, context: context, state: state, reveal: labelReveal)
+        let dataLeftReserve = dataReserve(for: input.content, side: .leading, config: config, context: context, state: state, textScale: textScale, reveal: labelReveal)
+        let dataRightReserve = dataReserve(for: input.content, side: .trailing, config: config, context: context, state: state, textScale: textScale, reveal: labelReveal)
         let chartWidth = max(1, input.size.width - resolvedPadding.left - resolvedPadding.right - dataLeftReserve - dataRightReserve)
         let needsArrowRoom = isLine && showBadge && (config.autoDetectMomentum || config.momentum != nil)
         let buffer = needsArrowRoom ? max(baseBuffer, Double(37 / chartWidth)) : baseBuffer
@@ -203,15 +208,15 @@ enum LivelineRenderer {
         }
 
         if let referenceLine = config.referenceLine, state.chartReveal > 0.01 {
-            drawReferenceLine(context: &layer, layout: layout, palette: palette, referenceLine: referenceLine, formatValue: config.formatValue, alpha: state.chartReveal)
+            drawReferenceLine(context: &layer, layout: layout, palette: palette, referenceLine: referenceLine, formatValue: config.formatValue, textScale: textScale, alpha: state.chartReveal)
         }
 
         if config.grid, capabilities.usesCartesianGrid {
-            drawGrid(context: &layer, layout: layout, palette: palette, state: state, formatValue: config.formatValue, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+            drawGrid(context: &layer, layout: layout, palette: palette, state: state, formatValue: config.formatValue, textScale: textScale, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
         }
 
         if let orderbook = config.orderbook, isLine {
-            drawOrderbook(context: &layer, layout: layout, palette: palette, state: state, orderbook: orderbook, randomSeed: config.randomSeed, deltaTime: dt, swingMagnitude: swingMagnitude, alpha: state.chartReveal)
+            drawOrderbook(context: &layer, layout: layout, palette: palette, state: state, orderbook: orderbook, randomSeed: config.randomSeed, textScale: textScale, deltaTime: dt, swingMagnitude: swingMagnitude, alpha: state.chartReveal)
         }
 
         let interactionSnapshot = LivelineInteractionBuilder.snapshot(
@@ -252,7 +257,8 @@ enum LivelineRenderer {
             rightEdge: rightEdge,
             reveal: state.chartReveal,
             animationTimestamp: animationTimestamp,
-            deltaTime: dt
+            deltaTime: dt,
+            textScale: textScale
         )
         var contentOverlay = LivelineContentOverlay.standard
         switch config.style {
@@ -299,6 +305,7 @@ enum LivelineRenderer {
                 state: state,
                 window: input.activeWindow,
                 formatTime: config.formatTime,
+                textScale: textScale,
                 alpha: revealAmount(
                     state.chartReveal,
                     axisRevealStart,
@@ -320,6 +327,7 @@ enum LivelineRenderer {
             scrubAmount: scrubAmount,
             configuration: config,
             tooltipSelection: tooltipSelection,
+            textScale: textScale,
             reveal: state.chartReveal,
             animationTimestamp: animationTimestamp
         )
@@ -357,11 +365,12 @@ extension LivelineRenderer {
         config: LivelineChartConfiguration,
         context: GraphicsContext,
         state: LivelineRenderState,
+        textScale: LivelineTextScale,
         reveal: Double
     ) -> CGFloat {
         guard config.seriesLegendSide == side else { return 0 }
         guard case let .series(series) = content else { return 0 }
-        let font = Font.system(size: 10, weight: .semibold)
+        let font = textScale.font(10, weight: .semibold)
         let labels = series.compactMap(\.label)
         guard !labels.isEmpty else { return 0 }
         // Text measurement goes through the graphics context. The gutter only

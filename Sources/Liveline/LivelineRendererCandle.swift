@@ -21,7 +21,8 @@ extension LivelineRenderer {
         reveal: Double,
         timestamp: TimeInterval,
         deltaTime: TimeInterval,
-        smoothValue: Double
+        smoothValue: Double,
+        textScale: LivelineTextScale
     ) -> LivelineCandleOverlay {
         let pausedDeltaTime = deltaTime * (1 - state.pauseProgress)
         let lineModeTarget = config.lineMode ? 1.0 : 0.0
@@ -109,6 +110,7 @@ extension LivelineRenderer {
                 palette: palette,
                 state: state,
                 formatValue: config.formatValue,
+                textScale: textScale,
                 alpha: revealAmount(reveal, 0.25, 0.60, fadeEffects: config.fadeEffects),
                 fadeEffects: config.fadeEffects,
                 deltaTime: deltaTime
@@ -217,6 +219,7 @@ extension LivelineRenderer {
                     momentum: resolvedMomentum(config: config, points: lineResult.points),
                     y: lastPoint.y,
                     config: config,
+                    textScale: textScale,
                     alpha: reveal * lineFade
                 )
             }

@@ -60,6 +60,7 @@ extension LivelineRenderer {
         showPulse: Bool,
         timestamp: TimeInterval,
         legendSide: LivelineLegendSide,
+        textScale: LivelineTextScale,
         drawsDot: Bool = true,
         drawsLabel: Bool = true
     ) {
@@ -88,7 +89,7 @@ extension LivelineRenderer {
                     at: CGPoint(x: endpoint.point.x + labelOffset, y: endpoint.point.y - 0.5),
                     anchor: anchor,
                     color: endpoint.palette.line,
-                    font: .system(size: 10, weight: .semibold)
+                    font: textScale.font(10, weight: .semibold)
                 )
             }
         }

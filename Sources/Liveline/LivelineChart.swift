@@ -18,6 +18,7 @@ public struct LivelineChart: View {
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var accessibilityVoiceOverEnabled
     @Environment(\.accessibilitySwitchControlEnabled) private var accessibilitySwitchControlEnabled
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.livelineSnapshotElapsedTime) private var snapshotElapsedTime
     @Environment(\.livelineChartStyleOverride) private var chartStyleOverride
     @ScaledMetric(relativeTo: .caption) private var scaledControlHitDimension: CGFloat = LivelineControlMetrics.minimumHitDimension
@@ -563,6 +564,17 @@ private extension LivelineChart {
         .accessibilityAction(named: Text("Show chart summary")) {
             accessibilityIndex = nil
         }
+        // Audio Graph. The representable is cheap to build; the descriptor
+        // behind it is only assembled when VoiceOver asks for it.
+        .livelineAudioGraph(
+            content: content,
+            semantics: semantics,
+            configuration: configuration,
+            hiddenSeries: hiddenSeries,
+            activeWindow: activeWindow,
+            title: accessibilityModel.label,
+            summary: accessibilityModel.summary
+        )
     }
 
     @ViewBuilder
@@ -650,12 +662,19 @@ private extension LivelineChart {
                     hiddenSeries: hiddenSeries,
                     hoverLocation: interactionSessions.activeLocation,
                     timestamp: timestamp,
-                    size: size
+                    size: size,
+                    textScale: textScale
                 )
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contentShape(Rectangle())
+    }
+
+    /// Canvas text is drawn, not laid out by SwiftUI, so Dynamic Type has to be
+    /// resolved here and handed to the renderer explicitly.
+    var textScale: LivelineTextScale {
+        LivelineTextScale.resolve(dynamicTypeSize)
     }
 
     var effectiveConfiguration: LivelineChartConfiguration {
