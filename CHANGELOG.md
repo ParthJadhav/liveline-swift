@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## 0.6.0 - 2026-08-03
+
+- Performance: sorted-input fast-path normalization, min/max-per-column line
+  decimation, prepared-chart and waterfall caching, palette memoization,
+  allocation-free `bucketWidth`, cached axis-label widths and legend gutter,
+  hover-snapshot narrowing for all chart kinds, and accessibility-model
+  memoization.
+- Accessibility: VoiceOver Audio Graph support (`AXChartDescriptor`) for every
+  chart kind, and Dynamic Type scaling for all canvas-drawn text.
+- Internationalization: all user-facing strings localized via a stable-key
+  string layer; locale-aware `localizedValue`/`localizedTime` formatters.
+- Theming: new `LivelineThemeMode.automatic` follows the system color scheme.
+- Six new chart kinds: histogram (auto binning), streamgraph (centered stacked
+  areas), bullet, treemap (squarified with group headers), sunburst, and
+  sankey — each wired through rendering, hover, accessibility, and RTL.
+- New features: public image export (`LivelineChartImageExporter`), multiple
+  reference lines and shaded bands, standalone `LivelineLegend`,
+  `LivelineDataStream` streaming buffer, and opt-in pinch-zoom/pan with
+  auto-follow-live.
+- Right-to-left layout mirroring via an explicit coordinate transform.
+- Fixes window changes snapping the x-axis: the drawn span now eases through
+  `displayWindow` smoothing with a half-pixel convergence snap.
+- Lowers the deployment floor to iOS 15 / macOS 12 / watchOS 8 (tvOS stays 16)
+  with availability gates on `ImageRenderer`-backed export, the legend's
+  `Layout` wrap, and continuous hover.
+
 ## 0.5.0 - 2026-07-29
 
 - Adds accessible chart summaries and adjustable value inspection, improves
