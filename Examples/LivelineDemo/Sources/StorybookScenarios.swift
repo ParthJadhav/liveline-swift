@@ -153,6 +153,7 @@ enum StorybookCatalog {
         lineShowValueWindows,
         lineRoundedWindows,
         lineTextWindows,
+        lineZoomPan,
         lineReference,
         lineOrderbook,
         lineDegen,

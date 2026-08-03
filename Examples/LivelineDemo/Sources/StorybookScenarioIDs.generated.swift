@@ -13,6 +13,7 @@ enum StorybookScenarioID: String, CaseIterable {
     case lineShowValueWindows = "line-show-value-windows"
     case lineRoundedWindows = "line-rounded-windows"
     case lineTextWindows = "line-text-windows"
+    case lineZoomPan = "line-zoom-pan"
     case lineReference = "line-reference"
     case lineOrderbook = "line-orderbook"
     case lineDegen = "line-degen"

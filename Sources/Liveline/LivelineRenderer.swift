@@ -8,6 +8,10 @@ struct LivelineRenderInput {
     var configuration: LivelineChartConfiguration
     var motion: LivelineMotionPolicy
     var activeWindow: TimeInterval
+    /// The right edge a frozen zoom-and-pan viewport has pinned, or `nil` to
+    /// follow the live edge as usual. `activeWindow` still carries the visible
+    /// span, so the two together are the viewport.
+    var frozenRightEdge: TimeInterval? = nil
     var hiddenSeries: Set<String>
     var hoverLocation: CGPoint?
     var timestamp: TimeInterval
@@ -84,7 +88,16 @@ enum LivelineRenderer {
         let chartWidth = max(1, input.size.width - resolvedPadding.left - resolvedPadding.right - dataLeftReserve - dataRightReserve)
         let needsArrowRoom = isLine && showBadge && (config.autoDetectMomentum || config.momentum != nil)
         let buffer = needsArrowRoom ? max(baseBuffer, Double(37 / chartWidth)) : baseBuffer
-        let rightEdge = anchor + input.activeWindow * buffer
+        let liveRightEdge = anchor + input.activeWindow * buffer
+        state.liveRightEdge = liveRightEdge
+        // A frozen viewport substitutes its own right edge and nothing else
+        // changes: decimation, hover narrowing, the time axis, and the prepared
+        // chart cache all key off these two edges already.
+        let rightEdge = resolvedRightEdge(
+            target: input.frozenRightEdge ?? liveRightEdge,
+            state: state,
+            input: input
+        )
         let leftEdge = rightEdge - input.activeWindow
 
         let renderData = LivelineChartPreparer.prepare(
@@ -407,6 +420,39 @@ extension LivelineRenderer {
             }
         }
         return max(0, maxLabelWidth - 2) * CGFloat(reveal)
+    }
+
+    /// Eases the drawn right edge toward wherever the viewport wants it.
+    ///
+    /// This is what makes "jump back to live" glide rather than cut. It only
+    /// runs for charts that opted into zoom and pan, and only while frames are
+    /// already arriving — a settled export or a chart with no timeline snaps to
+    /// the target, so nothing that renders one frame is left mid-glide.
+    static func resolvedRightEdge(
+        target: TimeInterval,
+        state: LivelineRenderState,
+        input: LivelineRenderInput
+    ) -> TimeInterval {
+        guard input.configuration.zoomAndPan,
+              !input.motion.settlesImmediately,
+              !input.motion.isPaused,
+              let previous = state.displayRightEdge,
+              previous.isFinite,
+              // A window change or a fresh chart is a cut, not a glide.
+              abs(previous - target) < input.activeWindow * 8
+        else {
+            state.displayRightEdge = target
+            return target
+        }
+
+        // Read the frame delta without consuming it: the animation frame is
+        // taken later in `draw`, after the identity reconcile that may reset it.
+        let delta = state.lastTimestamp
+            .map { min(max((input.timestamp - $0) * 1000, 0), 50) } ?? 16.667
+        var next = LivelineMath.lerp(previous, target, speed: 0.22, deltaTime: delta)
+        if abs(next - target) < input.activeWindow * 0.0005 { next = target }
+        state.displayRightEdge = next
+        return next
     }
 
     static func anchorTime(latestTime: TimeInterval?, timelineTimestamp: TimeInterval, window: TimeInterval) -> TimeInterval {

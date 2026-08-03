@@ -188,6 +188,9 @@ enum LivelineStrings {
     static let controlSeriesHintHide = localized("control.series.hint.hide", "Hides this series", "VoiceOver hint for the toggle of a shown series")
     static let controlSeriesHintShow = localized("control.series.hint.show", "Shows this series", "VoiceOver hint for the toggle of a hidden series")
     static let controlSeriesHintLocked = localized("control.series.hint.locked", "At least one series must remain visible", "VoiceOver hint for the toggle of the last remaining shown series")
+    static let controlLive = localized("control.live.label", "Live", "Label for the control that returns a panned chart to the newest data")
+    static let controlLiveHint = localized("control.live.hint", "Returns to the newest data", "VoiceOver hint for the control that returns a panned chart to the newest data")
+    static let accessibilityViewportFrozen = localized("accessibility.viewport.frozen", "Paused view, not following live", "VoiceOver note appended while zoom and pan has left the live edge")
 
     // MARK: - Configuration defaults
 

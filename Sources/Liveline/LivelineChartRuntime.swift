@@ -168,6 +168,21 @@ enum LivelineScrubPanPolicy {
     }
 }
 
+/// How a macOS scroll event becomes a horizontal pan.
+///
+/// A trackpad reports both axes, so the dominant one decides: a mostly
+/// horizontal swipe pans, a mostly vertical one belongs to whatever the chart
+/// is embedded in. A wheel mouse reports only the vertical axis, so Shift —
+/// the system-wide horizontal-scroll modifier — redirects it.
+enum LivelineScrollPanPolicy {
+    static func horizontalDelta(deltaX: CGFloat, deltaY: CGFloat, isShiftPressed: Bool) -> CGFloat {
+        guard deltaX.isFinite, deltaY.isFinite else { return 0 }
+        if abs(deltaX) > abs(deltaY) { return deltaX }
+        if isShiftPressed { return deltaY }
+        return 0
+    }
+}
+
 /// Keeps recognition ownership stable for the lifetime of one pan and makes
 /// end/cancel cleanup idempotent.
 struct LivelineScrubSession {

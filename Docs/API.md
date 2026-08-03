@@ -464,6 +464,92 @@ What mirrors:
 
 A left-to-right chart renders exactly as it did before, pixel for pixel.
 
+## Zoom and pan
+
+Off by default. Turning it on layers a *viewport* — a visible span and where it
+sits in absolute time — over the window selection:
+
+```swift
+LivelineChart(
+    data: points,
+    value: latest,
+    configuration: LivelineChartConfiguration(
+        appearance: LivelineChartAppearance(theme: .dark),
+        viewport: LivelineChartViewport(
+            window: 60,
+            windows: [
+                LivelineWindowOption(label: "1m", seconds: 60),
+                LivelineWindowOption(label: "5m", seconds: 300)
+            ],
+            minimumSpan: nil,   // nil derives it from the sample rate
+            maximumZoomOut: 8   // at most eight windows, and never past the data
+        ),
+        interaction: LivelineChartInteraction(
+            scrub: true,
+            showsTooltipOnHover: true,
+            zoomAndPan: true
+        )
+    )
+)
+```
+
+`configuration.zoomAndPan` is also available as a flat property.
+
+### Gestures
+
+With `zoomAndPan` on, the chart adopts the standard system division of labour:
+
+| Input | Action |
+| --- | --- |
+| Pinch | Zoom, pivoting on the moment under the gesture centroid |
+| One-finger drag | Pan along the time axis |
+| Long press, then drag | Scrub |
+| Trackpad or wheel scroll (macOS) | Pan; Shift redirects a wheel's vertical axis |
+| Cursor hover | Unchanged — the tooltip still follows the pointer |
+
+The scrub and the pan are exclusive: the long press has to survive its delay
+without moving, and any earlier movement hands the drag to the pan. With
+`zoomAndPan` off — the default — a plain drag scrubs exactly as it always did,
+and none of this code runs.
+
+Pinch needs iOS 17, macOS 14, or visionOS 1: it is the only version of the
+gesture that reports where it started, and an anchorless zoom that jumps the
+plot out from under the fingers is worse than no zoom. Panning, scrolling, and
+the "Live" control work on every supported version. tvOS and watchOS keep their
+existing interaction models.
+
+### Following live
+
+A chart follows live until it is panned away from the newest data. Panning back
+to within two percent of the visible span re-engages following, and while it is
+disengaged a small **Live** chip appears in the control row — the same chrome as
+the window picker — that returns to the newest data and eases the plot back.
+
+Zooming never disengages on its own: while following, a pinch pivots on the live
+edge whatever the centroid says. Picking a window from the picker clears the
+zoom and returns to live.
+
+The pan direction respects the reading direction: dragging toward the live edge
+always shows newer data, whichever side that edge is on.
+
+### Limits
+
+- **Zooming in** stops at `minimumSpan`, or at three sample intervals when that
+  is `nil`, so there is always a visible segment either side of what was zoomed
+  into.
+- **Zooming out** stops at `maximumZoomOut` times the selected window, capped
+  again by how much data actually exists.
+- **Panning** is clamped to the data domain: the oldest sample on one end, the
+  live edge on the other. A viewport wider than the data has nowhere to pan and
+  stays pinned to the live edge.
+
+The viewport feeds the renderer the same visible edges it has always drawn from,
+so decimation, hover narrowing, the time-axis labels, and the prepared-chart
+cache all adapt to the zoom with no extra work.
+
+`LivelineViewport` and `LivelineViewportLimits` are public, so the same clamping
+and follow-live rules can be exercised directly.
+
 ## Streaming data
 
 `LivelineDataStream` is a `@MainActor` `ObservableObject` holding a bounded,

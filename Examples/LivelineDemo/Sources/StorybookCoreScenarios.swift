@@ -170,6 +170,33 @@ extension StorybookCatalog {
         )
     }
 
+    static let lineZoomPan = chart(
+        id: .lineZoomPan,
+        group: "Line",
+        title: "Zoom + Pan",
+        detail: "Pinch to zoom, drag to pan, long press to scrub. Pan away and a Live chip returns.",
+        background: StorybookData.darkBackground,
+        height: 310
+    ) {
+        LivelineChart(
+            data: StorybookData.points(.normal),
+            value: StorybookData.points(.normal).last?.value ?? 0,
+            color: StorybookData.blue,
+            configuration: zoomPanConfiguration
+        )
+    }
+
+    private static var zoomPanConfiguration: LivelineChartConfiguration {
+        var configuration = StorybookData.lineConfig(
+            theme: .dark,
+            windows: StorybookData.windows,
+            showValue: true
+        )
+        configuration.zoomAndPan = true
+        configuration.showsTooltipOnHover = true
+        return configuration
+    }
+
     static let lineReference = chart(
         id: .lineReference,
         group: "Line",

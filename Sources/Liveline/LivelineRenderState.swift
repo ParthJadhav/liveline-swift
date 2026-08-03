@@ -33,6 +33,17 @@ final class LivelineRenderState: ObservableObject {
     var timeAxisLabels: [TimeInterval: TimeAxisLabelState] = [:]
     var seriesAlpha: [String: Double] = [:]
     var interactionSnapshot: LivelineInteractionSnapshot?
+    /// Where the right edge would sit if the chart were following live, recorded
+    /// on every frame whether or not a viewport has frozen it.
+    ///
+    /// Zoom and pan are resolved against this rather than against the newest
+    /// sample time, so freezing the viewport does not shift the plot by the
+    /// live-edge buffer, and a frozen viewport can still tell how far behind it
+    /// has fallen.
+    var liveRightEdge: TimeInterval?
+    /// The right edge actually drawn last frame, eased toward the viewport's
+    /// target so returning to live glides instead of cutting.
+    var displayRightEdge: TimeInterval?
     var candleDisplayLive: LivelineCandle?
     var candleLiveBirthAlpha: Double = 1
     var candleLiveBullBlend: Double = 0.5
@@ -227,6 +238,8 @@ final class LivelineRenderState: ObservableObject {
         displayMin = nil
         displayMax = nil
         displayWindow = window
+        liveRightEdge = nil
+        displayRightEdge = nil
         chartReveal = 0
         pauseProgress = 0
         previousMomentum = .flat

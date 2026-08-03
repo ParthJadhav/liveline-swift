@@ -91,6 +91,13 @@ struct LivelineChartSemantics {
     var momentum: LivelineMomentum
     var latestTime: TimeInterval?
     var seriesIDs: [String]
+    /// Oldest sample on the time axis. Together with ``latestTime`` this is the
+    /// domain a zoom-and-pan viewport is clamped to; charts with no time axis
+    /// leave both `nil`.
+    var earliestTime: TimeInterval?
+    /// Samples on the time axis, used only to derive how far a pinch may zoom
+    /// in before it runs out of data to show.
+    var sampleCount: Int = 0
 }
 
 extension LivelineChartContent {
@@ -327,7 +334,9 @@ extension LivelineChartContent {
                 capabilities: .timeline,
                 currentValue: data.last.map { $0.end - $0.start } ?? 0,
                 momentumPoints: points,
-                latestTime: data.map(\.end).max()
+                latestTime: data.map(\.end).max(),
+                earliestTime: data.map(\.start).min(),
+                sampleCount: data.count
             )
 
         case let .heatmap(data, _):
@@ -374,7 +383,9 @@ extension LivelineChartContent {
                 capabilities: .candle,
                 currentValue: lineValue ?? liveCandle?.close ?? value,
                 momentumPoints: points,
-                latestTime: latestTick ?? candles.last.map { $0.time + candleWidth }
+                latestTime: latestTick ?? candles.last.map { $0.time + candleWidth },
+                earliestTime: [data.first?.time, lineData.first?.time, candles.first?.time].compactMap { $0 }.min(),
+                sampleCount: max(points.count, candles.count)
             )
 
         case let .series(series):
@@ -411,7 +422,11 @@ extension LivelineChartContent {
                 currentValue: primary?.value ?? 0,
                 momentumPoints: windowedPrimary?.points ?? primary?.data ?? [],
                 latestTime: latestTime,
-                seriesIDs: ids
+                seriesIDs: ids,
+                // The momentum points are a window's worth of one series; the
+                // pan domain has to span every series in full.
+                earliestTime: timeSeries.compactMap { $0.data.first?.time }.min(),
+                sampleCount: primary?.data.count ?? 0
             )
         }
     }
@@ -422,7 +437,9 @@ extension LivelineChartContent {
         currentValue: Double,
         momentumPoints: [LivelinePoint],
         latestTime: TimeInterval?,
-        seriesIDs: [String] = []
+        seriesIDs: [String] = [],
+        earliestTime: TimeInterval? = nil,
+        sampleCount: Int? = nil
     ) -> LivelineChartSemantics {
         LivelineChartSemantics(
             identity: LivelineChartIdentity(kind: kind, seriesIDs: seriesIDs),
@@ -430,7 +447,12 @@ extension LivelineChartContent {
             currentValue: currentValue,
             momentum: LivelineMath.detectMomentum(points: momentumPoints),
             latestTime: latestTime,
-            seriesIDs: seriesIDs
+            seriesIDs: seriesIDs,
+            // Most kinds hand over their own points, so the time domain falls
+            // out of them. The kinds whose momentum points are derived — index
+            // based timelines, windowed multi-series — pass theirs explicitly.
+            earliestTime: earliestTime ?? momentumPoints.first?.time,
+            sampleCount: sampleCount ?? momentumPoints.count
         )
     }
 }

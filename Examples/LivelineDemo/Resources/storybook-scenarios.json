@@ -55,6 +55,11 @@
     "coverage": "Text-only window controls."
   },
   {
+    "id": "line-zoom-pan",
+    "area": "Line",
+    "coverage": "Pinch zoom, drag pan, long-press scrub, and the Live re-engage control."
+  },
+  {
     "id": "line-reference",
     "area": "Line",
     "coverage": "Reference line and label."
