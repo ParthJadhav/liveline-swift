@@ -175,18 +175,35 @@ public struct LivelineChartAnnotations {
     public var referenceLine: LivelineReferenceLine?
     public var activePoint: LivelineActivePoint?
 
+    /// Additional straight annotation lines, on either axis.
+    ///
+    /// These coexist with the single ``referenceLine``, which keeps its
+    /// range-widening behavior. Entries here are draw-time only and never move
+    /// the chart's automatic value range.
+    public var referenceLines: [LivelineReferenceLine]
+
+    /// Shaded value or time ranges drawn behind the marks.
+    ///
+    /// Like ``referenceLines``, bands are draw-time only and never move the
+    /// chart's automatic value range.
+    public var referenceBands: [LivelineReferenceBand]
+
     public init(
         momentum: LivelineMomentum? = nil,
         autoDetectMomentum: Bool = true,
         orderbook: LivelineOrderbookData? = nil,
         referenceLine: LivelineReferenceLine? = nil,
-        activePoint: LivelineActivePoint? = nil
+        activePoint: LivelineActivePoint? = nil,
+        referenceLines: [LivelineReferenceLine] = [],
+        referenceBands: [LivelineReferenceBand] = []
     ) {
         self.momentum = momentum
         self.autoDetectMomentum = autoDetectMomentum
         self.orderbook = orderbook
         self.referenceLine = referenceLine
         self.activePoint = activePoint
+        self.referenceLines = referenceLines
+        self.referenceBands = referenceBands
     }
 }
 
@@ -474,6 +491,14 @@ extension LivelineChartConfiguration {
     public var orderbook: LivelineOrderbookData? { get { annotations.orderbook } set { annotations.orderbook = newValue } }
     public var referenceLine: LivelineReferenceLine? { get { annotations.referenceLine } set { annotations.referenceLine = newValue } }
     public var activePoint: LivelineActivePoint? { get { annotations.activePoint } set { annotations.activePoint = newValue } }
+    /// Additional annotation lines. Set through this property or the
+    /// ``LivelineChartAnnotations`` group; the frozen flat initializers do not
+    /// take it.
+    public var referenceLines: [LivelineReferenceLine] { get { annotations.referenceLines } set { annotations.referenceLines = newValue } }
+    /// Shaded annotation bands. Set through this property or the
+    /// ``LivelineChartAnnotations`` group; the frozen flat initializers do not
+    /// take it.
+    public var referenceBands: [LivelineReferenceBand] { get { annotations.referenceBands } set { annotations.referenceBands = newValue } }
     public var formatValue: (Double) -> String { get { formatting.value } set { formatting.value = newValue } }
     public var formatTime: (TimeInterval) -> String { get { formatting.time } set { formatting.time = newValue } }
     public var lerpSpeed: Double { get { motion.lerpSpeed } set { motion.lerpSpeed = newValue } }
@@ -540,6 +565,38 @@ extension LivelineChartConfiguration {
             return LivelineReferenceLine(
                 value: LivelineScalar.value(referenceLine.value),
                 label: referenceLine.label
+            )
+        }
+        configuration.referenceLines = configuration.referenceLines.compactMap { line in
+            guard line.value.isFinite else { return nil }
+            let normalized: TimeInterval? = line.axis == .time
+                ? LivelineScalar.time(line.value)
+                : Optional(LivelineScalar.value(line.value))
+            guard let normalized else { return nil }
+            return LivelineReferenceLine(
+                value: normalized,
+                axis: line.axis,
+                label: line.label,
+                color: line.color,
+                dash: line.dash
+            )
+        }
+        configuration.referenceBands = configuration.referenceBands.compactMap { band in
+            guard let bounds = band.bounds else { return nil }
+            let lower: Double? = band.axis == .time
+                ? LivelineScalar.time(bounds.lowerBound)
+                : Optional(LivelineScalar.value(bounds.lowerBound))
+            let upper: Double? = band.axis == .time
+                ? LivelineScalar.time(bounds.upperBound)
+                : Optional(LivelineScalar.value(bounds.upperBound))
+            guard let lower, let upper else { return nil }
+            return LivelineReferenceBand(
+                axis: band.axis,
+                start: lower,
+                end: upper,
+                label: band.label,
+                color: band.color,
+                opacity: band.opacity.livelineClamped(0, 1, fallback: 0.12)
             )
         }
         configuration.activePoint = configuration.activePoint.flatMap { point in

@@ -21,6 +21,7 @@ public struct LivelineChart: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.livelineSnapshotElapsedTime) private var snapshotElapsedTime
+    @Environment(\.livelineRendersSettledFrame) private var rendersSettledFrame
     @Environment(\.livelineChartStyleOverride) private var chartStyleOverride
     @ScaledMetric(relativeTo: .caption) private var scaledControlHitDimension: CGFloat = LivelineControlMetrics.minimumHitDimension
     @StateObject private var renderState = LivelineRenderState()
@@ -366,7 +367,8 @@ public struct LivelineChart: View {
             configuration: configuration,
             capabilities: semantics.capabilities,
             reduceMotion: accessibilityReduceMotion,
-            snapshotElapsedTime: resolvedSnapshotElapsedTime
+            snapshotElapsedTime: resolvedSnapshotElapsedTime,
+            rendersSettledFrame: rendersSettledFrame
         )
 
         GeometryReader { proxy in

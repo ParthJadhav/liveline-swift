@@ -334,7 +334,9 @@ Important options:
 | `loading` | `false` | Shows the breathing loading line. |
 | `paused` | `false` | Freezes animation progress visually. |
 | `orderbook` | `nil` | Draws streaming bid/ask size labels behind the line. |
-| `referenceLine` | `nil` | Keeps a horizontal reference value visible. |
+| `referenceLine` | `nil` | Keeps a horizontal reference value visible, and widens the automatic value range to include it. |
+| `referenceLines` | `[]` | Additional annotation lines on either axis. Draw-time only: they never widen the value range. |
+| `referenceBands` | `[]` | Shaded value or time ranges drawn behind the marks. Draw-time only. |
 | `activePoint` | `nil` | Draws a pulsing dot at an arbitrary active time/value. If `value` is nil, Liveline interpolates the value from the visible data. |
 | `seriesLegendSide` | `.trailing` | Places multi-series endpoint labels to the trailing or leading side of their points. |
 | `lineMode` | `false` | Renders candle input as a line. |
@@ -377,3 +379,103 @@ LivelineChartConfiguration(
 Callbacks are optional event sinks and never act as feature flags. Built-in
 controls are governed explicitly by `showsModeControls`,
 `showsSeriesControls`, and the available chart data.
+
+## Annotations
+
+`referenceLines` and `referenceBands` sit in `LivelineChartAnnotations`, beside
+the original single `referenceLine`. Both accept the value axis (horizontal) and
+the time axis (vertical):
+
+```swift
+var configuration = LivelineChartConfiguration(theme: .dark, window: 60)
+configuration.referenceLines = [
+    LivelineReferenceLine(value: 42, label: "Open"),
+    LivelineReferenceLine(
+        value: marketOpen.timeIntervalSince1970,
+        axis: .time,
+        label: "Bell",
+        color: .orange,
+        dash: .dotted
+    )
+]
+configuration.referenceBands = [
+    LivelineReferenceBand(start: 40, end: 44, label: "Target", opacity: 0.10),
+    LivelineReferenceBand(axis: .time, start: lunchStart, end: lunchEnd)
+]
+```
+
+Bands are drawn after the grid and before the marks, so they read as a backdrop;
+lines are drawn with the same layering as the single `referenceLine`. Inverted
+band bounds are normalized and a band whose bounds are equal collapses to a
+hairline. Unlike `referenceLine`, neither array widens a chart's automatic value
+range — an annotation outside the visible range is simply not drawn.
+
+## Standalone legend
+
+`LivelineLegend` is an ordinary SwiftUI view, so it scales with Dynamic Type and
+exposes one accessibility element per row. Build it from the same content a
+chart takes, or from explicit items:
+
+```swift
+VStack(alignment: .leading) {
+    LivelineChart(series: series).frame(height: 240)
+    LivelineLegend(series: series, axis: .horizontal, swatch: .line)
+}
+
+LivelineLegend(items: [
+    LivelineLegendItem(label: "Cash", color: .mint),
+    LivelineLegendItem(label: "Credit", color: .pink)
+], axis: .vertical)
+```
+
+`LivelineLegendItem.items(donut:style:accent:)`,
+`items(funnel:style:accent:)`, and `items(stacked:colors:accent:)` derive rows
+that match the colors those renderers resolve.
+
+## Streaming data
+
+`LivelineDataStream` is a `@MainActor` `ObservableObject` holding a bounded,
+time-ordered buffer for live feeds:
+
+```swift
+@StateObject private var stream = LivelineDataStream(capacity: 600, retention: 300)
+
+var body: some View {
+    LivelineChart(data: stream.points, value: stream.points.last?.value ?? 0)
+        .task { try? await stream.consume(ticks) }
+}
+```
+
+`append(_:)`, `append(contentsOf:)`, `replace(_:)`, and `removeAll()` keep the
+buffer sorted; appending a sample newer than the last is a plain array append,
+and only an out-of-order sample pays for an insert. Because every published
+array holds finite, strictly increasing times, it satisfies the renderer's
+sorted-input fast path, so preparation reuses the buffer instead of sorting a
+copy each frame.
+
+## Image export
+
+`LivelineChartImageExporter` renders a chart to a platform image or PNG data on
+the main actor:
+
+```swift
+let exporter = LivelineChartImageExporter(
+    size: CGSize(width: 640, height: 320),
+    scale: 2,
+    elapsedTime: 3,
+    backgroundColor: .black
+)
+let image = exporter.image(chart)
+let data = exporter.pngData(chart)
+
+// Or, straight from the chart:
+let png = chart.exportedPNGData(size: CGSize(width: 640, height: 320))
+```
+
+The export pins the renderer clock instead of reading the wall clock, so nothing
+about the frame depends on when the call happened. Because a still is a single
+frame, transitions that ramp — the appearance reveal, range easing, line
+interpolation — are captured settled; `elapsedTime` drives the effects that stay
+a function of time, such as the dither shimmer. Both entry points return `nil`
+when the platform cannot rasterize, or when the requested size rounds to zero
+pixels. For video, use the `liveline-render` executable.

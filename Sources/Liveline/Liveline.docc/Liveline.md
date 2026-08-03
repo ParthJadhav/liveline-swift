@@ -46,6 +46,9 @@ LivelineChart(data: points, value: latest)
 - ``LivelineDitherBloom``
 - ``LivelineWindowOption``
 - ``LivelineReferenceLine``
+- ``LivelineReferenceBand``
+- ``LivelineAnnotationAxis``
+- ``LivelineAnnotationDash``
 - ``LivelineOrderbookData``
 - ``LivelineDegenOptions``
 - ``LivelineBarStyle``
@@ -66,3 +69,19 @@ LivelineChart(data: points, value: latest)
 - ``LivelineDonutStyle``
 - ``LivelineGaugeStyle``
 - ``LivelineFunnelStyle``
+
+### Legends
+
+- ``LivelineLegend``
+- ``LivelineLegendItem``
+- ``LivelineLegendAxis``
+- ``LivelineLegendSwatch``
+
+### Streaming
+
+- ``LivelineDataStream``
+
+### Image Export
+
+- ``LivelineChartImageExporter``
+- ``LivelineImage``

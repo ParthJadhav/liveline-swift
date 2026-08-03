@@ -454,13 +454,132 @@ public struct LivelineWindowOption: Identifiable, Hashable, Sendable {
     }
 }
 
+/// Which axis an annotation is measured against.
+public enum LivelineAnnotationAxis: String, CaseIterable, Sendable {
+    /// A value on the vertical axis, drawn as a horizontal line or band.
+    case value
+    /// A moment on the time axis, drawn as a vertical line or band. Times are
+    /// in the same units as ``LivelinePoint/time``.
+    case time
+}
+
+/// How an annotation line's stroke is dashed.
+public enum LivelineAnnotationDash: String, CaseIterable, Sendable {
+    case solid
+    case dashed
+    case dotted
+
+    var pattern: [CGFloat] {
+        switch self {
+        case .solid: return []
+        case .dashed: return [4, 4]
+        case .dotted: return [1, 3]
+        }
+    }
+}
+
+/// A single straight annotation line.
+///
+/// A `.value` line is horizontal, sitting at `value` on the vertical axis; a
+/// `.time` line is vertical, sitting at the moment `value` names. Lines are
+/// drawn from the plot's edges and clipped to it.
+///
+/// Only the configuration's single ``LivelineChartAnnotations/referenceLine``
+/// widens a chart's automatic value range. Lines in
+/// ``LivelineChartAnnotations/referenceLines`` are draw-time only: they never
+/// move the range, so scrolling one off the visible range simply hides it.
 public struct LivelineReferenceLine: Hashable, Sendable {
+    /// The value the line sits at — a chart value for `.value`, a time for
+    /// `.time`.
     public var value: Double
     public var label: String?
+    public var axis: LivelineAnnotationAxis
+    /// An explicit stroke color, or `nil` for the theme's reference color.
+    public var color: Color?
+    public var dash: LivelineAnnotationDash
 
+    /// Creates a horizontal reference line at a value.
     public init(value: Double, label: String? = nil) {
         self.value = value
         self.label = label
+        self.axis = .value
+        self.color = nil
+        self.dash = .dashed
+    }
+
+    /// Creates a reference line on either axis.
+    ///
+    /// - Parameters:
+    ///   - value: The value or time the line sits at.
+    ///   - axis: Whether `value` names a chart value or a moment.
+    ///   - label: Optional text drawn on the line.
+    ///   - color: An explicit stroke color, or `nil` for the theme's.
+    ///   - dash: The stroke pattern. Defaults to `.dashed`.
+    public init(
+        value: Double,
+        axis: LivelineAnnotationAxis,
+        label: String? = nil,
+        color: Color? = nil,
+        dash: LivelineAnnotationDash = .dashed
+    ) {
+        self.value = value
+        self.label = label
+        self.axis = axis
+        self.color = color
+        self.dash = dash
+    }
+}
+
+/// A shaded region spanning a value range or a time range.
+///
+/// A `.value` band is horizontal, covering the plot's full width between two
+/// values; a `.time` band is vertical, covering the plot's full height between
+/// two moments. Inverted bounds are normalized, and a band whose bounds are
+/// equal collapses to a hairline rather than disappearing or drawing backwards.
+///
+/// Bands are draw-time only and never widen a chart's automatic value range.
+public struct LivelineReferenceBand: Hashable, Sendable {
+    public var axis: LivelineAnnotationAxis
+    /// One edge of the band. Order does not matter.
+    public var start: Double
+    /// The other edge of the band.
+    public var end: Double
+    public var label: String?
+    /// An explicit fill color, or `nil` for the theme's reference color.
+    public var color: Color?
+    /// The fill's opacity, clamped to `0...1` at the rendering boundary.
+    public var opacity: Double
+
+    /// Creates a shaded band.
+    ///
+    /// - Parameters:
+    ///   - axis: Whether the bounds name chart values or moments.
+    ///   - start: One edge of the band.
+    ///   - end: The other edge.
+    ///   - label: Optional text drawn at the band's leading edge.
+    ///   - color: An explicit fill color, or `nil` for the theme's.
+    ///   - opacity: The fill's opacity. Defaults to `0.12`.
+    public init(
+        axis: LivelineAnnotationAxis = .value,
+        start: Double,
+        end: Double,
+        label: String? = nil,
+        color: Color? = nil,
+        opacity: Double = 0.12
+    ) {
+        self.axis = axis
+        self.start = start
+        self.end = end
+        self.label = label
+        self.color = color
+        self.opacity = opacity
+    }
+
+    /// The band's bounds in ascending order, or `nil` when either edge is not
+    /// a finite number.
+    public var bounds: ClosedRange<Double>? {
+        guard start.isFinite, end.isFinite else { return nil }
+        return start <= end ? start...end : end...start
     }
 }
 

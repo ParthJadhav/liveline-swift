@@ -202,7 +202,8 @@ struct LivelineMotionPolicy: Equatable {
         configuration: LivelineChartConfiguration,
         capabilities: LivelineChartCapabilities,
         reduceMotion: Bool,
-        snapshotElapsedTime: TimeInterval? = nil
+        snapshotElapsedTime: TimeInterval? = nil,
+        rendersSettledFrame: Bool = false
     ) -> LivelineMotionPolicy {
         let wantsContinuousFrames = capabilities.isRealtime
             || configuration.fadeEffects
@@ -216,7 +217,9 @@ struct LivelineMotionPolicy: Equatable {
         return LivelineMotionPolicy(
             isPaused: configuration.paused,
             requiresTimeline: requiresTimeline,
-            settlesImmediately: reduceMotion || (!requiresTimeline && !configuration.paused),
+            // A still export draws one frame and stops, so every ramp has to be
+            // shown at its destination rather than at its first millisecond.
+            settlesImmediately: reduceMotion || rendersSettledFrame || (!requiresTimeline && !configuration.paused),
             minimumInterval: configuration.style.preferredFrameInterval ?? 1.0 / 60.0
         )
     }

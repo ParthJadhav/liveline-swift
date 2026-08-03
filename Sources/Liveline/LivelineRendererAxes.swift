@@ -337,6 +337,95 @@ extension LivelineRenderer {
         return 604_800
     }
 
+    /// Draws the shaded annotation bands. Called after the grid and before the
+    /// marks, so a band reads as a backdrop rather than a highlight over data.
+    static func drawReferenceBands(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        bands: [LivelineReferenceBand],
+        textScale: LivelineTextScale,
+        alpha: Double
+    ) {
+        guard !bands.isEmpty, alpha > 0.01 else { return }
+        var layer = context
+        layer.opacity *= alpha
+
+        for band in bands {
+            guard let rect = LivelineAnnotationGeometry.rect(for: band, layout: layout) else { continue }
+            let color = band.color ?? palette.referenceLine
+            layer.fill(Path(rect), with: .color(color.opacity(band.opacity.livelineClamped(0, 1, fallback: 0.12))))
+
+            guard let label = band.label, !label.isEmpty else { continue }
+            let font = textScale.font(11, weight: .medium)
+            drawText(
+                label,
+                context: &layer,
+                at: CGPoint(x: rect.minX + 6, y: rect.minY + textScale.scaled(9)),
+                anchor: .leading,
+                color: palette.referenceLabel,
+                font: font
+            )
+        }
+    }
+
+    /// Draws the additional annotation lines, matching the single reference
+    /// line's layering so a chart that uses both reads consistently.
+    static func drawReferenceLines(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        lines: [LivelineReferenceLine],
+        textScale: LivelineTextScale,
+        alpha: Double
+    ) {
+        guard !lines.isEmpty, alpha > 0.01 else { return }
+        var layer = context
+        layer.opacity *= alpha
+
+        for line in lines {
+            guard let position = LivelineAnnotationGeometry.position(for: line, layout: layout) else { continue }
+            let color = line.color ?? palette.referenceLine
+            let style = StrokeStyle(lineWidth: 1, dash: line.dash.pattern)
+            let font = textScale.font(11, weight: .medium)
+            let label = line.label ?? ""
+
+            switch line.axis {
+            case .value:
+                var path = Path()
+                path.move(to: CGPoint(x: layout.plotLeftX, y: position))
+                path.addLine(to: CGPoint(x: layout.rightX, y: position))
+                layer.stroke(path, with: .color(color), style: style)
+                if !label.isEmpty {
+                    drawText(
+                        label,
+                        context: &layer,
+                        at: CGPoint(x: layout.plotLeftX + 6, y: position - textScale.scaled(8)),
+                        anchor: .leading,
+                        color: palette.referenceLabel,
+                        font: font
+                    )
+                }
+
+            case .time:
+                var path = Path()
+                path.move(to: CGPoint(x: position, y: layout.padding.top))
+                path.addLine(to: CGPoint(x: position, y: layout.bottomY))
+                layer.stroke(path, with: .color(color), style: style)
+                if !label.isEmpty {
+                    drawText(
+                        label,
+                        context: &layer,
+                        at: CGPoint(x: position + 4, y: layout.padding.top + textScale.scaled(8)),
+                        anchor: .leading,
+                        color: palette.referenceLabel,
+                        font: font
+                    )
+                }
+            }
+        }
+    }
+
     static func drawReferenceLine(
         context: inout GraphicsContext,
         layout: LivelineLayout,
@@ -383,5 +472,74 @@ extension LivelineRenderer {
             color: palette.referenceLabel,
             font: font
         )
+    }
+}
+
+/// Maps annotation models onto plot coordinates.
+///
+/// Split out from the drawing code so the mapping — value to `y`, time to `x`,
+/// and the clipping that keeps an off-screen annotation from drawing — can be
+/// exercised without a graphics context.
+enum LivelineAnnotationGeometry {
+    /// The line's position along the axis it crosses: `y` for a `.value` line,
+    /// `x` for a `.time` line. Returns `nil` when the line falls outside the
+    /// plot.
+    static func position(for line: LivelineReferenceLine, layout: LivelineLayout) -> CGFloat? {
+        guard line.value.isFinite else { return nil }
+        switch line.axis {
+        case .value:
+            let y = layout.y(for: line.value)
+            guard y.isFinite, y >= layout.padding.top - 2, y <= layout.bottomY + 2 else { return nil }
+            return y
+        case .time:
+            let x = layout.x(for: line.value)
+            guard x.isFinite, x >= layout.plotLeftX - 2, x <= layout.rightX + 2 else { return nil }
+            return x
+        }
+    }
+
+    /// The band's rectangle inside the plot, clamped to the plot's bounds.
+    ///
+    /// Inverted bounds are normalized by ``LivelineReferenceBand/bounds`` and a
+    /// degenerate band — both edges equal — becomes a hairline rather than a
+    /// zero-area rectangle that would silently vanish. Returns `nil` when the
+    /// band lies entirely outside the plot or carries non-finite bounds.
+    static func rect(for band: LivelineReferenceBand, layout: LivelineLayout) -> CGRect? {
+        guard let bounds = band.bounds else { return nil }
+        let hairline: CGFloat = 0.5
+
+        switch band.axis {
+        case .value:
+            let top = layout.y(for: bounds.upperBound)
+            let bottom = layout.y(for: bounds.lowerBound)
+            guard top.isFinite, bottom.isFinite else { return nil }
+            let plotTop = layout.padding.top
+            let plotBottom = layout.bottomY
+            guard bottom >= plotTop, top <= plotBottom else { return nil }
+            let clampedTop = min(max(top, plotTop), plotBottom)
+            let clampedBottom = min(max(bottom, plotTop), plotBottom)
+            return CGRect(
+                x: layout.plotLeftX,
+                y: clampedTop,
+                width: layout.chartWidth,
+                height: max(clampedBottom - clampedTop, hairline)
+            )
+
+        case .time:
+            let left = layout.x(for: bounds.lowerBound)
+            let right = layout.x(for: bounds.upperBound)
+            guard left.isFinite, right.isFinite else { return nil }
+            let plotLeft = layout.plotLeftX
+            let plotRight = layout.rightX
+            guard right >= plotLeft, left <= plotRight else { return nil }
+            let clampedLeft = min(max(left, plotLeft), plotRight)
+            let clampedRight = min(max(right, plotLeft), plotRight)
+            return CGRect(
+                x: clampedLeft,
+                y: layout.padding.top,
+                width: max(clampedRight - clampedLeft, hairline),
+                height: layout.chartHeight
+            )
+        }
     }
 }

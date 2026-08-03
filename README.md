@@ -308,6 +308,10 @@ On tvOS, focus a chart and press Select to enter inspection, then move left or
 right through its values. Press Select, Up, Down, or Menu to leave inspection
 and resume normal focus navigation.
 - Reference line and orderbook stream labels
+- Multiple horizontal and vertical reference lines and shaded reference bands
+- Standalone `LivelineLegend` view with Dynamic Type and accessibility support
+- `LivelineDataStream` bounded, time-ordered buffer for live feeds
+- Still-image and PNG export through `LivelineChartImageExporter`
 
 ## Example App
 

@@ -211,8 +211,18 @@ enum LivelineRenderer {
             drawReferenceLine(context: &layer, layout: layout, palette: palette, referenceLine: referenceLine, formatValue: config.formatValue, textScale: textScale, alpha: state.chartReveal)
         }
 
+        if !config.referenceLines.isEmpty, capabilities.usesCartesianGrid, state.chartReveal > 0.01 {
+            drawReferenceLines(context: &layer, layout: layout, palette: palette, lines: config.referenceLines, textScale: textScale, alpha: state.chartReveal)
+        }
+
         if config.grid, capabilities.usesCartesianGrid {
             drawGrid(context: &layer, layout: layout, palette: palette, state: state, formatValue: config.formatValue, textScale: textScale, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+        }
+
+        // Bands sit between the grid and the marks: a backdrop for the data
+        // rather than a highlight painted over it.
+        if !config.referenceBands.isEmpty, capabilities.usesCartesianGrid, state.chartReveal > 0.01 {
+            drawReferenceBands(context: &layer, layout: layout, palette: palette, bands: config.referenceBands, textScale: textScale, alpha: state.chartReveal)
         }
 
         if let orderbook = config.orderbook, isLine {
