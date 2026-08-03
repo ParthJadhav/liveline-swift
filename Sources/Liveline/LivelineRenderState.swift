@@ -242,6 +242,20 @@ final class LivelineRenderState: ObservableObject {
         return LivelineAnimationFrame(deltaMilliseconds: effectiveDelta, elapsed: animationElapsed)
     }
 
+    /// The delta ``frame(for:isPaused:)`` will report for this timestamp, read
+    /// without consuming it.
+    ///
+    /// `frame(for:isPaused:)` advances `lastTimestamp` and `animationElapsed`,
+    /// so it must be called exactly once per draw — and it is called after the
+    /// identity reconcile, which may reset both. Smoothing that has to run
+    /// *before* the geometry is laid out peeks at the delta through here
+    /// instead of taking a second frame.
+    func peekDeltaMilliseconds(for timestamp: TimeInterval, isPaused: Bool) -> TimeInterval {
+        guard !isPaused else { return 0 }
+        guard let lastTimestamp else { return 16.667 }
+        return min(max((timestamp - lastTimestamp) * 1000, 0), 50)
+    }
+
     func presentationTimestamp(for timestamp: TimeInterval, isPaused: Bool) -> TimeInterval {
         if isPaused {
             if pausedPresentationTimestamp == nil {

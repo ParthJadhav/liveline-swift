@@ -76,7 +76,6 @@ enum LivelineRenderer {
         // to the left, so the horizontal insets swap with it.
         let resolvedPadding = isRTL ? ltrPadding.mirroredHorizontally() : ltrPadding
         let presentationTimestamp = state.presentationTimestamp(for: input.timestamp, isPaused: input.motion.isPaused)
-        let anchor = anchorTime(latestTime: input.semantics.latestTime, timelineTimestamp: presentationTimestamp, window: input.activeWindow)
         let baseBuffer = isCandle ? windowBufferNoBadge : (showBadge ? windowBuffer : windowBufferNoBadge)
         let labelReveal = config.fadeEffects ? state.chartReveal : 1
         // The legend gutter is requested on a logical side, so it follows the
@@ -86,19 +85,25 @@ enum LivelineRenderer {
         let dataLeftReserve = isRTL ? trailingReserve : leadingReserve
         let dataRightReserve = isRTL ? leadingReserve : trailingReserve
         let chartWidth = max(1, input.size.width - resolvedPadding.left - resolvedPadding.right - dataLeftReserve - dataRightReserve)
+        // Everything below is derived from the *drawn* window rather than the
+        // requested one, so a window change eases across frames instead of
+        // remapping every visible time in a single one.
+        let effectiveWindow = resolvedWindow(state: state, input: input, plotWidth: chartWidth)
+        let anchor = anchorTime(latestTime: input.semantics.latestTime, timelineTimestamp: presentationTimestamp, window: effectiveWindow)
         let needsArrowRoom = isLine && showBadge && (config.autoDetectMomentum || config.momentum != nil)
         let buffer = needsArrowRoom ? max(baseBuffer, Double(37 / chartWidth)) : baseBuffer
-        let liveRightEdge = anchor + input.activeWindow * buffer
+        let liveRightEdge = anchor + effectiveWindow * buffer
         state.liveRightEdge = liveRightEdge
         // A frozen viewport substitutes its own right edge and nothing else
         // changes: decimation, hover narrowing, the time axis, and the prepared
         // chart cache all key off these two edges already.
         let rightEdge = resolvedRightEdge(
             target: input.frozenRightEdge ?? liveRightEdge,
+            window: effectiveWindow,
             state: state,
             input: input
         )
-        let leftEdge = rightEdge - input.activeWindow
+        let leftEdge = rightEdge - effectiveWindow
 
         let renderData = LivelineChartPreparer.prepare(
             for: input.content,
@@ -180,12 +185,6 @@ enum LivelineRenderer {
             if abs(nextMax - range.upperBound) < pixelThreshold { nextMax = range.upperBound }
             state.displayMin = nextMin
             state.displayMax = nextMax
-        }
-
-        if input.motion.settlesImmediately {
-            state.displayWindow = input.activeWindow
-        } else {
-            state.displayWindow = LivelineMath.lerp(state.displayWindow ?? input.activeWindow, input.activeWindow, speed: 0.08, deltaTime: dt)
         }
 
         let layout = LivelineLayout(
@@ -340,7 +339,7 @@ enum LivelineRenderer {
                 layout: layout,
                 palette: palette,
                 state: state,
-                window: input.activeWindow,
+                window: effectiveWindow,
                 formatTime: config.formatTime,
                 textScale: textScale,
                 alpha: revealAmount(
@@ -422,14 +421,67 @@ extension LivelineRenderer {
         return max(0, maxLabelWidth - 2) * CGFloat(reveal)
     }
 
+    /// The window the x-axis is actually drawn at this frame.
+    ///
+    /// The visible span is part of the time-to-x mapping, so adopting a new one
+    /// in a single frame slides every visible point sideways at once — the
+    /// trace jumps, then scrolls back. Growing the window as data arrives, and
+    /// the built-in `30s`/`1m` picker, both do exactly that. Easing the drawn
+    /// span toward the requested one turns the jump into a glide, and every
+    /// other piece of this frame's geometry — the anchor, the live edge, the
+    /// prepared chart's edges, the layout, the time axis' tick spacing — is
+    /// derived from the value returned here so nothing mixes the two spans.
+    ///
+    /// Composes with the viewport's return-to-live glide rather than fighting
+    /// it: this eases *how wide* the plot is, ``resolvedRightEdge(target:window:state:input:)``
+    /// eases *where its right edge sits*, and the latter is handed the eased
+    /// span so its "a window change is a cut" escape hatch no longer trips on a
+    /// change that is already being animated.
+    static func resolvedWindow(
+        state: LivelineRenderState,
+        input: LivelineRenderInput,
+        plotWidth: CGFloat
+    ) -> TimeInterval {
+        let target = input.activeWindow
+        // Reduce Motion, a settled single-frame export, and a chart that just
+        // changed identity all cut to the new span rather than animate to it.
+        guard !input.motion.settlesImmediately,
+              state.chartIdentity == input.semantics.identity,
+              let current = state.displayWindow,
+              current.isFinite, current > 0,
+              target.isFinite, target > 0
+        else {
+            state.displayWindow = target
+            return target
+        }
+
+        // The animation frame is taken once per draw, later, after the identity
+        // reconcile that may reset it — so read the delta without consuming it.
+        // While paused the delta is zero and the eased span simply holds.
+        let dt = state.peekDeltaMilliseconds(for: input.timestamp, isPaused: input.motion.isPaused)
+        var next = LivelineMath.lerp(current, target, speed: 0.08, deltaTime: dt)
+        // Settle once the remainder is worth less than half a pixel of plot,
+        // the same convergence rule the value range uses, so the span does not
+        // asymptote toward its target forever.
+        let secondsPerPixel = target / Double(max(plotWidth, 1))
+        if abs(next - target) < secondsPerPixel * 0.5 { next = target }
+        state.displayWindow = next
+        return next
+    }
+
     /// Eases the drawn right edge toward wherever the viewport wants it.
     ///
     /// This is what makes "jump back to live" glide rather than cut. It only
     /// runs for charts that opted into zoom and pan, and only while frames are
     /// already arriving — a settled export or a chart with no timeline snaps to
     /// the target, so nothing that renders one frame is left mid-glide.
+    ///
+    /// - Parameter window: The span actually being drawn this frame — the eased
+    ///   one from ``resolvedWindow(state:input:plotWidth:)``, never the raw
+    ///   request, so a single frame's geometry is derived from one span only.
     static func resolvedRightEdge(
         target: TimeInterval,
+        window: TimeInterval,
         state: LivelineRenderState,
         input: LivelineRenderInput
     ) -> TimeInterval {
@@ -438,8 +490,8 @@ extension LivelineRenderer {
               !input.motion.isPaused,
               let previous = state.displayRightEdge,
               previous.isFinite,
-              // A window change or a fresh chart is a cut, not a glide.
-              abs(previous - target) < input.activeWindow * 8
+              // A fresh chart, or a jump too far to be worth easing, is a cut.
+              abs(previous - target) < window * 8
         else {
             state.displayRightEdge = target
             return target
@@ -447,10 +499,9 @@ extension LivelineRenderer {
 
         // Read the frame delta without consuming it: the animation frame is
         // taken later in `draw`, after the identity reconcile that may reset it.
-        let delta = state.lastTimestamp
-            .map { min(max((input.timestamp - $0) * 1000, 0), 50) } ?? 16.667
+        let delta = state.peekDeltaMilliseconds(for: input.timestamp, isPaused: input.motion.isPaused)
         var next = LivelineMath.lerp(previous, target, speed: 0.22, deltaTime: delta)
-        if abs(next - target) < input.activeWindow * 0.0005 { next = target }
+        if abs(next - target) < window * 0.0005 { next = target }
         state.displayRightEdge = next
         return next
     }

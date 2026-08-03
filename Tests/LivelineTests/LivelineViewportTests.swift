@@ -261,6 +261,7 @@ final class LivelineViewportTests: XCTestCase {
         state.displayRightEdge = 40
         let edge = LivelineRenderer.resolvedRightEdge(
             target: 90,
+            window: 30,
             state: state,
             input: renderInput(
                 zoomAndPan: true,
@@ -278,6 +279,7 @@ final class LivelineViewportTests: XCTestCase {
         state.lastTimestamp = 0
         let edge = LivelineRenderer.resolvedRightEdge(
             target: 90,
+            window: 30,
             state: state,
             input: renderInput(
                 zoomAndPan: true,
@@ -298,6 +300,7 @@ final class LivelineViewportTests: XCTestCase {
         state.lastTimestamp = 0
         let edge = LivelineRenderer.resolvedRightEdge(
             target: 90,
+            window: 30,
             state: state,
             input: renderInput(
                 zoomAndPan: false,
@@ -315,6 +318,7 @@ final class LivelineViewportTests: XCTestCase {
         state.lastTimestamp = 0
         let edge = LivelineRenderer.resolvedRightEdge(
             target: 10_000,
+            window: 30,
             state: state,
             input: renderInput(
                 zoomAndPan: true,
@@ -324,6 +328,125 @@ final class LivelineViewportTests: XCTestCase {
             )
         )
         XCTAssertEqual(edge, 10_000, accuracy: 0.0001)
+    }
+
+    // MARK: - Window smoothing
+
+    /// Records the layout the renderer laid out each frame with, so a sequence
+    /// of windows can be checked against the span actually drawn.
+    private final class LayoutRecorder {
+        var spans: [TimeInterval] = []
+    }
+
+    /// Draws one frame per entry in `windows`, a sixtieth of a second apart, and
+    /// reports the span each frame's layout covered.
+    ///
+    /// The render state is created *inside* the drawing closure: `ImageRenderer`
+    /// is free to evaluate the canvas more than once, and a fresh state makes
+    /// every pass replay the same sequence instead of continuing the last one.
+    @MainActor
+    private func drawnSpans(
+        windows: [TimeInterval],
+        settlesImmediately: Bool,
+        isPaused: Bool = false
+    ) throws -> [TimeInterval] {
+        let recorder = LayoutRecorder()
+        let points = (0..<160).map { LivelinePoint(time: Double($0) / 4, value: Double($0 % 9)) }
+        let content = LivelineChartContent.line(data: points, value: 4)
+        let semantics = content.semantics()
+        let configuration = LivelineChartConfiguration(style: .standard).normalizedForRendering()
+        let size = CGSize(width: 320, height: 200)
+
+        let renderer = ImageRenderer(
+            content: Canvas { context, canvasSize in
+                recorder.spans.removeAll()
+                let state = LivelineRenderState()
+                for (index, window) in windows.enumerated() {
+                    var pass = context
+                    LivelineRenderer.draw(
+                        context: &pass,
+                        state: state,
+                        input: LivelineRenderInput(
+                            content: content,
+                            semantics: semantics,
+                            accent: .blue,
+                            configuration: configuration,
+                            motion: LivelineMotionPolicy(
+                                isPaused: isPaused,
+                                requiresTimeline: !settlesImmediately,
+                                settlesImmediately: settlesImmediately
+                            ),
+                            activeWindow: window,
+                            hiddenSeries: [],
+                            hoverLocation: nil,
+                            timestamp: 1_000 + Double(index) / 60,
+                            size: canvasSize
+                        )
+                    )
+                    if let layout = state.interactionSnapshot?.layout {
+                        recorder.spans.append(layout.rightEdge - layout.leftEdge)
+                    }
+                }
+            }
+            .frame(width: size.width, height: size.height)
+        )
+        renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+        renderer.scale = 1
+        #if os(macOS)
+        _ = try XCTUnwrap(renderer.nsImage)
+        #else
+        _ = try XCTUnwrap(renderer.uiImage)
+        #endif
+        return recorder.spans
+    }
+
+    @MainActor
+    func testAWindowChangeEasesTheDrawnSpanInsteadOfSnappingIt() throws {
+        // Growing the window with the data — 30s then 32s — used to remap every
+        // visible time in one frame, jumping the trace sideways before it
+        // resumed scrolling.
+        let spans = try drawnSpans(
+            windows: [30] + Array(repeating: 32, count: 90),
+            settlesImmediately: false
+        )
+        XCTAssertEqual(spans.count, 91)
+        XCTAssertEqual(spans[0], 30, accuracy: 0.0001)
+        XCTAssertGreaterThan(spans[1], 30)
+        XCTAssertLessThan(spans[1], 32)
+        // And it settles exactly rather than asymptoting toward the target.
+        XCTAssertEqual(try XCTUnwrap(spans.last), 32, accuracy: 0.000001)
+    }
+
+    @MainActor
+    func testASettledChartAdoptsANewWindowOnTheVeryFirstFrame() throws {
+        // Reduce Motion and single-frame exports cut to the new span: there are
+        // no further frames to finish an animation in.
+        let spans = try drawnSpans(windows: [30, 32], settlesImmediately: true)
+        XCTAssertEqual(spans.count, 2)
+        XCTAssertEqual(spans[0], 30, accuracy: 0.000001)
+        XCTAssertEqual(spans[1], 32, accuracy: 0.000001)
+    }
+
+    @MainActor
+    func testAPausedChartHoldsItsDrawnSpanUntilFramesResume() throws {
+        // A paused chart reports a zero delta, so the eased span parks rather
+        // than creeping toward the new window with no frames driving it.
+        let spans = try drawnSpans(
+            windows: [30] + Array(repeating: 32, count: 20),
+            settlesImmediately: false,
+            isPaused: true
+        )
+        XCTAssertEqual(Set(spans.map { ($0 * 1_000).rounded() }), [30_000])
+    }
+
+    @MainActor
+    func testAStaticWindowNeverDriftsFromTheRequestedSpan() throws {
+        // The regression guard: smoothing must be invisible when the window is
+        // not changing.
+        let spans = try drawnSpans(windows: Array(repeating: 30, count: 30), settlesImmediately: false)
+        for span in spans {
+            XCTAssertEqual(span, 30, accuracy: 0.000001)
+        }
     }
 
     func testTimeDomainTravelsWithTheChartSemantics() {
