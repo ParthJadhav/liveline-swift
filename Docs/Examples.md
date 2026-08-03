@@ -305,3 +305,52 @@ LivelineChart(
 )
 .frame(height: 260)
 ```
+
+## Annotated Chart With A Legend
+
+```swift
+var configuration = LivelineChartConfiguration(theme: .dark, window: 300)
+configuration.referenceLines = [
+    LivelineReferenceLine(value: 100, label: "SLO"),
+    LivelineReferenceLine(value: deployedAt, axis: .time, label: "Deploy", dash: .dotted)
+]
+configuration.referenceBands = [
+    LivelineReferenceBand(start: 90, end: 110, label: "Healthy", opacity: 0.10)
+]
+
+VStack(alignment: .leading, spacing: 8) {
+    LivelineChart(series: series, configuration: configuration)
+        .frame(height: 260)
+    LivelineLegend(series: series, swatch: .line)
+}
+```
+
+## Streaming Feed
+
+```swift
+struct LiveTicker: View {
+    @StateObject private var stream = LivelineDataStream(capacity: 900, retention: 600)
+
+    var body: some View {
+        LivelineChart(data: stream.points, value: stream.points.last?.value ?? 0)
+            .frame(height: 240)
+            .task {
+                try? await stream.consume(prices)
+            }
+    }
+}
+```
+
+## Exporting A Still
+
+```swift
+@MainActor
+func chartThumbnail() -> Data? {
+    LivelineChart(data: points, value: latest)
+        .exportedPNGData(
+            size: CGSize(width: 640, height: 320),
+            scale: 2,
+            backgroundColor: .black
+        )
+}
+```

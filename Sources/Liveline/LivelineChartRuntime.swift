@@ -168,6 +168,21 @@ enum LivelineScrubPanPolicy {
     }
 }
 
+/// How a macOS scroll event becomes a horizontal pan.
+///
+/// A trackpad reports both axes, so the dominant one decides: a mostly
+/// horizontal swipe pans, a mostly vertical one belongs to whatever the chart
+/// is embedded in. A wheel mouse reports only the vertical axis, so Shift —
+/// the system-wide horizontal-scroll modifier — redirects it.
+enum LivelineScrollPanPolicy {
+    static func horizontalDelta(deltaX: CGFloat, deltaY: CGFloat, isShiftPressed: Bool) -> CGFloat {
+        guard deltaX.isFinite, deltaY.isFinite else { return 0 }
+        if abs(deltaX) > abs(deltaY) { return deltaX }
+        if isShiftPressed { return deltaY }
+        return 0
+    }
+}
+
 /// Keeps recognition ownership stable for the lifetime of one pan and makes
 /// end/cancel cleanup idempotent.
 struct LivelineScrubSession {
@@ -202,7 +217,8 @@ struct LivelineMotionPolicy: Equatable {
         configuration: LivelineChartConfiguration,
         capabilities: LivelineChartCapabilities,
         reduceMotion: Bool,
-        snapshotElapsedTime: TimeInterval? = nil
+        snapshotElapsedTime: TimeInterval? = nil,
+        rendersSettledFrame: Bool = false
     ) -> LivelineMotionPolicy {
         let wantsContinuousFrames = capabilities.isRealtime
             || configuration.fadeEffects
@@ -216,7 +232,9 @@ struct LivelineMotionPolicy: Equatable {
         return LivelineMotionPolicy(
             isPaused: configuration.paused,
             requiresTimeline: requiresTimeline,
-            settlesImmediately: reduceMotion || (!requiresTimeline && !configuration.paused),
+            // A still export draws one frame and stops, so every ramp has to be
+            // shown at its destination rather than at its first millisecond.
+            settlesImmediately: reduceMotion || rendersSettledFrame || (!requiresTimeline && !configuration.paused),
             minimumInterval: configuration.style.preferredFrameInterval ?? 1.0 / 60.0
         )
     }
@@ -249,6 +267,11 @@ struct LivelineInteractionTarget {
 }
 
 enum LivelineInteractionRegion {
+    /// Hit slack applied to rect regions, so a pointer just outside a mark
+    /// still selects it. Shared with the interaction builder, which narrows
+    /// rect-region charts to the marks this slack can reach.
+    static let rectHitSlack: CGFloat = 8
+
     case x
     case rect(CGRect)
     case circle(center: CGPoint, radius: CGFloat)
@@ -348,7 +371,9 @@ enum LivelineHoverResolver {
         case .x:
             return false
         case let .rect(rect):
-            return rect.insetBy(dx: -8, dy: -8).contains(location)
+            return rect
+                .insetBy(dx: -LivelineInteractionRegion.rectHitSlack, dy: -LivelineInteractionRegion.rectHitSlack)
+                .contains(location)
         case let .circle(center, radius):
             return distanceSquared(location, center) <= radius * radius
         case let .sector(center, innerRadius, outerRadius, startAngle, endAngle):

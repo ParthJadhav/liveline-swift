@@ -20,6 +20,11 @@ enum LivelineChartContent {
     case donut(data: [LivelineCategoryValue], style: LivelineDonutStyle)
     case gauge(value: Double, range: ClosedRange<Double>, style: LivelineGaugeStyle)
     case funnel(data: [LivelineCategoryValue], style: LivelineFunnelStyle)
+    case histogram(values: [Double], style: LivelineHistogramStyle)
+    case bullet(style: LivelineBulletStyle)
+    case treemap(nodes: [LivelineTreemapNode], style: LivelineTreemapStyle)
+    case sunburst(nodes: [LivelineSunburstNode], style: LivelineSunburstStyle)
+    case sankey(links: [LivelineSankeyLink], style: LivelineSankeyStyle)
     case candle(
         data: [LivelinePoint],
         value: Double,
@@ -52,6 +57,11 @@ enum LivelineChartKind: Hashable, CaseIterable {
     case donut
     case gauge
     case funnel
+    case histogram
+    case bullet
+    case treemap
+    case sunburst
+    case sankey
     case candle
     case series
 }
@@ -69,6 +79,9 @@ struct LivelineChartCapabilities: Equatable {
     var hoverBehavior: LivelineHoverBehavior
     var supportsLiveBadge: Bool = false
     var reservesBadgePadding: Bool = false
+    /// Reserves the bottom gutter the time axis would use for content that
+    /// draws its own horizontal axis labels there.
+    var reservesBottomAxisPadding: Bool = false
     var isRealtime: Bool = false
 }
 
@@ -84,31 +97,62 @@ struct LivelineChartSemantics {
     var momentum: LivelineMomentum
     var latestTime: TimeInterval?
     var seriesIDs: [String]
+    /// Oldest sample on the time axis. Together with ``latestTime`` this is the
+    /// domain a zoom-and-pan viewport is clamped to; charts with no time axis
+    /// leave both `nil`.
+    var earliestTime: TimeInterval?
+    /// Samples on the time axis, used only to derive how far a pinch may zoom
+    /// in before it runs out of data to show.
+    var sampleCount: Int = 0
 }
 
 extension LivelineChartContent {
     func normalized() -> LivelineChartContent {
         switch self {
         case let .line(data, value):
-            let data = LivelineInputNormalizer.points(data)
-            return .line(data: data, value: LivelineInputNormalizer.value(value, fallback: data.last?.value ?? 0))
+            let points = LivelineInputNormalizer.points(data)
+            let resolvedValue = LivelineInputNormalizer.value(value, fallback: points.last?.value ?? 0)
+            guard points.livelineSharesStorage(with: data), resolvedValue == value else {
+                return .line(data: points, value: resolvedValue)
+            }
+            return self
 
         case let .bars(data, style):
-            return .bars(data: LivelineInputNormalizer.points(data), style: style)
+            let points = LivelineInputNormalizer.points(data)
+            guard points.livelineSharesStorage(with: data) else {
+                return .bars(data: points, style: style)
+            }
+            return self
 
         case let .range(data, style):
-            return .range(data: LivelineInputNormalizer.ranges(data), style: style)
+            let points = LivelineInputNormalizer.ranges(data)
+            guard points.livelineSharesStorage(with: data) else {
+                return .range(data: points, style: style)
+            }
+            return self
 
         case let .scatter(data, value, style):
-            let data = LivelineInputNormalizer.points(data)
-            return .scatter(data: data, value: LivelineInputNormalizer.value(value, fallback: data.last?.value ?? 0), style: style)
+            let points = LivelineInputNormalizer.points(data)
+            let resolvedValue = LivelineInputNormalizer.value(value, fallback: points.last?.value ?? 0)
+            guard points.livelineSharesStorage(with: data), resolvedValue == value else {
+                return .scatter(data: points, value: resolvedValue, style: style)
+            }
+            return self
 
         case let .steps(data, value, style):
-            let data = LivelineInputNormalizer.points(data)
-            return .steps(data: data, value: LivelineInputNormalizer.value(value, fallback: data.last?.value ?? 0), style: style)
+            let points = LivelineInputNormalizer.points(data)
+            let resolvedValue = LivelineInputNormalizer.value(value, fallback: points.last?.value ?? 0)
+            guard points.livelineSharesStorage(with: data), resolvedValue == value else {
+                return .steps(data: points, value: resolvedValue, style: style)
+            }
+            return self
 
         case let .lollipops(data, style):
-            return .lollipops(data: LivelineInputNormalizer.points(data), style: style)
+            let points = LivelineInputNormalizer.points(data)
+            guard points.livelineSharesStorage(with: data) else {
+                return .lollipops(data: points, style: style)
+            }
+            return self
 
         case let .bubbles(data, style):
             return .bubbles(data: LivelineInputNormalizer.bubbles(data), style: style)
@@ -117,7 +161,11 @@ extension LivelineChartContent {
             return .boxPlots(data: LivelineInputNormalizer.boxPlots(data), style: style)
 
         case let .waterfall(data, style):
-            return .waterfall(data: LivelineInputNormalizer.points(data), style: style)
+            let points = LivelineInputNormalizer.points(data)
+            guard points.livelineSharesStorage(with: data) else {
+                return .waterfall(data: points, style: style)
+            }
+            return self
 
         case let .errorBars(data, style):
             return .errorBars(data: LivelineInputNormalizer.errorBars(data), style: style)
@@ -154,24 +202,61 @@ extension LivelineChartContent {
         case let .funnel(data, style):
             return .funnel(data: LivelineInputNormalizer.categories(data), style: style)
 
+        case let .histogram(values, style):
+            let samples = LivelineInputNormalizer.samples(values)
+            guard samples.livelineSharesStorage(with: values) else {
+                return .histogram(values: samples, style: style)
+            }
+            return self
+
+        case .bullet:
+            return self
+
+        case .treemap, .sunburst, .sankey:
+            // Hierarchies and flows are keyed by label rather than time, and
+            // the layout passes already drop non-positive weights, so there is
+            // nothing an ordering pass could normalize here.
+            return self
+
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
-            let data = LivelineInputNormalizer.points(data)
-            let lineData = LivelineInputNormalizer.points(lineData)
-            let candles = LivelineInputNormalizer.candles(candles)
-            let liveCandle = liveCandle.flatMap(LivelineInputNormalizer.candle)
-            let fallback = lineData.last?.value ?? liveCandle?.close ?? data.last?.value ?? candles.last?.close ?? 0
-            return .candle(
-                data: data,
-                value: LivelineInputNormalizer.value(value, fallback: fallback),
-                candles: candles,
-                candleWidth: LivelineInputNormalizer.positive(candleWidth, fallback: 1),
-                liveCandle: liveCandle,
-                lineData: lineData,
-                lineValue: lineValue.flatMap { $0.isFinite ? $0 : nil }
-            )
+            let points = LivelineInputNormalizer.points(data)
+            let linePoints = LivelineInputNormalizer.points(lineData)
+            let resolvedCandles = LivelineInputNormalizer.candles(candles)
+            let resolvedLiveCandle = liveCandle.flatMap(LivelineInputNormalizer.candle)
+            let fallback = linePoints.last?.value
+                ?? resolvedLiveCandle?.close
+                ?? points.last?.value
+                ?? resolvedCandles.last?.close
+                ?? 0
+            let resolvedValue = LivelineInputNormalizer.value(value, fallback: fallback)
+            let resolvedWidth = LivelineInputNormalizer.positive(candleWidth, fallback: 1)
+            let resolvedLineValue = lineValue.flatMap { $0.isFinite ? $0 : nil }
+            guard points.livelineSharesStorage(with: data),
+                  linePoints.livelineSharesStorage(with: lineData),
+                  resolvedCandles.livelineSharesStorage(with: candles),
+                  resolvedLiveCandle == liveCandle,
+                  resolvedValue == value,
+                  resolvedWidth == candleWidth,
+                  resolvedLineValue == lineValue
+            else {
+                return .candle(
+                    data: points,
+                    value: resolvedValue,
+                    candles: resolvedCandles,
+                    candleWidth: resolvedWidth,
+                    liveCandle: resolvedLiveCandle,
+                    lineData: linePoints,
+                    lineValue: resolvedLineValue
+                )
+            }
+            return self
 
         case let .series(series):
-            return .series(LivelineInputNormalizer.series(series))
+            let entries = LivelineInputNormalizer.series(series)
+            guard entries.livelineSharesStorage(with: series) else {
+                return .series(entries)
+            }
+            return self
         }
     }
 
@@ -244,7 +329,15 @@ extension LivelineChartContent {
 
         case let .stackedAreas(data, style):
             let points = data.map { LivelinePoint(time: $0.time, value: LivelineMath.stackedPrimaryValue(point: $0, mode: style.mode)) }
-            return semantics(kind: .stackedAreas, capabilities: .discreteCartesian, currentValue: points.last?.value ?? 0, momentumPoints: points, latestTime: data.last?.time)
+            // A centered stack is read by shape, not magnitude: the value axis
+            // and its grid would label offsets no reader can interpret.
+            return semantics(
+                kind: .stackedAreas,
+                capabilities: style.baseline == .centered ? .stream : .discreteCartesian,
+                currentValue: points.last?.value ?? 0,
+                momentumPoints: points,
+                latestTime: data.last?.time
+            )
 
         case let .timeline(data, _):
             let points = data.enumerated().map { LivelinePoint(time: Double($0.offset), value: $0.element.end - $0.element.start) }
@@ -253,7 +346,9 @@ extension LivelineChartContent {
                 capabilities: .timeline,
                 currentValue: data.last.map { $0.end - $0.start } ?? 0,
                 momentumPoints: points,
-                latestTime: data.map(\.end).max()
+                latestTime: data.map(\.end).max(),
+                earliestTime: data.map(\.start).min(),
+                sampleCount: data.count
             )
 
         case let .heatmap(data, _):
@@ -274,6 +369,54 @@ extension LivelineChartContent {
         case let .funnel(data, _):
             return semantics(kind: .funnel, capabilities: .radial, currentValue: data.last(where: { $0.value > 0 })?.value ?? 0, momentumPoints: [], latestTime: nil)
 
+        case let .histogram(values, _):
+            return semantics(
+                kind: .histogram,
+                capabilities: .binned,
+                currentValue: Double(values.count),
+                momentumPoints: [],
+                latestTime: nil
+            )
+
+        case let .bullet(style):
+            return semantics(
+                kind: .bullet,
+                capabilities: .radial,
+                currentValue: style.resolvedMeasure,
+                momentumPoints: [],
+                latestTime: nil
+            )
+
+        case let .treemap(nodes, _):
+            return semantics(
+                kind: .treemap,
+                capabilities: .radial,
+                currentValue: nodes.reduce(0) { $0 + $1.resolvedValue },
+                momentumPoints: [],
+                latestTime: nil
+            )
+
+        case let .sunburst(nodes, _):
+            return semantics(
+                kind: .sunburst,
+                capabilities: .radial,
+                currentValue: nodes.reduce(0) { $0 + $1.resolvedValue },
+                momentumPoints: [],
+                latestTime: nil
+            )
+
+        case let .sankey(links, _):
+            return semantics(
+                kind: .sankey,
+                capabilities: .radial,
+                // The sum of the flows the caller supplied. Cycle breaking can
+                // only lower it, and running the layout here would repeat the
+                // graph walk on every body evaluation.
+                currentValue: links.reduce(0) { $0 + max($1.value, 0) },
+                momentumPoints: [],
+                latestTime: nil
+            )
+
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
             let points = lineData.isEmpty ? data : lineData
             let latestTick = [data.last?.time, lineData.last?.time, liveCandle?.time].compactMap { $0 }.max()
@@ -282,7 +425,9 @@ extension LivelineChartContent {
                 capabilities: .candle,
                 currentValue: lineValue ?? liveCandle?.close ?? value,
                 momentumPoints: points,
-                latestTime: latestTick ?? candles.last.map { $0.time + candleWidth }
+                latestTime: latestTick ?? candles.last.map { $0.time + candleWidth },
+                earliestTime: [data.first?.time, lineData.first?.time, candles.first?.time].compactMap { $0 }.min(),
+                sampleCount: max(points.count, candles.count)
             )
 
         case let .series(series):
@@ -319,7 +464,11 @@ extension LivelineChartContent {
                 currentValue: primary?.value ?? 0,
                 momentumPoints: windowedPrimary?.points ?? primary?.data ?? [],
                 latestTime: latestTime,
-                seriesIDs: ids
+                seriesIDs: ids,
+                // The momentum points are a window's worth of one series; the
+                // pan domain has to span every series in full.
+                earliestTime: timeSeries.compactMap { $0.data.first?.time }.min(),
+                sampleCount: primary?.data.count ?? 0
             )
         }
     }
@@ -330,7 +479,9 @@ extension LivelineChartContent {
         currentValue: Double,
         momentumPoints: [LivelinePoint],
         latestTime: TimeInterval?,
-        seriesIDs: [String] = []
+        seriesIDs: [String] = [],
+        earliestTime: TimeInterval? = nil,
+        sampleCount: Int? = nil
     ) -> LivelineChartSemantics {
         LivelineChartSemantics(
             identity: LivelineChartIdentity(kind: kind, seriesIDs: seriesIDs),
@@ -338,7 +489,12 @@ extension LivelineChartContent {
             currentValue: currentValue,
             momentum: LivelineMath.detectMomentum(points: momentumPoints),
             latestTime: latestTime,
-            seriesIDs: seriesIDs
+            seriesIDs: seriesIDs,
+            // Most kinds hand over their own points, so the time domain falls
+            // out of them. The kinds whose momentum points are derived — index
+            // based timelines, windowed multi-series — pass theirs explicitly.
+            earliestTime: earliestTime ?? momentumPoints.first?.time,
+            sampleCount: sampleCount ?? momentumPoints.count
         )
     }
 }
@@ -393,6 +549,25 @@ private extension LivelineChartCapabilities {
     static let discreteCartesian = LivelineChartCapabilities(
         usesValueAxis: true,
         usesCartesianGrid: true,
+        usesTimeAxis: true,
+        hoverBehavior: .discrete
+    )
+
+    /// Value axis with no time axis: the horizontal axis is a value range the
+    /// content draws itself.
+    static let binned = LivelineChartCapabilities(
+        usesValueAxis: true,
+        usesCartesianGrid: true,
+        usesTimeAxis: false,
+        hoverBehavior: .none,
+        reservesBottomAxisPadding: true
+    )
+
+    /// Time axis without a value axis, for stacks whose absolute values carry
+    /// no meaning.
+    static let stream = LivelineChartCapabilities(
+        usesValueAxis: false,
+        usesCartesianGrid: false,
         usesTimeAxis: true,
         hoverBehavior: .discrete
     )
@@ -645,6 +820,8 @@ enum LivelineInputNormalizer {
     }
 
     static func heatmap(_ source: [LivelineHeatmapCell]) -> [LivelineHeatmapCell] {
+        if isCellOrdered(source) { return source }
+
         let normalized = source.enumerated().compactMap { offset, cell -> (offset: Int, cell: LivelineHeatmapCell)? in
             guard let time = LivelineScalar.time(cell.time), cell.value.isFinite else { return nil }
             return (
@@ -674,12 +851,38 @@ enum LivelineInputNormalizer {
         return result
     }
 
+    /// Heatmap twin of `isTimeOrdered`: cells already climb by time then row
+    /// with no duplicate coordinate and no repair to apply.
+    private static func isCellOrdered(_ source: [LivelineHeatmapCell]) -> Bool {
+        var previous: LivelineHeatmapCell?
+        for cell in source {
+            guard let time = LivelineScalar.time(cell.time),
+                  time == cell.time,
+                  cell.value.isFinite,
+                  value(cell.value, fallback: 0) == cell.value,
+                  cell.row >= 0,
+                  cell.row <= LivelineScalar.maximumDiscreteIndex
+            else {
+                return false
+            }
+            if let previous, (cell.time, cell.row) <= (previous.time, previous.row) { return false }
+            previous = cell
+        }
+        return true
+    }
+
     static func radar(_ source: [LivelineRadarPoint]) -> [LivelineRadarPoint] {
         var seen = Set<String>()
         return source.compactMap { point in
             guard !point.label.isEmpty, point.value.isFinite, seen.insert(point.label).inserted else { return nil }
             return LivelineRadarPoint(label: point.label, value: value(point.value, fallback: 0))
         }
+    }
+
+    /// Raw samples for a histogram: only the non-finite ones are dropped, since
+    /// binning does not care about order.
+    static func samples(_ source: [Double]) -> [Double] {
+        source.allSatisfy(\.isFinite) ? source : source.filter(\.isFinite)
     }
 
     static func categories(_ source: [LivelineCategoryValue]) -> [LivelineCategoryValue] {
@@ -695,6 +898,8 @@ enum LivelineInputNormalizer {
     }
 
     static func series(_ source: [LivelineSeries]) -> [LivelineSeries] {
+        if isSeriesNormalized(source) { return source }
+
         var seen = Set<String>()
         return source.compactMap { entry in
             guard !entry.id.isEmpty, seen.insert(entry.id).inserted else { return nil }
@@ -709,10 +914,12 @@ enum LivelineInputNormalizer {
         }
     }
 
-    private static func timed<Element: LivelineTimedDatum>(
+    private static func timed<Element: LivelineTimedDatum & Equatable>(
         _ source: [Element],
         normalize: (Element) -> Element?
     ) -> [Element] {
+        if isTimeOrdered(source, normalize: normalize) { return source }
+
         let normalized = source.enumerated().compactMap { offset, element -> (offset: Int, element: Element)? in
             guard let element = normalize(element), element.time.isFinite else { return nil }
             return (offset, element)
@@ -733,5 +940,54 @@ enum LivelineInputNormalizer {
             }
         }
         return result
+    }
+
+    /// Every entry keeps a unique non-empty identifier, a finite value, and
+    /// samples that `points` would return untouched.
+    private static func isSeriesNormalized(_ source: [LivelineSeries]) -> Bool {
+        var seen = Set<String>()
+        seen.reserveCapacity(source.count)
+        for entry in source {
+            guard !entry.id.isEmpty,
+                  seen.insert(entry.id).inserted,
+                  value(entry.value, fallback: entry.data.last?.value ?? 0) == entry.value,
+                  points(entry.data).livelineSharesStorage(with: entry.data)
+            else {
+                return false
+            }
+        }
+        return true
+    }
+
+    /// Single pass over the input: every sample survives normalization
+    /// unchanged and the times already climb strictly. Realtime feeds almost
+    /// always land here, which lets the caller's buffer be reused instead of
+    /// paying for a sort and two intermediate arrays on every render.
+    private static func isTimeOrdered<Element: LivelineTimedDatum & Equatable>(
+        _ source: [Element],
+        normalize: (Element) -> Element?
+    ) -> Bool {
+        var previousTime: TimeInterval?
+        for element in source {
+            guard let normalized = normalize(element), normalized == element else { return false }
+            if let previousTime, element.time <= previousTime { return false }
+            previousTime = element.time
+        }
+        return true
+    }
+}
+
+extension Array {
+    /// Opaque address of the backing buffer. Only ever compared, never
+    /// dereferenced, so it is a cheap way to prove two arrays are the same
+    /// samples without walking them.
+    var livelineStorageIdentity: UInt {
+        withUnsafeBufferPointer { buffer in
+            buffer.baseAddress.map { UInt(bitPattern: UnsafeRawPointer($0)) } ?? 0
+        }
+    }
+
+    func livelineSharesStorage(with other: [Element]) -> Bool {
+        count == other.count && livelineStorageIdentity == other.livelineStorageIdentity
     }
 }

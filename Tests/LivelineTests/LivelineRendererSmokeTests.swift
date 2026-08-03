@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import Foundation
 import SwiftUI
 import XCTest
 @testable import Liveline
@@ -74,6 +75,42 @@ final class LivelineRendererSmokeTests: XCTestCase {
             ("donut", AnyView(LivelineChart(donut: categories, configuration: config))),
             ("gauge", AnyView(LivelineChart(gauge: 0.65, configuration: config))),
             ("funnel", AnyView(LivelineChart(funnel: categories, configuration: config))),
+            ("histogram", AnyView(LivelineChart(
+                histogram: [1, 2, 2, 3, 3, 3, 4, 4, 5, 9],
+                configuration: config
+            ))),
+            ("bullet", AnyView(LivelineChart(
+                bullet: LivelineBulletStyle(
+                    measure: 72,
+                    target: 80,
+                    ranges: [
+                        LivelineBulletRange(value: 50, label: "Poor"),
+                        LivelineBulletRange(value: 75, label: "OK"),
+                        LivelineBulletRange(value: 100, label: "Good"),
+                    ]
+                ),
+                configuration: config
+            ))),
+            ("treemap", AnyView(LivelineChart(treemap: [
+                LivelineTreemapNode(label: "Alpha", value: 6),
+                LivelineTreemapNode(label: "Beta", children: [
+                    LivelineTreemapNode(label: "Beta 1", value: 3),
+                    LivelineTreemapNode(label: "Beta 2", value: 1),
+                ]),
+                LivelineTreemapNode(label: "Gamma", value: 2),
+            ], configuration: config))),
+            ("sunburst", AnyView(LivelineChart(sunburst: [
+                LivelineSunburstNode(label: "Alpha", value: 6),
+                LivelineSunburstNode(label: "Beta", children: [
+                    LivelineSunburstNode(label: "Beta 1", value: 3),
+                    LivelineSunburstNode(label: "Beta 2", value: 1),
+                ]),
+            ], configuration: config))),
+            ("sankey", AnyView(LivelineChart(sankey: [
+                LivelineSankeyLink(source: "Visits", target: "Signups", value: 40),
+                LivelineSankeyLink(source: "Visits", target: "Bounced", value: 60),
+                LivelineSankeyLink(source: "Signups", target: "Paid", value: 12),
+            ], configuration: config))),
             ("candle", AnyView(LivelineChart(
                 data: points,
                 value: 5,
@@ -113,6 +150,39 @@ final class LivelineRendererSmokeTests: XCTestCase {
                 XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000, name)
             }
         }
+    }
+
+    /// The streamgraph baseline is opt-in: a default stacked-area chart must
+    /// keep rendering exactly the pixels it rendered before the option existed,
+    /// while `.centered` visibly moves the stack.
+    @MainActor
+    func testStackedAreaBaselineDefaultsToUnchangedZeroRendering() throws {
+        let stacked = [
+            LivelineStackedPoint(time: 1, values: [2, 1]),
+            LivelineStackedPoint(time: 2, values: [3, 2]),
+            LivelineStackedPoint(time: 3, values: [1, 4]),
+        ]
+
+        func render(_ style: LivelineStackedAreaStyle) throws -> Data {
+            let renderer = ImageRenderer(
+                content: ZStack {
+                    Color.black
+                    LivelineChart(stackedAreas: stacked, style: style, configuration: configuration)
+                }
+                .frame(width: 320, height: 220)
+            )
+            renderer.proposedSize = ProposedViewSize(width: 320, height: 220)
+            renderer.scale = 1
+            let image: NSImage = try XCTUnwrap(renderer.nsImage)
+            return try XCTUnwrap(image.tiffRepresentation)
+        }
+
+        let implicit = try render(LivelineStackedAreaStyle())
+        let explicitZero = try render(LivelineStackedAreaStyle(baseline: .zero))
+        let centered = try render(LivelineStackedAreaStyle(baseline: .centered))
+
+        XCTAssertEqual(implicit, explicitZero)
+        XCTAssertNotEqual(implicit, centered)
     }
 
     @MainActor
@@ -226,6 +296,7 @@ final class LivelineRendererSmokeTests: XCTestCase {
                         anchor: CGPoint(x: 120, y: 80)
                     ),
                     configuration: LivelineChartConfiguration(),
+                    textScale: .standard,
                     alpha: 1
                 )
             }
@@ -444,6 +515,232 @@ final class LivelineRendererSmokeTests: XCTestCase {
         XCTAssertLessThan(animatedState.candleLineDensityProgress, 1)
         XCTAssertEqual(animatedState.candleDisplayLive?.close, live.open)
         XCTAssertLessThan(animatedState.candleLiveBirthAlpha, 1)
+    }
+
+    @MainActor
+    func testRepeatFramesReuseMeasuredTextAndResolvedPalettes() throws {
+        let content = LivelineChartContent.series([
+            LivelineSeries(
+                id: "revenue",
+                data: (0..<20).map { LivelinePoint(time: Double($0), value: Double($0 % 5) + 1) },
+                value: 3,
+                color: .green,
+                label: "Revenue"
+            ),
+            LivelineSeries(
+                id: "cost",
+                data: (0..<20).map { LivelinePoint(time: Double($0), value: Double($0 % 3) + 1) },
+                value: 2,
+                color: .red,
+                label: "Cost"
+            ),
+        ])
+        let semantics = content.semantics()
+        var configuration = LivelineChartConfiguration(window: 20, badge: false, pulse: false, paused: true)
+        configuration.seriesLegendSide = .trailing
+        configuration = configuration.normalizedForRendering()
+
+        let state = LivelineRenderState()
+        let size = CGSize(width: 320, height: 200)
+        let renderer = ImageRenderer(
+            content: Canvas { context, canvasSize in
+                for step in 0..<8 {
+                    var pass = context
+                    LivelineRenderer.draw(
+                        context: &pass,
+                        state: state,
+                        input: LivelineRenderInput(
+                            content: content,
+                            semantics: semantics,
+                            accent: .blue,
+                            configuration: configuration,
+                            motion: LivelineMotionPolicy(
+                                isPaused: true,
+                                requiresTimeline: false,
+                                settlesImmediately: true,
+                                minimumInterval: 1.0 / 60.0
+                            ),
+                            activeWindow: 20,
+                            hiddenSeries: [],
+                            hoverLocation: nil,
+                            timestamp: 1_000 + Double(step) / 60,
+                            size: canvasSize
+                        )
+                    )
+                }
+            }
+            .frame(width: size.width, height: size.height)
+        )
+        renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+        _ = renderer.nsImage
+
+        // One palette per distinct accent (chart plus each series) and one
+        // legend measurement, no matter how many frames were drawn. The first
+        // frame resolves the chart accent and the gutter before `reconcile`
+        // adopts the identity and flushes the caches, so each of those is paid
+        // exactly once more.
+        XCTAssertEqual(state.paletteBuildCount, 4)
+        XCTAssertEqual(state.legendGutterMeasureCount, 2)
+        XCTAssertFalse(state.timeAxisLabels.isEmpty)
+        XCTAssertTrue(state.timeAxisLabels.values.contains { $0.measuredWidth != nil })
+    }
+
+    @MainActor
+    func testTextScaleReachesCanvasTextAndLeavesStandardSizesUntouched() throws {
+        let content = LivelineChartContent.line(
+            data: (0..<20).map { LivelinePoint(time: Double($0), value: Double($0 % 5) + 1) },
+            value: 1
+        )
+        let semantics = content.semantics()
+        let configuration = LivelineChartConfiguration(
+            window: 20,
+            badge: true,
+            pulse: false,
+            fadeEffects: false,
+            paused: true
+        )
+        .normalizedForRendering()
+
+        func render(_ textScale: LivelineTextScale) throws -> Data {
+            let state = LivelineRenderState()
+            let renderer = ImageRenderer(
+                content: Canvas { context, size in
+                    var pass = context
+                    LivelineRenderer.draw(
+                        context: &pass,
+                        state: state,
+                        input: LivelineRenderInput(
+                            content: content,
+                            semantics: semantics,
+                            accent: .blue,
+                            configuration: configuration,
+                            motion: LivelineMotionPolicy(
+                                isPaused: true,
+                                requiresTimeline: false,
+                                settlesImmediately: true,
+                                minimumInterval: 1.0 / 60.0
+                            ),
+                            activeWindow: 20,
+                            hiddenSeries: [],
+                            hoverLocation: nil,
+                            timestamp: 1_000,
+                            size: size,
+                            textScale: textScale
+                        )
+                    )
+                }
+                .frame(width: 320, height: 200)
+                .background(Color.black)
+            )
+            renderer.proposedSize = ProposedViewSize(width: 320, height: 200)
+            let image: NSImage = try XCTUnwrap(renderer.nsImage)
+            return try XCTUnwrap(image.tiffRepresentation)
+        }
+
+        let standard = try render(.standard)
+        // The default input and an explicit standard scale must be the same
+        // pixels, which is what keeps the deterministic snapshots stable.
+        XCTAssertEqual(try render(LivelineTextScale.resolve(.large)), standard)
+        XCTAssertNotEqual(try render(LivelineTextScale.resolve(.accessibility5)), standard)
+    }
+
+    @MainActor
+    func testRightToLeftMirrorsTheFrameAndLeavesLeftToRightUntouched() throws {
+        let content = LivelineChartContent.line(
+            data: (0..<20).map { LivelinePoint(time: Double($0), value: Double($0 % 5) + 1) },
+            value: 1
+        )
+        let semantics = content.semantics()
+        let configuration = LivelineChartConfiguration(
+            window: 20,
+            badge: true,
+            pulse: false,
+            fadeEffects: false,
+            paused: true
+        )
+        .normalizedForRendering()
+
+        func render(isRTL: Bool) throws -> Data {
+            let state = LivelineRenderState()
+            let renderer = ImageRenderer(
+                content: Canvas { context, size in
+                    var pass = context
+                    LivelineRenderer.draw(
+                        context: &pass,
+                        state: state,
+                        input: LivelineRenderInput(
+                            content: content,
+                            semantics: semantics,
+                            accent: .blue,
+                            configuration: configuration,
+                            motion: LivelineMotionPolicy(
+                                isPaused: true,
+                                requiresTimeline: false,
+                                settlesImmediately: true,
+                                minimumInterval: 1.0 / 60.0
+                            ),
+                            activeWindow: 20,
+                            hiddenSeries: [],
+                            hoverLocation: nil,
+                            timestamp: 1_000,
+                            size: size,
+                            isRTL: isRTL
+                        )
+                    )
+                }
+                .frame(width: 320, height: 200)
+                .background(Color.black)
+            )
+            renderer.proposedSize = ProposedViewSize(width: 320, height: 200)
+            let image: NSImage = try XCTUnwrap(renderer.nsImage)
+            return try XCTUnwrap(image.tiffRepresentation)
+        }
+
+        let leftToRight = try render(isRTL: false)
+        // The default input and an explicit left-to-right flag are the same
+        // pixels, which is what keeps the deterministic snapshots stable.
+        XCTAssertEqual(leftToRight, try renderDefaultDirection(content: content, semantics: semantics, configuration: configuration))
+        XCTAssertNotEqual(try render(isRTL: true), leftToRight)
+    }
+
+    @MainActor
+    private func renderDefaultDirection(
+        content: LivelineChartContent,
+        semantics: LivelineChartSemantics,
+        configuration: LivelineChartConfiguration
+    ) throws -> Data {
+        let state = LivelineRenderState()
+        let renderer = ImageRenderer(
+            content: Canvas { context, size in
+                var pass = context
+                LivelineRenderer.draw(
+                    context: &pass,
+                    state: state,
+                    input: LivelineRenderInput(
+                        content: content,
+                        semantics: semantics,
+                        accent: .blue,
+                        configuration: configuration,
+                        motion: LivelineMotionPolicy(
+                            isPaused: true,
+                            requiresTimeline: false,
+                            settlesImmediately: true,
+                            minimumInterval: 1.0 / 60.0
+                        ),
+                        activeWindow: 20,
+                        hiddenSeries: [],
+                        hoverLocation: nil,
+                        timestamp: 1_000,
+                        size: size
+                    )
+                )
+            }
+            .frame(width: 320, height: 200)
+            .background(Color.black)
+        )
+        renderer.proposedSize = ProposedViewSize(width: 320, height: 200)
+        let image: NSImage = try XCTUnwrap(renderer.nsImage)
+        return try XCTUnwrap(image.tiffRepresentation)
     }
 
     private var configuration: LivelineChartConfiguration {

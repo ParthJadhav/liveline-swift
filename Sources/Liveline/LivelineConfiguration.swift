@@ -19,7 +19,7 @@ public struct LivelineChartAppearance {
         lineWidth: CGFloat = 2,
         showValue: Bool = false,
         valueMomentumColor: Bool = false,
-        emptyText: String = "No data to display",
+        emptyText: String = LivelineLocalizedDefaults.emptyText,
         padding: LivelinePadding = LivelinePadding()
     ) {
         self.theme = theme
@@ -41,7 +41,7 @@ public struct LivelineChartAppearance {
         lineWidth: CGFloat = 2,
         showValue: Bool = false,
         valueMomentumColor: Bool = false,
-        emptyText: String = "No data to display",
+        emptyText: String = LivelineLocalizedDefaults.emptyText,
         padding: LivelinePadding = LivelinePadding()
     ) {
         self.theme = theme
@@ -97,15 +97,29 @@ public struct LivelineChartViewport {
     public var window: TimeInterval
     public var windows: [LivelineWindowOption]
     public var exaggerate: Bool
+    /// The tightest span a pinch may zoom to, in seconds.
+    ///
+    /// `nil` derives it from the data: three sample intervals, so there is
+    /// always a visible segment either side of whatever was zoomed into. Only
+    /// consulted when ``LivelineChartInteraction/zoomAndPan`` is on.
+    public var minimumSpan: TimeInterval?
+    /// How many times the selected window a pinch may zoom out to, before the
+    /// extent of the data caps it further. Only consulted when
+    /// ``LivelineChartInteraction/zoomAndPan`` is on.
+    public var maximumZoomOut: Double
 
     public init(
         window: TimeInterval = 30,
         windows: [LivelineWindowOption] = [],
-        exaggerate: Bool = false
+        exaggerate: Bool = false,
+        minimumSpan: TimeInterval? = nil,
+        maximumZoomOut: Double = LivelineViewportLimits.defaultMaximumZoomOut
     ) {
         self.window = window
         self.windows = windows
         self.exaggerate = exaggerate
+        self.minimumSpan = minimumSpan
+        self.maximumZoomOut = maximumZoomOut
     }
 }
 
@@ -129,6 +143,18 @@ public struct LivelineChartInteraction {
     public var seriesLegendSide: LivelineLegendSide
     public var showsModeControls: Bool
     public var showsSeriesControls: Bool
+    /// Enables pinch-to-zoom and drag-to-pan over the time axis, plus the
+    /// "Live" control that reappears once panning has left the live edge.
+    ///
+    /// Off by default: turning it on changes what a one-finger drag means.
+    /// With it on, a drag pans and scrubbing becomes long-press-then-drag; with
+    /// it off, a drag scrubs exactly as before. Cursor hover is unaffected
+    /// either way.
+    ///
+    /// Pinch zoom needs iOS 17, macOS 14, tvOS 17, watchOS 10, or visionOS 1.
+    /// Panning, the trackpad scroll on macOS, and the "Live" control work on
+    /// every supported version.
+    public var zoomAndPan: Bool
 
     // `showsTooltipOnHover` is deliberately not defaulted here. Defaulted
     // parameters are part of Swift's exported constructor signature, so giving
@@ -143,10 +169,12 @@ public struct LivelineChartInteraction {
         seriesToggleCompact: Bool = false,
         seriesLegendSide: LivelineLegendSide = .trailing,
         showsModeControls: Bool = false,
-        showsSeriesControls: Bool = true
+        showsSeriesControls: Bool = true,
+        zoomAndPan: Bool = false
     ) {
         self.scrub = scrub
         self.showsTooltipOnHover = showsTooltipOnHover
+        self.zoomAndPan = zoomAndPan
         self.windowStyle = windowStyle
         self.lineMode = lineMode
         self.seriesToggleCompact = seriesToggleCompact
@@ -175,18 +203,35 @@ public struct LivelineChartAnnotations {
     public var referenceLine: LivelineReferenceLine?
     public var activePoint: LivelineActivePoint?
 
+    /// Additional straight annotation lines, on either axis.
+    ///
+    /// These coexist with the single ``referenceLine``, which keeps its
+    /// range-widening behavior. Entries here are draw-time only and never move
+    /// the chart's automatic value range.
+    public var referenceLines: [LivelineReferenceLine]
+
+    /// Shaded value or time ranges drawn behind the marks.
+    ///
+    /// Like ``referenceLines``, bands are draw-time only and never move the
+    /// chart's automatic value range.
+    public var referenceBands: [LivelineReferenceBand]
+
     public init(
         momentum: LivelineMomentum? = nil,
         autoDetectMomentum: Bool = true,
         orderbook: LivelineOrderbookData? = nil,
         referenceLine: LivelineReferenceLine? = nil,
-        activePoint: LivelineActivePoint? = nil
+        activePoint: LivelineActivePoint? = nil,
+        referenceLines: [LivelineReferenceLine] = [],
+        referenceBands: [LivelineReferenceBand] = []
     ) {
         self.momentum = momentum
         self.autoDetectMomentum = autoDetectMomentum
         self.orderbook = orderbook
         self.referenceLine = referenceLine
         self.activePoint = activePoint
+        self.referenceLines = referenceLines
+        self.referenceBands = referenceBands
     }
 }
 
@@ -280,7 +325,7 @@ public struct LivelineChartConfiguration {
         degen: LivelineDegenOptions? = nil,
         loading: Bool = false,
         paused: Bool = false,
-        emptyText: String = "No data to display",
+        emptyText: String = LivelineLocalizedDefaults.emptyText,
         windowStyle: LivelineWindowStyle = .default,
         tooltipY: CGFloat = 14,
         tooltipOutline: Bool = true,
@@ -368,7 +413,7 @@ public struct LivelineChartConfiguration {
         degen: LivelineDegenOptions? = nil,
         loading: Bool = false,
         paused: Bool = false,
-        emptyText: String = "No data to display",
+        emptyText: String = LivelineLocalizedDefaults.emptyText,
         windowStyle: LivelineWindowStyle = .default,
         tooltipY: CGFloat = 14,
         tooltipOutline: Bool = true,
@@ -462,6 +507,14 @@ extension LivelineChartConfiguration {
     public var scrub: Bool { get { interaction.scrub } set { interaction.scrub = newValue } }
     public var showsTooltipOnHover: Bool { get { interaction.showsTooltipOnHover } set { interaction.showsTooltipOnHover = newValue } }
     public var exaggerate: Bool { get { viewport.exaggerate } set { viewport.exaggerate = newValue } }
+    /// Enables pinch-to-zoom and drag-to-pan. Set through this property or the
+    /// ``LivelineChartInteraction`` group; the frozen flat initializers do not
+    /// take it.
+    public var zoomAndPan: Bool { get { interaction.zoomAndPan } set { interaction.zoomAndPan = newValue } }
+    /// The tightest span a pinch may reach, or `nil` to derive it from the data.
+    public var minimumSpan: TimeInterval? { get { viewport.minimumSpan } set { viewport.minimumSpan = newValue } }
+    /// How many times the selected window a pinch may zoom out to.
+    public var maximumZoomOut: Double { get { viewport.maximumZoomOut } set { viewport.maximumZoomOut = newValue } }
     public var showValue: Bool { get { appearance.showValue } set { appearance.showValue = newValue } }
     public var valueMomentumColor: Bool { get { appearance.valueMomentumColor } set { appearance.valueMomentumColor = newValue } }
     public var degen: LivelineDegenOptions? { get { effects.degen } set { effects.degen = newValue } }
@@ -474,6 +527,14 @@ extension LivelineChartConfiguration {
     public var orderbook: LivelineOrderbookData? { get { annotations.orderbook } set { annotations.orderbook = newValue } }
     public var referenceLine: LivelineReferenceLine? { get { annotations.referenceLine } set { annotations.referenceLine = newValue } }
     public var activePoint: LivelineActivePoint? { get { annotations.activePoint } set { annotations.activePoint = newValue } }
+    /// Additional annotation lines. Set through this property or the
+    /// ``LivelineChartAnnotations`` group; the frozen flat initializers do not
+    /// take it.
+    public var referenceLines: [LivelineReferenceLine] { get { annotations.referenceLines } set { annotations.referenceLines = newValue } }
+    /// Shaded annotation bands. Set through this property or the
+    /// ``LivelineChartAnnotations`` group; the frozen flat initializers do not
+    /// take it.
+    public var referenceBands: [LivelineReferenceBand] { get { annotations.referenceBands } set { annotations.referenceBands = newValue } }
     public var formatValue: (Double) -> String { get { formatting.value } set { formatting.value = newValue } }
     public var formatTime: (TimeInterval) -> String { get { formatting.time } set { formatting.time = newValue } }
     public var lerpSpeed: Double { get { motion.lerpSpeed } set { motion.lerpSpeed = newValue } }
@@ -511,6 +572,12 @@ extension LivelineChartConfiguration {
     func normalizedForRendering() -> LivelineChartConfiguration {
         var configuration = self
         configuration.window = LivelineScalar.positiveDuration(configuration.window, fallback: 30)
+        configuration.minimumSpan = configuration.minimumSpan.flatMap {
+            $0.isFinite && $0 > 0 ? $0 : nil
+        }
+        configuration.maximumZoomOut = configuration.maximumZoomOut.isFinite && configuration.maximumZoomOut >= 1
+            ? configuration.maximumZoomOut
+            : LivelineViewportLimits.defaultMaximumZoomOut
 
         var seenWindows = Set<TimeInterval>()
         configuration.windows = configuration.windows.compactMap { option in
@@ -540,6 +607,38 @@ extension LivelineChartConfiguration {
             return LivelineReferenceLine(
                 value: LivelineScalar.value(referenceLine.value),
                 label: referenceLine.label
+            )
+        }
+        configuration.referenceLines = configuration.referenceLines.compactMap { line in
+            guard line.value.isFinite else { return nil }
+            let normalized: TimeInterval? = line.axis == .time
+                ? LivelineScalar.time(line.value)
+                : Optional(LivelineScalar.value(line.value))
+            guard let normalized else { return nil }
+            return LivelineReferenceLine(
+                value: normalized,
+                axis: line.axis,
+                label: line.label,
+                color: line.color,
+                dash: line.dash
+            )
+        }
+        configuration.referenceBands = configuration.referenceBands.compactMap { band in
+            guard let bounds = band.bounds else { return nil }
+            let lower: Double? = band.axis == .time
+                ? LivelineScalar.time(bounds.lowerBound)
+                : Optional(LivelineScalar.value(bounds.lowerBound))
+            let upper: Double? = band.axis == .time
+                ? LivelineScalar.time(bounds.upperBound)
+                : Optional(LivelineScalar.value(bounds.upperBound))
+            guard let lower, let upper else { return nil }
+            return LivelineReferenceBand(
+                axis: band.axis,
+                start: lower,
+                end: upper,
+                label: band.label,
+                color: band.color,
+                opacity: band.opacity.livelineClamped(0, 1, fallback: 0.12)
             )
         }
         configuration.activePoint = configuration.activePoint.flatMap { point in

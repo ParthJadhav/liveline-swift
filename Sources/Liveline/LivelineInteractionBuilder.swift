@@ -47,81 +47,82 @@ enum LivelineInteractionBuilder {
         case .line:
             return interactionSlice(prepared.primaryVisible, nearestTo: targetLocation, layout: layout).map {
                 xTarget(point: $0, anchorValue: $0.value, heading: time($0.time), rows: [
-                    row("Value", value($0.value), palette.line),
+                    row(LivelineStrings.labelValue, value($0.value), palette.line),
                 ], layout: layout)
             }
 
         case let .bars(data, style):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 let color = $0.value >= style.resolvedBaseline ? (style.positiveColor ?? palette.line) : style.negativeColor
                 return xTarget(point: $0, anchorValue: $0.value, heading: time($0.time), rows: [
-                    row("Value", value($0.value), color),
+                    row(LivelineStrings.labelValue, value($0.value), color),
                 ], layout: layout)
             }
 
         case let .range(data, _):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 xTarget(
                     point: LivelinePoint(time: $0.time, value: $0.midpoint),
                     anchorValue: $0.upper,
                     heading: time($0.time),
                     rows: [
-                        row("Lower", value($0.lower), palette.line.opacity(0.65)),
-                        row("Upper", value($0.upper), palette.line),
+                        row(LivelineStrings.labelLower, value($0.lower), palette.line.opacity(0.65)),
+                        row(LivelineStrings.labelUpper, value($0.upper), palette.line),
                     ],
                     layout: layout
                 )
             }
 
         case let .scatter(data, _, _), let .steps(data, _, _):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 xTarget(point: $0, anchorValue: $0.value, heading: time($0.time), rows: [
-                    row("Value", value($0.value), palette.line),
+                    row(LivelineStrings.labelValue, value($0.value), palette.line),
                 ], layout: layout)
             }
 
         case let .lollipops(data, style):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 let color = $0.value >= style.resolvedBaseline ? (style.positiveColor ?? palette.line) : style.negativeColor
                 return xTarget(point: $0, anchorValue: $0.value, heading: time($0.time), rows: [
-                    row("Value", value($0.value), color),
+                    row(LivelineStrings.labelValue, value($0.value), color),
                 ], layout: layout)
             }
 
         case let .bubbles(data, _):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 xTarget(
                     point: LivelinePoint(time: $0.time, value: $0.value),
                     anchorValue: $0.value,
                     heading: time($0.time),
                     rows: [
-                        row("Value", value($0.value), palette.line),
-                        row("Magnitude", value($0.magnitude), palette.line.opacity(0.65)),
+                        row(LivelineStrings.labelValue, value($0.value), palette.line),
+                        row(LivelineStrings.labelMagnitude, value($0.magnitude), palette.line.opacity(0.65)),
                     ],
                     layout: layout
                 )
             }
 
         case let .boxPlots(data, _):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 xTarget(
                     point: LivelinePoint(time: $0.time, value: $0.median),
                     anchorValue: $0.maximum,
                     heading: time($0.time),
                     rows: [
-                        row("Maximum", value($0.maximum), palette.line),
-                        row("Q3", value($0.upperQuartile), palette.line.opacity(0.82)),
-                        row("Median", value($0.median), palette.line),
-                        row("Q1", value($0.lowerQuartile), palette.line.opacity(0.82)),
-                        row("Minimum", value($0.minimum), palette.line.opacity(0.65)),
+                        row(LivelineStrings.labelMaximum, value($0.maximum), palette.line),
+                        row(LivelineStrings.labelUpperQuartile, value($0.upperQuartile), palette.line.opacity(0.82)),
+                        row(LivelineStrings.labelMedian, value($0.median), palette.line),
+                        row(LivelineStrings.labelLowerQuartile, value($0.lowerQuartile), palette.line.opacity(0.82)),
+                        row(LivelineStrings.labelMinimum, value($0.minimum), palette.line.opacity(0.65)),
                     ],
                     layout: layout
                 )
             }
 
         case let .waterfall(data, style):
-            return LivelineMath.waterfallSegments(points: data, initialValue: style.resolvedInitialValue)
+            let segments = LivelineMath.waterfallSegments(points: data, initialValue: style.resolvedInitialValue)
                 .livelineVisible(in: visibleRange)
+            return interactionSlice(segments, nearestTo: targetLocation, layout: layout)
                 .map { segment in
                     let color = segment.delta >= 0 ? (style.positiveColor ?? palette.line) : style.negativeColor
                     return xTarget(
@@ -129,48 +130,48 @@ enum LivelineInteractionBuilder {
                         anchorValue: max(segment.start, segment.end),
                         heading: time(segment.time),
                         rows: [
-                            row("Start", value(segment.start), palette.gridLabel),
-                            row("Change", value(segment.delta), color),
-                            row("End", value(segment.end), color),
+                            row(LivelineStrings.labelStart, value(segment.start), palette.gridLabel),
+                            row(LivelineStrings.labelChange, value(segment.delta), color),
+                            row(LivelineStrings.labelEnd, value(segment.end), color),
                         ],
                         layout: layout
                     )
                 }
 
         case let .errorBars(data, _):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 xTarget(
                     point: LivelinePoint(time: $0.time, value: $0.value),
                     anchorValue: $0.upper,
                     heading: time($0.time),
                     rows: [
-                        row("Upper", value($0.upper), palette.line.opacity(0.72)),
-                        row("Value", value($0.value), palette.line),
-                        row("Lower", value($0.lower), palette.line.opacity(0.72)),
+                        row(LivelineStrings.labelUpper, value($0.upper), palette.line.opacity(0.72)),
+                        row(LivelineStrings.labelValue, value($0.value), palette.line),
+                        row(LivelineStrings.labelLower, value($0.lower), palette.line.opacity(0.72)),
                     ],
                     layout: layout
                 )
             }
 
         case let .dumbbells(data, style):
-            return data.livelineVisible(in: visibleRange).map {
+            return interactionSlice(data.livelineVisible(in: visibleRange), nearestTo: targetLocation, layout: layout).map {
                 xTarget(
                     point: LivelinePoint(time: $0.time, value: $0.end),
                     anchorValue: max($0.start, $0.end),
                     heading: time($0.time),
                     rows: [
-                        row("Start", value($0.start), style.startColor ?? palette.gridLabel),
-                        row("End", value($0.end), style.endColor ?? palette.line),
+                        row(LivelineStrings.labelStart, value($0.start), style.startColor ?? palette.gridLabel),
+                        row(LivelineStrings.labelEnd, value($0.end), style.endColor ?? palette.line),
                     ],
                     layout: layout
                 )
             }
 
         case let .stackedBars(data, style):
-            return stackedTargets(data: data, mode: style.mode, colors: style.colors, layout: layout, palette: palette, value: value, time: time)
+            return stackedTargets(data: data, mode: style.mode, colors: style.colors, layout: layout, palette: palette, targetLocation: targetLocation, value: value, time: time)
 
         case let .stackedAreas(data, style):
-            return stackedTargets(data: data, mode: style.mode, colors: style.colors, layout: layout, palette: palette, value: value, time: time)
+            return stackedTargets(data: data, mode: style.mode, baseline: style.baseline, colors: style.colors, layout: layout, palette: palette, targetLocation: targetLocation, value: value, time: time)
 
         case let .timeline(items, style):
             let visible = items.filter { $0.end >= layout.leftEdge - 2 && $0.start <= layout.rightEdge }
@@ -182,16 +183,16 @@ enum LivelineInteractionBuilder {
                 palette: palette,
                 reveal: 1
             )
-            return geometry.marks.map { mark in
+            return interactionMarks(geometry.marks, nearestTo: targetLocation, rect: \.rect).map { mark in
                 return target(
                     time: mark.item.start,
                     value: mark.item.end - mark.item.start,
                     anchor: CGPoint(x: mark.rect.midX, y: mark.rect.minY),
                     heading: mark.item.label,
                     rows: [
-                        row("Start", time(mark.item.start), mark.color.opacity(0.7)),
-                        row("End", time(mark.item.end), mark.color),
-                        row("Duration", value(mark.item.end - mark.item.start), mark.color),
+                        row(LivelineStrings.labelStart, time(mark.item.start), mark.color.opacity(0.7)),
+                        row(LivelineStrings.labelEnd, time(mark.item.end), mark.color),
+                        row(LivelineStrings.labelDuration, value(mark.item.end - mark.item.start), mark.color),
                     ],
                     region: .rect(mark.rect)
                 )
@@ -207,10 +208,10 @@ enum LivelineInteractionBuilder {
                 palette: palette,
                 reveal: 1
             )
-            return geometry.marks.map { mark in
+            return interactionMarks(geometry.marks, nearestTo: targetLocation, rect: \.rect).map { mark in
                 let label = style.rowLabels.indices.contains(mark.cell.row)
                     ? style.rowLabels[mark.cell.row]
-                    : "Row \(mark.cell.row + 1)"
+                    : String(format: LivelineStrings.labelRowFormat, mark.cell.row + 1)
                 return target(
                     time: mark.cell.time,
                     value: mark.cell.value,
@@ -231,7 +232,7 @@ enum LivelineInteractionBuilder {
                     value: point.value,
                     anchor: geometry.valuePoints[index],
                     heading: point.label,
-                    rows: [row("Value", value(point.value), palette.line)],
+                    rows: [row(LivelineStrings.labelValue, value(point.value), palette.line)],
                     region: .sector(
                         center: geometry.center,
                         innerRadius: 0,
@@ -262,9 +263,9 @@ enum LivelineInteractionBuilder {
                     ),
                     heading: segment.entry.label,
                     rows: [
-                        row("Value", value(segment.entry.value), segment.color),
+                        row(LivelineStrings.labelValue, value(segment.entry.value), segment.color),
                         row(
-                            "Share",
+                            LivelineStrings.labelShare,
                             (segment.entry.value / geometry.total * 100).formatted(.number.precision(.fractionLength(1))) + "%",
                             segment.color
                         ),
@@ -288,15 +289,15 @@ enum LivelineInteractionBuilder {
                 reveal: 1
             )
             let angle = (geometry.startDegrees + style.resolvedSweepDegrees * geometry.valueProgress) * Double.pi / 180
-            var rows = [row("Value", value(gaugeValue), style.progressColor ?? palette.line)]
+            var rows = [row(LivelineStrings.labelValue, value(gaugeValue), style.progressColor ?? palette.line)]
             if let targetValue = style.resolvedTarget {
-                rows.append(row("Target", value(targetValue), style.targetColor ?? palette.tooltipText))
+                rows.append(row(LivelineStrings.labelTarget, value(targetValue), style.targetColor ?? palette.tooltipText))
             }
             return [target(
                 time: 0,
                 value: gaugeValue,
                 anchor: LivelineMath.polarPoint(center: geometry.gauge.center, radius: geometry.gauge.radius, angle: angle),
-                heading: "Gauge",
+                heading: LivelineStrings.labelGauge,
                 rows: rows,
                 region: .rect(geometry.plotRect)
             )]
@@ -315,10 +316,178 @@ enum LivelineInteractionBuilder {
                     value: stage.entry.value,
                     anchor: CGPoint(x: stage.rect.midX, y: stage.rect.minY),
                     heading: stage.entry.label,
-                    rows: [row("Value", value(stage.entry.value), stage.color)],
+                    rows: [row(LivelineStrings.labelValue, value(stage.entry.value), stage.color)],
                     region: .rect(stage.rect)
                 )
             }
+
+        case let .histogram(values, style):
+            let bins = LivelineMath.histogramBins(values: values, binning: style.binning)
+            let geometry = LivelineRenderer.histogramGeometry(
+                bins: bins,
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: 1
+            )
+            return interactionMarks(geometry.bars, nearestTo: targetLocation, rect: \.rect).map { bar in
+                target(
+                    time: bar.bin.midpoint,
+                    value: Double(bar.bin.count),
+                    anchor: CGPoint(x: bar.rect.midX, y: bar.rect.minY),
+                    heading: String(
+                        format: LivelineStrings.labelBinRangeFormat,
+                        value(bar.bin.lowerBound),
+                        value(bar.bin.upperBound)
+                    ),
+                    rows: [
+                        row(
+                            LivelineStrings.labelCount,
+                            String(format: LivelineStrings.labelSampleCountFormat, bar.bin.count),
+                            geometry.color
+                        ),
+                    ],
+                    region: .rect(bar.rect)
+                )
+            }
+
+        case let .bullet(style):
+            let geometry = LivelineRenderer.bulletGeometry(
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: 1
+            )
+            var rows = [row(LivelineStrings.labelMeasure, value(style.resolvedMeasure), style.measureColor ?? palette.line)]
+            if let targetValue = style.resolvedTarget {
+                rows.append(row(LivelineStrings.labelTarget, value(targetValue), style.targetColor ?? palette.tooltipText))
+            }
+            for (index, band) in geometry.bands.enumerated() {
+                rows.append(row(
+                    band.range.label ?? String(format: LivelineStrings.labelBandFormat, index + 1),
+                    value(band.range.value),
+                    band.color
+                ))
+            }
+            return [target(
+                time: 0,
+                value: style.resolvedMeasure,
+                anchor: CGPoint(x: geometry.measureRect.maxX, y: geometry.trackRect.minY),
+                heading: style.label ?? LivelineStrings.labelBullet,
+                rows: rows,
+                region: .rect(geometry.plotRect)
+            )]
+
+        case let .treemap(nodes, style):
+            let plotRect = CGRect(
+                x: layout.plotLeftX,
+                y: layout.padding.top,
+                width: layout.chartWidth,
+                height: layout.chartHeight
+            )
+            let geometry = LivelineRenderer.treemapGeometry(
+                nodes: nodes,
+                tiling: LivelineMath.treemapLayout(
+                    nodes: nodes,
+                    in: plotRect,
+                    padding: style.resolvedPadding,
+                    groupPadding: style.resolvedGroupPadding,
+                    groupHeaderHeight: style.resolvedGroupHeaderHeight
+                ),
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: 1
+            )
+            return interactionMarks(geometry.cells, nearestTo: targetLocation, rect: \.rect)
+                .enumerated()
+                .map { index, cell in
+                    target(
+                        time: Double(index),
+                        value: cell.value,
+                        anchor: CGPoint(x: cell.rect.midX, y: cell.rect.minY),
+                        heading: cell.node.label,
+                        rows: [
+                            row(LivelineStrings.labelValue, value(cell.value), cell.color),
+                            row(LivelineStrings.labelShare, percentage(cell.share * 100), cell.color),
+                        ],
+                        region: .rect(cell.rect)
+                    )
+                }
+
+        case let .sunburst(nodes, style):
+            let geometry = LivelineRenderer.sunburstGeometry(
+                nodes: nodes,
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: 1
+            )
+            guard geometry.total > 0 else { return [] }
+            return geometry.segments.enumerated().map { index, segment in
+                target(
+                    time: Double(index),
+                    value: segment.value,
+                    anchor: LivelineMath.polarPoint(
+                        center: geometry.center,
+                        radius: segment.pathRadius,
+                        angle: segment.span.middle * Double.pi / 180
+                    ),
+                    heading: segment.label,
+                    rows: [
+                        row(LivelineStrings.labelValue, value(segment.value), segment.color),
+                        row(LivelineStrings.labelShare, percentage(segment.share * 100), segment.color),
+                    ],
+                    region: .sector(
+                        center: geometry.center,
+                        innerRadius: segment.innerRadius,
+                        outerRadius: segment.outerRadius,
+                        startAngle: segment.span.fullStart * Double.pi / 180,
+                        endAngle: segment.span.fullEnd * Double.pi / 180
+                    )
+                )
+            }
+
+        case let .sankey(links, style):
+            let geometry = LivelineRenderer.sankeyGeometry(
+                links: links,
+                graph: LivelineMath.sankeyGraph(links: links),
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: 1
+            )
+            // A link's ribbon is a curve; its bounding box is the closest a
+            // rect region can get, and node bars take precedence because they
+            // sit on top of every ribbon that touches them.
+            let linkTargets = geometry.links.enumerated().map { index, link in
+                target(
+                    time: Double(index),
+                    value: link.link.value,
+                    anchor: link.anchor,
+                    heading: String(
+                        format: LivelineStrings.labelFlowRouteFormat,
+                        link.sourceLabel,
+                        link.targetLabel
+                    ),
+                    rows: [row(LivelineStrings.labelFlow, value(link.link.value), link.color)],
+                    region: .rect(link.path.boundingRect)
+                )
+            }
+            let nodeTargets = geometry.nodes.map { mark in
+                target(
+                    time: Double(mark.index),
+                    value: mark.node.throughput,
+                    anchor: CGPoint(x: mark.rect.midX, y: mark.rect.minY),
+                    heading: mark.node.label,
+                    rows: [
+                        row(LivelineStrings.labelInbound, value(mark.node.inflow), mark.color),
+                        row(LivelineStrings.labelOutbound, value(mark.node.outflow), mark.color),
+                    ],
+                    region: .rect(mark.rect)
+                )
+            }
+            return linkTargets + nodeTargets
 
         case let .candle(_, _, candles, candleWidth, liveCandle, lineData, _):
             // Once candles have morphed into line mode, the visible geometry is
@@ -332,7 +501,7 @@ enum LivelineInteractionBuilder {
                         point: point,
                         anchorValue: point.value,
                         heading: time(point.time),
-                        rows: [row("Value", value(point.value), palette.line)],
+                        rows: [row(LivelineStrings.labelValue, value(point.value), palette.line)],
                         layout: layout
                     )
                 }
@@ -354,10 +523,10 @@ enum LivelineInteractionBuilder {
                     anchorValue: candle.high,
                     heading: time(candle.time),
                     rows: [
-                        row("Open", value(candle.open), color.opacity(0.72)),
-                        row("High", value(candle.high), color),
-                        row("Low", value(candle.low), color.opacity(0.72)),
-                        row("Close", value(candle.close), color),
+                        row(LivelineStrings.labelOpen, value(candle.open), color.opacity(0.72)),
+                        row(LivelineStrings.labelHigh, value(candle.high), color),
+                        row(LivelineStrings.labelLow, value(candle.low), color.opacity(0.72)),
+                        row(LivelineStrings.labelClose, value(candle.close), color),
                     ],
                     layout: layout
                 )
@@ -424,17 +593,33 @@ enum LivelineInteractionBuilder {
         return [targetTime - before.time <= after.time - targetTime ? before : after]
     }
 
+    /// Rect-region kinds cannot be narrowed by time, but the resolver only ever
+    /// selects a mark whose slack-expanded rect contains the pointer. Everything
+    /// outside that box would have its rows formatted and then discarded.
+    private static func interactionMarks<Element>(
+        _ marks: [Element],
+        nearestTo location: CGPoint?,
+        rect: (Element) -> CGRect
+    ) -> [Element] {
+        guard let location else { return marks }
+        let slack = LivelineInteractionRegion.rectHitSlack
+        return marks.filter { rect($0).insetBy(dx: -slack, dy: -slack).contains(location) }
+    }
+
     private static func stackedTargets(
         data: [LivelineStackedPoint],
         mode: LivelineStackMode,
+        baseline: LivelineStackBaseline = .zero,
         colors: [Color],
         layout: LivelineLayout,
         palette: LivelinePalette,
+        targetLocation: CGPoint?,
         value: (Double) -> String,
         time: (TimeInterval) -> String
     ) -> [LivelineInteractionTarget] {
-        data.livelineVisible(in: (layout.leftEdge - 2)...layout.rightEdge).map { point in
-            let segments = LivelineMath.stackedSegments(values: point.values, mode: mode)
+        let visible = data.livelineVisible(in: (layout.leftEdge - 2)...layout.rightEdge)
+        return interactionSlice(visible, nearestTo: targetLocation, layout: layout).map { point in
+            let segments = LivelineMath.stackedSegments(values: point.values, mode: mode, baseline: baseline)
             let signedValues = zip(point.values, segments).map { rawValue, segment in
                 rawValue < 0
                     ? segment.lower - segment.upper
@@ -442,15 +627,18 @@ enum LivelineInteractionBuilder {
             }
             var rows = signedValues.enumerated().map { index, signedValue in
                 row(
-                    "Series \(index + 1)",
+                    String(format: LivelineStrings.labelSeriesFormat, index + 1),
                     value(signedValue),
                     LivelineRenderer.extendedSeriesColor(index: index, colors: colors, palette: palette)
                 )
             }
             let total = signedValues.reduce(0, +)
-            rows.append(row("Total", value(total), palette.tooltipText))
+            rows.append(row(LivelineStrings.labelTotal, value(total), palette.tooltipText))
             return xTarget(
-                point: LivelinePoint(time: point.time, value: total),
+                point: LivelinePoint(
+                    time: point.time,
+                    value: baseline == .centered ? (segments.map(\.upper).max() ?? total) : total
+                ),
                 anchorValue: segments.map(\.upper).max() ?? total,
                 heading: time(point.time),
                 rows: rows,
@@ -504,6 +692,12 @@ enum LivelineInteractionBuilder {
             ),
             region: region
         )
+    }
+
+    /// A share of a whole, to one decimal place — the same phrasing the donut
+    /// chart's tooltip uses.
+    private static func percentage(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(1))) + "%"
     }
 
     private static func row(_ label: String, _ value: String, _ color: Color) -> LivelineTooltipRow {

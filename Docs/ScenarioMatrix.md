@@ -50,6 +50,7 @@ The machine-readable manifest at `Examples/LivelineDemo/Resources/storybook-scen
 | `line-show-value-windows` | Line | Live value display and window controls. |
 | `line-rounded-windows` | Line | Rounded window controls. |
 | `line-text-windows` | Line | Text-only window controls. |
+| `line-zoom-pan` | Line | Pinch zoom, drag pan, long-press scrub, and the Live re-engage control. |
 | `line-reference` | Line | Reference line and label. |
 | `line-orderbook` | Line | Orderbook stream labels with static pulse suppressed for diff stability. |
 | `line-degen` | Line | Particle/shake mode. |
@@ -103,6 +104,12 @@ The machine-readable manifest at `Examples/LivelineDemo/Resources/storybook-scen
 | `gauge-target` | Gauge | Half-circle SLA gauge with target marker. |
 | `funnel-basic` | Funnel | Labeled conversion stages with values. |
 | `funnel-compact` | Funnel | Tight square stages with labels only. |
+| `stacked-area-stream` | Stacked area | Centered baseline streamgraph without a value axis. |
+| `histogram-basic` | Histogram | Automatically binned sample frequencies. |
+| `bullet-basic` | Bullet | Measure against a target across qualitative bands. |
+| `treemap-basic` | Treemap | Squarified spend hierarchy with one nested group. |
+| `sunburst-basic` | Sunburst | Two-ring acquisition breakdown with labelled arcs. |
+| `sankey-basic` | Sankey | Three-column funnel flow with proportional ribbons. |
 <!-- END GENERATED SCENARIO TABLE -->
 
 ## Parity Notes

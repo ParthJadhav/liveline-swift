@@ -1,5 +1,22 @@
 # API Overview
 
+## Platform requirements
+
+The package floor is iOS 15, macOS 12, tvOS 16, watchOS 8, and visionOS 1 — the
+releases that introduced `Canvas`, `TimelineView`, and `GraphicsContext`, which
+is the entire rendering surface. tvOS is a release higher because
+`onTapGesture`, how the Siri Remote enters and leaves inspection, is tvOS 16.
+
+Four features need a newer OS and are gated so the rest of the library keeps
+working without them:
+
+| Feature | Needs | Below that |
+| --- | --- | --- |
+| `LivelineChartImageExporter`, `exportedImage`, `exportedPNGData` | iOS 16, macOS 13, watchOS 9 | Unavailable (`@available`-gated) |
+| Wrapping horizontal `LivelineLegend` | iOS 16, macOS 13, watchOS 9 | Renders as a single non-wrapping row |
+| Pointer hover inspection | iOS 16, macOS 13 | No hover; scrubbing is unaffected |
+| Pinch to zoom | iOS 17, macOS 14, visionOS 1 | No pinch; drag to pan is unaffected |
+
 ## `LivelineChart`
 
 `LivelineChart` is the only view most apps need. It fills its parent, so give it a height.
@@ -33,6 +50,11 @@ LivelineChart(radar:color:style:configuration:)
 LivelineChart(donut:color:style:configuration:)
 LivelineChart(gauge:range:color:style:configuration:)
 LivelineChart(funnel:color:style:configuration:)
+LivelineChart(histogram:color:style:configuration:)
+LivelineChart(bullet:color:configuration:)
+LivelineChart(treemap:color:style:configuration:)
+LivelineChart(sunburst:color:style:configuration:)
+LivelineChart(sankey:color:style:configuration:)
 ```
 
 ## Data Types
@@ -96,9 +118,14 @@ LivelineTimelineItem(id: "build", label: "Build", start: start, end: end, lane: 
 LivelineHeatmapCell(time: unixSeconds, row: 2, value: 0.84)
 LivelineRadarPoint(label: "Speed", value: 84)
 LivelineCategoryValue(id: "pro", label: "Pro", value: 42)
+LivelineTreemapNode(label: "Storage", children: [LivelineTreemapNode(label: "Hot", value: 180)])
+LivelineSunburstNode(label: "Search", children: [LivelineSunburstNode(label: "Paid", value: 90)])
+LivelineSankeyLink(source: "Visits", target: "Signups", value: 420)
 ```
 
 Error bounds, reversed timeline intervals, negative lanes, non-finite stacked values, heatmap rows, and negative categorical values are normalized at initialization.
+
+`LivelineTreemapNode` and `LivelineSunburstNode` accept either a flat list of leaves or one level of nesting; a node with children takes its weight from their sum. `LivelineSankeyLink` derives its nodes from the endpoint labels — layering is a single longest-path pass with no crossing minimization, and a link that closes a cycle is dropped.
 
 ## Chart Styles
 
@@ -312,7 +339,7 @@ Important options:
 
 | Option | Default | Notes |
 | --- | --- | --- |
-| `theme` | `.dark` | Controls grid, label, tooltip, and badge colors. |
+| `theme` | `.dark` | Controls grid, label, tooltip, and badge colors. Use `.automatic` to follow the system `colorScheme`. |
 | `style` | `.standard` | Applies `.dither(LivelineDitherStyle)` universally to line, cartesian, radial, categorical, and financial chart marks. |
 | `window` | `30` | Visible time span in seconds. |
 | `windows` | `[]` | Adds built-in time horizon buttons. |
@@ -332,7 +359,9 @@ Important options:
 | `loading` | `false` | Shows the breathing loading line. |
 | `paused` | `false` | Freezes animation progress visually. |
 | `orderbook` | `nil` | Draws streaming bid/ask size labels behind the line. |
-| `referenceLine` | `nil` | Keeps a horizontal reference value visible. |
+| `referenceLine` | `nil` | Keeps a horizontal reference value visible, and widens the automatic value range to include it. |
+| `referenceLines` | `[]` | Additional annotation lines on either axis. Draw-time only: they never widen the value range. |
+| `referenceBands` | `[]` | Shaded value or time ranges drawn behind the marks. Draw-time only. |
 | `activePoint` | `nil` | Draws a pulsing dot at an arbitrary active time/value. If `value` is nil, Liveline interpolates the value from the visible data. |
 | `seriesLegendSide` | `.trailing` | Places multi-series endpoint labels to the trailing or leading side of their points. |
 | `lineMode` | `false` | Renders candle input as a line. |
@@ -375,3 +404,229 @@ LivelineChartConfiguration(
 Callbacks are optional event sinks and never act as feature flags. Built-in
 controls are governed explicitly by `showsModeControls`,
 `showsSeriesControls`, and the available chart data.
+
+## Annotations
+
+`referenceLines` and `referenceBands` sit in `LivelineChartAnnotations`, beside
+the original single `referenceLine`. Both accept the value axis (horizontal) and
+the time axis (vertical):
+
+```swift
+var configuration = LivelineChartConfiguration(theme: .dark, window: 60)
+configuration.referenceLines = [
+    LivelineReferenceLine(value: 42, label: "Open"),
+    LivelineReferenceLine(
+        value: marketOpen.timeIntervalSince1970,
+        axis: .time,
+        label: "Bell",
+        color: .orange,
+        dash: .dotted
+    )
+]
+configuration.referenceBands = [
+    LivelineReferenceBand(start: 40, end: 44, label: "Target", opacity: 0.10),
+    LivelineReferenceBand(axis: .time, start: lunchStart, end: lunchEnd)
+]
+```
+
+Bands are drawn after the grid and before the marks, so they read as a backdrop;
+lines are drawn with the same layering as the single `referenceLine`. Inverted
+band bounds are normalized and a band whose bounds are equal collapses to a
+hairline. Unlike `referenceLine`, neither array widens a chart's automatic value
+range — an annotation outside the visible range is simply not drawn.
+
+## Standalone legend
+
+`LivelineLegend` is an ordinary SwiftUI view, so it scales with Dynamic Type and
+exposes one accessibility element per row. Build it from the same content a
+chart takes, or from explicit items:
+
+```swift
+VStack(alignment: .leading) {
+    LivelineChart(series: series).frame(height: 240)
+    LivelineLegend(series: series, axis: .horizontal, swatch: .line)
+}
+
+LivelineLegend(items: [
+    LivelineLegendItem(label: "Cash", color: .mint),
+    LivelineLegendItem(label: "Credit", color: .pink)
+], axis: .vertical)
+```
+
+A horizontal legend wraps onto further rows when its width runs out, which keeps
+a wide key readable at accessibility type sizes. Wrapping uses SwiftUI's `Layout`
+protocol (iOS 16, macOS 13, watchOS 9); below that the horizontal legend renders
+as one non-wrapping row instead.
+
+`LivelineLegendItem.items(donut:style:accent:)`,
+`items(funnel:style:accent:)`, and `items(stacked:colors:accent:)` derive rows
+that match the colors those renderers resolve.
+
+## Right-to-left layouts
+
+The chart reads `\.layoutDirection` from the environment and mirrors the plot
+itself, so it matches the chrome around it in Arabic, Hebrew, and any other RTL
+locale — no per-call configuration:
+
+```swift
+LivelineChart(data: points, value: points.last?.value ?? 0)
+    .environment(\.layoutDirection, .rightToLeft) // usually inherited
+```
+
+What mirrors:
+
+- **Time runs right to left.** The newest sample hugs the left edge — the
+  reading start — and history trails off to the right, where the fade sits.
+- **Everything anchored to the live edge follows it**: the value-axis gutter and
+  its labels, the live badge and its tail, momentum arrows, the series legend
+  gutter (`seriesLegendSide` is a *logical* side), the orderbook ticker, and the
+  tooltip, which opens toward the reading direction first.
+- **Canvas text stays upright.** Mirroring is an explicit coordinate reflection,
+  not a flipped graphics context, so glyphs are never reversed; labels simply
+  switch to the mirrored anchor.
+- **Hit testing mirrors with it.** Pointer, scrub, and tvOS remote coordinates
+  convert through the same transform, so hovering still selects the sample under
+  the finger, and a leftward remote swipe steps toward newer data.
+- **Value-ordered kinds mirror too** — the histogram's value axis and the bullet
+  chart's measure both grow toward the reading direction.
+- **Radial kinds are unchanged**: donut, gauge, radar, and the funnel read the
+  same in either direction, as does the vertical value axis everywhere.
+
+A left-to-right chart renders exactly as it did before, pixel for pixel.
+
+## Zoom and pan
+
+Off by default. Turning it on layers a *viewport* — a visible span and where it
+sits in absolute time — over the window selection:
+
+```swift
+LivelineChart(
+    data: points,
+    value: latest,
+    configuration: LivelineChartConfiguration(
+        appearance: LivelineChartAppearance(theme: .dark),
+        viewport: LivelineChartViewport(
+            window: 60,
+            windows: [
+                LivelineWindowOption(label: "1m", seconds: 60),
+                LivelineWindowOption(label: "5m", seconds: 300)
+            ],
+            minimumSpan: nil,   // nil derives it from the sample rate
+            maximumZoomOut: 8   // at most eight windows, and never past the data
+        ),
+        interaction: LivelineChartInteraction(
+            scrub: true,
+            showsTooltipOnHover: true,
+            zoomAndPan: true
+        )
+    )
+)
+```
+
+`configuration.zoomAndPan` is also available as a flat property.
+
+### Gestures
+
+With `zoomAndPan` on, the chart adopts the standard system division of labour:
+
+| Input | Action |
+| --- | --- |
+| Pinch | Zoom, pivoting on the moment under the gesture centroid |
+| One-finger drag | Pan along the time axis |
+| Long press, then drag | Scrub |
+| Trackpad or wheel scroll (macOS) | Pan; Shift redirects a wheel's vertical axis |
+| Cursor hover | Unchanged — the tooltip still follows the pointer |
+
+The scrub and the pan are exclusive: the long press has to survive its delay
+without moving, and any earlier movement hands the drag to the pan. With
+`zoomAndPan` off — the default — a plain drag scrubs exactly as it always did,
+and none of this code runs.
+
+Pinch needs iOS 17, macOS 14, or visionOS 1: it is the only version of the
+gesture that reports where it started, and an anchorless zoom that jumps the
+plot out from under the fingers is worse than no zoom. Panning, scrolling, and
+the "Live" control work on every supported version. tvOS and watchOS keep their
+existing interaction models.
+
+### Following live
+
+A chart follows live until it is panned away from the newest data. Panning back
+to within two percent of the visible span re-engages following, and while it is
+disengaged a small **Live** chip appears in the control row — the same chrome as
+the window picker — that returns to the newest data and eases the plot back.
+
+Zooming never disengages on its own: while following, a pinch pivots on the live
+edge whatever the centroid says. Picking a window from the picker clears the
+zoom and returns to live.
+
+The pan direction respects the reading direction: dragging toward the live edge
+always shows newer data, whichever side that edge is on.
+
+### Limits
+
+- **Zooming in** stops at `minimumSpan`, or at three sample intervals when that
+  is `nil`, so there is always a visible segment either side of what was zoomed
+  into.
+- **Zooming out** stops at `maximumZoomOut` times the selected window, capped
+  again by how much data actually exists.
+- **Panning** is clamped to the data domain: the oldest sample on one end, the
+  live edge on the other. A viewport wider than the data has nowhere to pan and
+  stays pinned to the live edge.
+
+The viewport feeds the renderer the same visible edges it has always drawn from,
+so decimation, hover narrowing, the time-axis labels, and the prepared-chart
+cache all adapt to the zoom with no extra work.
+
+`LivelineViewport` and `LivelineViewportLimits` are public, so the same clamping
+and follow-live rules can be exercised directly.
+
+## Streaming data
+
+`LivelineDataStream` is a `@MainActor` `ObservableObject` holding a bounded,
+time-ordered buffer for live feeds:
+
+```swift
+@StateObject private var stream = LivelineDataStream(capacity: 600, retention: 300)
+
+var body: some View {
+    LivelineChart(data: stream.points, value: stream.points.last?.value ?? 0)
+        .task { try? await stream.consume(ticks) }
+}
+```
+
+`append(_:)`, `append(contentsOf:)`, `replace(_:)`, and `removeAll()` keep the
+buffer sorted; appending a sample newer than the last is a plain array append,
+and only an out-of-order sample pays for an insert. Because every published
+array holds finite, strictly increasing times, it satisfies the renderer's
+sorted-input fast path, so preparation reuses the buffer instead of sorting a
+copy each frame.
+
+## Image export
+
+`LivelineChartImageExporter` renders a chart to a platform image or PNG data on
+the main actor. It is built on `ImageRenderer`, so the type and both
+`LivelineChart` conveniences require iOS 16, macOS 13, tvOS 16, or watchOS 9 —
+a release above the package floor. Wrap calls in `if #available` when your app
+deploys lower.
+
+```swift
+let exporter = LivelineChartImageExporter(
+    size: CGSize(width: 640, height: 320),
+    scale: 2,
+    elapsedTime: 3,
+    backgroundColor: .black
+)
+let image = exporter.image(chart)
+let data = exporter.pngData(chart)
+
+// Or, straight from the chart:
+let png = chart.exportedPNGData(size: CGSize(width: 640, height: 320))
+```
+
+The export pins the renderer clock instead of reading the wall clock, so nothing
+about the frame depends on when the call happened. Because a still is a single
+frame, transitions that ramp — the appearance reveal, range easing, line
+interpolation — are captured settled; `elapsedTime` drives the effects that stay
+a function of time, such as the dither shimmer. Both entry points return `nil`
+when the platform cannot rasterize, or when the requested size rounds to zero
+pixels. For video, use the `liveline-render` executable.

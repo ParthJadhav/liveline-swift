@@ -23,7 +23,7 @@ extension LivelineRenderer {
         }
 
         let width = bucketWidth(
-            times: points.map(\.time),
+            sortedTimes: points.lazy.map(\.time),
             layout: layout,
             ratio: style.resolvedWidthRatio,
             minimum: 1,
@@ -346,7 +346,7 @@ extension LivelineRenderer {
         let progress = LivelineMath.easedReveal(reveal)
         guard !points.isEmpty, progress > 0.001 else { return }
         let width = bucketWidth(
-            times: points.map(\.time),
+            sortedTimes: points.lazy.map(\.time),
             layout: layout,
             ratio: style.resolvedWidthRatio,
             minimum: 3,
@@ -412,7 +412,7 @@ extension LivelineRenderer {
         let progress = LivelineMath.easedReveal(reveal)
         guard !segments.isEmpty, progress > 0.001 else { return }
         let width = bucketWidth(
-            times: segments.map(\.time),
+            sortedTimes: segments.lazy.map(\.time),
             layout: layout,
             ratio: style.resolvedWidthRatio,
             maximum: 48
@@ -434,8 +434,10 @@ extension LivelineRenderer {
                 let current = pair.0
                 let next = pair.1
                 let y = layout.y(for: current.end)
-                let startX = layout.x(for: current.time) + width / 2
-                let targetX = layout.x(for: next.time) - width / 2
+                // The connector leaves one bar's far edge and meets the next
+                // bar's near edge, which swap sides in an RTL layout.
+                let startX = layout.x(for: current.time) + width / 2 * layout.forwardXDirection
+                let targetX = layout.x(for: next.time) - width / 2 * layout.forwardXDirection
                 var connector = Path()
                 connector.move(to: CGPoint(x: startX, y: y))
                 connector.addLine(to: CGPoint(

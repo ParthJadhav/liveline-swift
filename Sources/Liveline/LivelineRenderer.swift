@@ -8,10 +8,21 @@ struct LivelineRenderInput {
     var configuration: LivelineChartConfiguration
     var motion: LivelineMotionPolicy
     var activeWindow: TimeInterval
+    /// The right edge a frozen zoom-and-pan viewport has pinned, or `nil` to
+    /// follow the live edge as usual. `activeWindow` still carries the visible
+    /// span, so the two together are the viewport.
+    var frozenRightEdge: TimeInterval? = nil
     var hiddenSeries: Set<String>
     var hoverLocation: CGPoint?
     var timestamp: TimeInterval
     var size: CGSize
+    /// Canvas text does not inherit Dynamic Type on its own; the chart reads the
+    /// environment and hands the resolved multiplier to every text site.
+    var textScale: LivelineTextScale = .standard
+    /// Canvas drawing does not inherit `layoutDirection` either. The chart reads
+    /// it once per body evaluation so the render pipeline can mirror the time
+    /// axis, the gutters, and every hover coordinate.
+    var isRTL: Bool = false
 }
 
 enum LivelineRenderer {
@@ -42,8 +53,10 @@ enum LivelineRenderer {
         }
 
         state.settlesTransitionsImmediately = input.motion.settlesImmediately
+        state.adoptTextScale(input.textScale)
+        let textScale = input.textScale
         let config = input.configuration
-        let palette = LivelinePalette.resolve(accent: input.accent, mode: config.theme, lineWidth: config.lineWidth)
+        let palette = state.palette(accent: input.accent, mode: config.theme, lineWidth: config.lineWidth)
         let capabilities = input.semantics.capabilities
         let kind = input.semantics.identity.kind
         let isLine = kind == .line
@@ -51,30 +64,54 @@ enum LivelineRenderer {
         let isMultiSeries = kind == .series
         let showBadge = capabilities.supportsLiveBadge && config.badge
         let reservesBadgePadding = capabilities.reservesBadgePadding && config.badge
-        let resolvedPadding = LivelineMath.resolvedPadding(
+        let isRTL = input.isRTL
+        let ltrPadding = LivelineMath.resolvedPadding(
             config.padding,
             badgeEnabled: reservesBadgePadding,
             showValueAxis: config.grid && capabilities.usesValueAxis,
-            showTimeAxis: capabilities.usesTimeAxis
+            showTimeAxis: capabilities.usesTimeAxis || capabilities.reservesBottomAxisPadding
         )
+        // The value-axis gutter and the badge's room are resolved on the right;
+        // in an RTL layout the live edge — and everything hanging off it — moves
+        // to the left, so the horizontal insets swap with it.
+        let resolvedPadding = isRTL ? ltrPadding.mirroredHorizontally() : ltrPadding
         let presentationTimestamp = state.presentationTimestamp(for: input.timestamp, isPaused: input.motion.isPaused)
-        let anchor = anchorTime(latestTime: input.semantics.latestTime, timelineTimestamp: presentationTimestamp, window: input.activeWindow)
         let baseBuffer = isCandle ? windowBufferNoBadge : (showBadge ? windowBuffer : windowBufferNoBadge)
         let labelReveal = config.fadeEffects ? state.chartReveal : 1
-        let dataLeftReserve = dataReserve(for: input.content, side: .leading, config: config, context: context, reveal: labelReveal)
-        let dataRightReserve = dataReserve(for: input.content, side: .trailing, config: config, context: context, reveal: labelReveal)
+        // The legend gutter is requested on a logical side, so it follows the
+        // reading direction onto the physical edge that side maps to.
+        let leadingReserve = dataReserve(for: input.content, side: .leading, config: config, context: context, state: state, textScale: textScale, reveal: labelReveal)
+        let trailingReserve = dataReserve(for: input.content, side: .trailing, config: config, context: context, state: state, textScale: textScale, reveal: labelReveal)
+        let dataLeftReserve = isRTL ? trailingReserve : leadingReserve
+        let dataRightReserve = isRTL ? leadingReserve : trailingReserve
         let chartWidth = max(1, input.size.width - resolvedPadding.left - resolvedPadding.right - dataLeftReserve - dataRightReserve)
+        // Everything below is derived from the *drawn* window rather than the
+        // requested one, so a window change eases across frames instead of
+        // remapping every visible time in a single one.
+        let effectiveWindow = resolvedWindow(state: state, input: input, plotWidth: chartWidth)
+        let anchor = anchorTime(latestTime: input.semantics.latestTime, timelineTimestamp: presentationTimestamp, window: effectiveWindow)
         let needsArrowRoom = isLine && showBadge && (config.autoDetectMomentum || config.momentum != nil)
         let buffer = needsArrowRoom ? max(baseBuffer, Double(37 / chartWidth)) : baseBuffer
-        let rightEdge = anchor + input.activeWindow * buffer
-        let leftEdge = rightEdge - input.activeWindow
+        let liveRightEdge = anchor + effectiveWindow * buffer
+        state.liveRightEdge = liveRightEdge
+        // A frozen viewport substitutes its own right edge and nothing else
+        // changes: decimation, hover narrowing, the time axis, and the prepared
+        // chart cache all key off these two edges already.
+        let rightEdge = resolvedRightEdge(
+            target: input.frozenRightEdge ?? liveRightEdge,
+            window: effectiveWindow,
+            state: state,
+            input: input
+        )
+        let leftEdge = rightEdge - effectiveWindow
 
         let renderData = LivelineChartPreparer.prepare(
             for: input.content,
             hiddenSeries: input.hiddenSeries,
             leftEdge: leftEdge,
             rightEdge: rightEdge,
-            config: config
+            config: config,
+            state: state
         )
         state.reconcile(
             identity: input.semantics.identity,
@@ -150,12 +187,6 @@ enum LivelineRenderer {
             state.displayMax = nextMax
         }
 
-        if input.motion.settlesImmediately {
-            state.displayWindow = input.activeWindow
-        } else {
-            state.displayWindow = LivelineMath.lerp(state.displayWindow ?? input.activeWindow, input.activeWindow, speed: 0.08, deltaTime: dt)
-        }
-
         let layout = LivelineLayout(
             size: input.size,
             padding: resolvedPadding,
@@ -164,7 +195,8 @@ enum LivelineRenderer {
             leftEdge: leftEdge,
             rightEdge: rightEdge,
             dataLeftReserve: dataLeftReserve,
-            dataRightReserve: dataRightReserve
+            dataRightReserve: dataRightReserve,
+            isRTL: isRTL
         )
         let swingMagnitude = renderData.swingMagnitude(valueRange: layout.maxValue - layout.minValue)
 
@@ -202,15 +234,25 @@ enum LivelineRenderer {
         }
 
         if let referenceLine = config.referenceLine, state.chartReveal > 0.01 {
-            drawReferenceLine(context: &layer, layout: layout, palette: palette, referenceLine: referenceLine, formatValue: config.formatValue, alpha: state.chartReveal)
+            drawReferenceLine(context: &layer, layout: layout, palette: palette, referenceLine: referenceLine, formatValue: config.formatValue, textScale: textScale, alpha: state.chartReveal)
+        }
+
+        if !config.referenceLines.isEmpty, capabilities.usesCartesianGrid, state.chartReveal > 0.01 {
+            drawReferenceLines(context: &layer, layout: layout, palette: palette, lines: config.referenceLines, textScale: textScale, alpha: state.chartReveal)
         }
 
         if config.grid, capabilities.usesCartesianGrid {
-            drawGrid(context: &layer, layout: layout, palette: palette, state: state, formatValue: config.formatValue, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+            drawGrid(context: &layer, layout: layout, palette: palette, state: state, formatValue: config.formatValue, textScale: textScale, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+        }
+
+        // Bands sit between the grid and the marks: a backdrop for the data
+        // rather than a highlight painted over it.
+        if !config.referenceBands.isEmpty, capabilities.usesCartesianGrid, state.chartReveal > 0.01 {
+            drawReferenceBands(context: &layer, layout: layout, palette: palette, bands: config.referenceBands, textScale: textScale, alpha: state.chartReveal)
         }
 
         if let orderbook = config.orderbook, isLine {
-            drawOrderbook(context: &layer, layout: layout, palette: palette, state: state, orderbook: orderbook, randomSeed: config.randomSeed, deltaTime: dt, swingMagnitude: swingMagnitude, alpha: state.chartReveal)
+            drawOrderbook(context: &layer, layout: layout, palette: palette, state: state, orderbook: orderbook, randomSeed: config.randomSeed, textScale: textScale, deltaTime: dt, swingMagnitude: swingMagnitude, alpha: state.chartReveal)
         }
 
         let interactionSnapshot = LivelineInteractionBuilder.snapshot(
@@ -251,7 +293,8 @@ enum LivelineRenderer {
             rightEdge: rightEdge,
             reveal: state.chartReveal,
             animationTimestamp: animationTimestamp,
-            deltaTime: dt
+            deltaTime: dt,
+            textScale: textScale
         )
         var contentOverlay = LivelineContentOverlay.standard
         switch config.style {
@@ -296,8 +339,9 @@ enum LivelineRenderer {
                 layout: layout,
                 palette: palette,
                 state: state,
-                window: input.activeWindow,
+                window: effectiveWindow,
                 formatTime: config.formatTime,
+                textScale: textScale,
                 alpha: revealAmount(
                     state.chartReveal,
                     axisRevealStart,
@@ -319,6 +363,7 @@ enum LivelineRenderer {
             scrubAmount: scrubAmount,
             configuration: config,
             tooltipSelection: tooltipSelection,
+            textScale: textScale,
             reveal: state.chartReveal,
             animationTimestamp: animationTimestamp
         )
@@ -335,31 +380,130 @@ extension LivelineRenderer {
         from layout: LivelineLayout,
         input: LivelineRenderInput
     ) -> LivelineLayout {
-        LivelineLayout(
+        let padding = LivelineMath.resolvedPadding(
+            input.configuration.padding,
+            badgeEnabled: false,
+            showValueAxis: false,
+            showTimeAxis: false
+        )
+        return LivelineLayout(
             size: input.size,
-            padding: LivelineMath.resolvedPadding(
-                input.configuration.padding,
-                badgeEnabled: false,
-                showValueAxis: false,
-                showTimeAxis: false
-            ),
+            padding: input.isRTL ? padding.mirroredHorizontally() : padding,
             minValue: layout.minValue,
             maxValue: layout.maxValue,
             leftEdge: layout.leftEdge,
-            rightEdge: layout.rightEdge
+            rightEdge: layout.rightEdge,
+            isRTL: input.isRTL
         )
     }
 
-    static func dataReserve(for content: LivelineChartContent, side: LivelineLegendSide, config: LivelineChartConfiguration, context: GraphicsContext, reveal: Double) -> CGFloat {
+    static func dataReserve(
+        for content: LivelineChartContent,
+        side: LivelineLegendSide,
+        config: LivelineChartConfiguration,
+        context: GraphicsContext,
+        state: LivelineRenderState,
+        textScale: LivelineTextScale,
+        reveal: Double
+    ) -> CGFloat {
         guard config.seriesLegendSide == side else { return 0 }
         guard case let .series(series) = content else { return 0 }
-        let font = Font.system(size: 10, weight: .semibold)
+        let font = textScale.font(10, weight: .semibold)
         let labels = series.compactMap(\.label)
         guard !labels.isEmpty else { return 0 }
-        let maxLabelWidth = labels.reduce(CGFloat.zero) { current, label in
-            max(current, measureText(label, context: context, font: font).width)
+        // Text measurement goes through the graphics context. The gutter only
+        // moves when the labels do, so measure once per label set.
+        let maxLabelWidth = state.legendGutterWidth(labels: labels, side: side) {
+            labels.reduce(CGFloat.zero) { current, label in
+                max(current, measureText(label, context: context, font: font).width)
+            }
         }
         return max(0, maxLabelWidth - 2) * CGFloat(reveal)
+    }
+
+    /// The window the x-axis is actually drawn at this frame.
+    ///
+    /// The visible span is part of the time-to-x mapping, so adopting a new one
+    /// in a single frame slides every visible point sideways at once — the
+    /// trace jumps, then scrolls back. Growing the window as data arrives, and
+    /// the built-in `30s`/`1m` picker, both do exactly that. Easing the drawn
+    /// span toward the requested one turns the jump into a glide, and every
+    /// other piece of this frame's geometry — the anchor, the live edge, the
+    /// prepared chart's edges, the layout, the time axis' tick spacing — is
+    /// derived from the value returned here so nothing mixes the two spans.
+    ///
+    /// Composes with the viewport's return-to-live glide rather than fighting
+    /// it: this eases *how wide* the plot is, ``resolvedRightEdge(target:window:state:input:)``
+    /// eases *where its right edge sits*, and the latter is handed the eased
+    /// span so its "a window change is a cut" escape hatch no longer trips on a
+    /// change that is already being animated.
+    static func resolvedWindow(
+        state: LivelineRenderState,
+        input: LivelineRenderInput,
+        plotWidth: CGFloat
+    ) -> TimeInterval {
+        let target = input.activeWindow
+        // Reduce Motion, a settled single-frame export, and a chart that just
+        // changed identity all cut to the new span rather than animate to it.
+        guard !input.motion.settlesImmediately,
+              state.chartIdentity == input.semantics.identity,
+              let current = state.displayWindow,
+              current.isFinite, current > 0,
+              target.isFinite, target > 0
+        else {
+            state.displayWindow = target
+            return target
+        }
+
+        // The animation frame is taken once per draw, later, after the identity
+        // reconcile that may reset it — so read the delta without consuming it.
+        // While paused the delta is zero and the eased span simply holds.
+        let dt = state.peekDeltaMilliseconds(for: input.timestamp, isPaused: input.motion.isPaused)
+        var next = LivelineMath.lerp(current, target, speed: 0.08, deltaTime: dt)
+        // Settle once the remainder is worth less than half a pixel of plot,
+        // the same convergence rule the value range uses, so the span does not
+        // asymptote toward its target forever.
+        let secondsPerPixel = target / Double(max(plotWidth, 1))
+        if abs(next - target) < secondsPerPixel * 0.5 { next = target }
+        state.displayWindow = next
+        return next
+    }
+
+    /// Eases the drawn right edge toward wherever the viewport wants it.
+    ///
+    /// This is what makes "jump back to live" glide rather than cut. It only
+    /// runs for charts that opted into zoom and pan, and only while frames are
+    /// already arriving — a settled export or a chart with no timeline snaps to
+    /// the target, so nothing that renders one frame is left mid-glide.
+    ///
+    /// - Parameter window: The span actually being drawn this frame — the eased
+    ///   one from ``resolvedWindow(state:input:plotWidth:)``, never the raw
+    ///   request, so a single frame's geometry is derived from one span only.
+    static func resolvedRightEdge(
+        target: TimeInterval,
+        window: TimeInterval,
+        state: LivelineRenderState,
+        input: LivelineRenderInput
+    ) -> TimeInterval {
+        guard input.configuration.zoomAndPan,
+              !input.motion.settlesImmediately,
+              !input.motion.isPaused,
+              let previous = state.displayRightEdge,
+              previous.isFinite,
+              // A fresh chart, or a jump too far to be worth easing, is a cut.
+              abs(previous - target) < window * 8
+        else {
+            state.displayRightEdge = target
+            return target
+        }
+
+        // Read the frame delta without consuming it: the animation frame is
+        // taken later in `draw`, after the identity reconcile that may reset it.
+        let delta = state.peekDeltaMilliseconds(for: input.timestamp, isPaused: input.motion.isPaused)
+        var next = LivelineMath.lerp(previous, target, speed: 0.22, deltaTime: delta)
+        if abs(next - target) < window * 0.0005 { next = target }
+        state.displayRightEdge = next
+        return next
     }
 
     static func anchorTime(latestTime: TimeInterval?, timelineTimestamp: TimeInterval, window: TimeInterval) -> TimeInterval {

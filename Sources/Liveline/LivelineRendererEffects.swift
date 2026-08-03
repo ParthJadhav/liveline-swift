@@ -9,6 +9,7 @@ extension LivelineRenderer {
         state: LivelineRenderState,
         orderbook: LivelineOrderbookData,
         randomSeed: UInt32?,
+        textScale: LivelineTextScale,
         deltaTime: TimeInterval,
         swingMagnitude: Double,
         alpha: Double
@@ -82,12 +83,16 @@ extension LivelineRenderer {
                 ? LivelineRGBA(red: 34 / 255, green: 197 / 255, blue: 94 / 255, alpha: 1)
                 : LivelineRGBA(red: 239 / 255, green: 68 / 255, blue: 68 / 255, alpha: 1)
             let fill = baseColor.blended(to: palette.backgroundRGB, t: 1 - strength)
+            // The ticker column hugs the edge history scrolls off, opposite the
+            // live edge, so it swaps sides with the reading direction.
             drawOrderbookText(
                 label.text,
                 context: &layer,
-                at: CGPoint(x: layout.plotLeftX + 8, y: label.y),
+                at: CGPoint(x: layout.pastEdgeX + 8 * layout.forwardXDirection, y: label.y),
                 fill: fill,
-                outline: palette.backgroundRGB
+                outline: palette.backgroundRGB,
+                textScale: textScale,
+                isRTL: layout.isRTL
             )
         }
     }
@@ -157,14 +162,18 @@ extension LivelineRenderer {
         }
     }
 
-    static func formatOrderSize(_ size: Double) -> String {
+    /// The orderbook overlay's size label. `currencySymbol` defaults to `"$"`
+    /// rather than the locale's symbol so that snapshot renders stay
+    /// byte-identical across machines; pass
+    /// `LivelineFormatters.currencySymbol()` for a locale-aware label.
+    static func formatOrderSize(_ size: Double, currencySymbol: String = "$") -> String {
         // `Double(Int.max)` rounds to 2^63 on 64-bit platforms, which is one
         // greater than the largest representable Int. Converting that exact
         // boundary traps, so keep it on the floating-point formatting path.
-        if size >= Double(Int.max) { return String(format: "$%.2e", size) }
-        if size >= 10 { return "$\(Int(size.rounded()))" }
-        if size >= 1 { return String(format: "$%.1f", size) }
-        return String(format: "$%.2f", size)
+        if size >= Double(Int.max) { return currencySymbol + String(format: "%.2e", size) }
+        if size >= 10 { return "\(currencySymbol)\(Int(size.rounded()))" }
+        if size >= 1 { return currencySymbol + String(format: "%.1f", size) }
+        return currencySymbol + String(format: "%.2f", size)
     }
 
     static func drawOrderbookText(
@@ -172,25 +181,36 @@ extension LivelineRenderer {
         context: inout GraphicsContext,
         at point: CGPoint,
         fill: LivelineRGBA,
-        outline: LivelineRGBA
+        outline: LivelineRGBA,
+        textScale: LivelineTextScale,
+        isRTL: Bool = false
     ) {
         drawOutlinedText(
             text,
             context: &context,
             at: CGPoint(
-                x: point.x + orderbookTextOffsetX,
+                x: point.x + (isRTL ? -orderbookTextOffsetX : orderbookTextOffsetX),
                 y: point.y + orderbookTextOffsetY
             ),
-            anchor: .leading,
+            anchor: isRTL ? .trailing : .leading,
             fill: fill.color,
             outline: outline.color,
-            font: .system(size: 13, weight: .semibold, design: .monospaced)
+            font: textScale.font(13, weight: .semibold, design: .monospaced)
         )
     }
 
+    /// Softens the edge history scrolls off — the left in LTR, the right in an
+    /// RTL layout where time runs the other way.
     static func drawLeftFade(context: inout GraphicsContext, layout: LivelineLayout) {
         var rect = Path()
-        rect.addRect(CGRect(x: 0, y: 0, width: layout.plotLeftX + fadeEdgeWidth, height: layout.size.height))
+        if layout.isRTL {
+            let inner = layout.rightX - fadeEdgeWidth
+            rect.addRect(CGRect(x: inner, y: 0, width: max(0, layout.size.width - inner), height: layout.size.height))
+        } else {
+            rect.addRect(CGRect(x: 0, y: 0, width: layout.plotLeftX + fadeEdgeWidth, height: layout.size.height))
+        }
+        let start = CGPoint(x: layout.pastEdgeX, y: 0)
+        let end = CGPoint(x: layout.pastEdgeX + fadeEdgeWidth * layout.forwardXDirection, y: 0)
         context.blendMode = .destinationOut
         context.fill(
             rect,
@@ -199,8 +219,8 @@ extension LivelineRenderer {
                     .init(color: .black, location: 0),
                     .init(color: .black.opacity(0), location: 1),
                 ]),
-                startPoint: CGPoint(x: layout.plotLeftX, y: 0),
-                endPoint: CGPoint(x: layout.plotLeftX + fadeEdgeWidth, y: 0)
+                startPoint: start,
+                endPoint: end
             )
         )
         context.blendMode = .normal

@@ -13,6 +13,7 @@ enum StorybookScenarioID: String, CaseIterable {
     case lineShowValueWindows = "line-show-value-windows"
     case lineRoundedWindows = "line-rounded-windows"
     case lineTextWindows = "line-text-windows"
+    case lineZoomPan = "line-zoom-pan"
     case lineReference = "line-reference"
     case lineOrderbook = "line-orderbook"
     case lineDegen = "line-degen"
@@ -66,4 +67,10 @@ enum StorybookScenarioID: String, CaseIterable {
     case gaugeTarget = "gauge-target"
     case funnelBasic = "funnel-basic"
     case funnelCompact = "funnel-compact"
+    case stackedAreaStream = "stacked-area-stream"
+    case histogramBasic = "histogram-basic"
+    case bulletBasic = "bullet-basic"
+    case treemapBasic = "treemap-basic"
+    case sunburstBasic = "sunburst-basic"
+    case sankeyBasic = "sankey-basic"
 }

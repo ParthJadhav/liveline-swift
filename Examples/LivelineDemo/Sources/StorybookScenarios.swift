@@ -153,6 +153,7 @@ enum StorybookCatalog {
         lineShowValueWindows,
         lineRoundedWindows,
         lineTextWindows,
+        lineZoomPan,
         lineReference,
         lineOrderbook,
         lineDegen,
@@ -194,6 +195,7 @@ enum StorybookCatalog {
         stackedBarNormalized,
         stackedAreaBasic,
         stackedAreaNormalized,
+        stackedAreaStream,
         timelineBasic,
         timelineCompact,
         heatmapBasic,
@@ -206,6 +208,11 @@ enum StorybookCatalog {
         gaugeTarget,
         funnelBasic,
         funnelCompact,
+        histogramBasic,
+        bulletBasic,
+        treemapBasic,
+        sunburstBasic,
+        sankeyBasic,
     ]
 
     static let all = definitions

@@ -287,4 +287,109 @@ extension StorybookCatalog {
             configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: "")
         )
     }
+
+    static let stackedAreaStream = chart(
+        id: .stackedAreaStream,
+        group: "Stacked area",
+        title: "Service Stream",
+        detail: "Centered baseline: layers ripple around a shared middle.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            stackedAreas: StorybookData.stackedArea,
+            color: StorybookData.blue,
+            style: LivelineStackedAreaStyle(
+                baseline: .centered,
+                colors: StorybookData.segmentColors,
+                fillOpacity: 0.7,
+                boundaryLineWidth: 0,
+                showsBaseline: false
+            ),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: " k")
+        )
+    }
+
+    static let histogramBasic = chart(
+        id: .histogramBasic,
+        group: "Histogram",
+        title: "Latency Distribution",
+        detail: "Automatically binned samples with a value-range axis.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            histogram: StorybookData.histogramSamples,
+            color: StorybookData.blue,
+            style: LivelineHistogramStyle(binning: .count(12)),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "")
+        )
+    }
+
+    static let bulletBasic = chart(
+        id: .bulletBasic,
+        group: "Bullet",
+        title: "Quarterly Conversion",
+        detail: "Measure and target layered over qualitative bands.",
+        background: .white
+    ) {
+        LivelineChart(
+            bullet: LivelineBulletStyle(
+                measure: 72,
+                target: 80,
+                ranges: [
+                    LivelineBulletRange(value: 50, label: "poor"),
+                    LivelineBulletRange(value: 75, label: "ok"),
+                    LivelineBulletRange(value: 100, label: "good"),
+                ],
+                axisRange: 0...100,
+                label: "Conversion"
+            ),
+            color: StorybookData.blue,
+            configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: "%")
+        )
+    }
+
+    static let treemapBasic = chart(
+        id: .treemapBasic,
+        group: "Treemap",
+        title: "Cloud Spend",
+        detail: "Squarified areas; Storage subdivides into its own children.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            treemap: StorybookData.treemap,
+            color: StorybookData.blue,
+            style: LivelineTreemapStyle(padding: 3, cornerRadius: 4),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "")
+        )
+    }
+
+    static let sunburstBasic = chart(
+        id: .sunburstBasic,
+        group: "Sunburst",
+        title: "Acquisition Mix",
+        detail: "Inner ring by channel, outer ring by sub-channel.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            sunburst: StorybookData.sunburst,
+            color: StorybookData.blue,
+            style: LivelineSunburstStyle(),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "")
+        )
+    }
+
+    static let sankeyBasic = chart(
+        id: .sankeyBasic,
+        group: "Sankey",
+        title: "Funnel Flow",
+        detail: "Columns from longest-path layering; ribbons scale with value.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            sankey: StorybookData.sankey,
+            color: StorybookData.blue,
+            style: LivelineSankeyStyle(nodeWidth: 9, nodeSpacing: 10),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "")
+        )
+    }
 }

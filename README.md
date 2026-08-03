@@ -1,6 +1,6 @@
 # Liveline Swift
 
-Native SwiftUI real-time charts for iOS apps. Liveline includes line, candlestick, multi-series, bar, range-band, scatter, step, lollipop, bubble, box-plot, waterfall, error-bar, dumbbell, stacked-bar, stacked-area, timeline, heatmap, radar, donut, gauge, and funnel renderers with typed customization.
+Native SwiftUI real-time charts for iOS apps. Liveline includes line, candlestick, multi-series, bar, range-band, scatter, step, lollipop, bubble, box-plot, waterfall, error-bar, dumbbell, stacked-bar, stacked-area, timeline, heatmap, radar, donut, gauge, funnel, histogram, bullet, treemap, sunburst, and Sankey renderers with typed customization.
 
 This repository is a Swift Package. Any iOS app can add it with Swift Package Manager and import `Liveline`.
 
@@ -48,11 +48,22 @@ Each cell is captured from the included deterministic iOS Storybook.
 
 ## Requirements
 
-- iOS 16+
+- iOS 15+
 - Swift 5.9+
 - Xcode 15+
 
-The package also declares macOS 13, tvOS 16, watchOS 9, and visionOS 1 support. The included demo app targets iOS.
+The package also declares macOS 12, tvOS 16, watchOS 8, and visionOS 1 support. The included demo app targets iOS.
+
+A few features need a newer OS than the package floor and are gated, so the rest of the library keeps working without them:
+
+| Feature | Needs |
+| --- | --- |
+| Image export (`LivelineChartImageExporter`, `exportedImage`, `exportedPNGData`) | iOS 16, macOS 13, watchOS 9 |
+| Wrapping horizontal `LivelineLegend` (falls back to a single non-wrapping row) | iOS 16, macOS 13, watchOS 9 |
+| Pointer hover inspection (scrubbing is unaffected) | iOS 16, macOS 13 |
+| Pinch to zoom (drag to pan is unaffected) | iOS 17, macOS 14, visionOS 1 |
+
+tvOS stays at 16 because `onTapGesture` — how the Siri Remote enters and leaves chart inspection — is unavailable before it.
 
 ## Installation
 
@@ -308,6 +319,10 @@ On tvOS, focus a chart and press Select to enter inspection, then move left or
 right through its values. Press Select, Up, Down, or Menu to leave inspection
 and resume normal focus navigation.
 - Reference line and orderbook stream labels
+- Multiple horizontal and vertical reference lines and shaded reference bands
+- Standalone `LivelineLegend` view with Dynamic Type and accessibility support
+- `LivelineDataStream` bounded, time-ordered buffer for live feeds
+- Still-image and PNG export through `LivelineChartImageExporter`
 
 ## Example App
 

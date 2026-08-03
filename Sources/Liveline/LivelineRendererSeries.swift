@@ -24,7 +24,7 @@ extension LivelineRenderer {
             let entryAlpha = state.seriesAlpha[entry.id] ?? target
             guard entryAlpha > 0.01 else { continue }
 
-            let palette = LivelinePalette.resolve(accent: entry.color, mode: config.theme, lineWidth: config.lineWidth)
+            let palette = state.palette(accent: entry.color, mode: config.theme, lineWidth: config.lineWidth)
             var layer = context
             layer.opacity *= entryAlpha * alpha
             let visible = entry.data.livelineVisible(in: (layout.leftEdge - 2)...layout.rightEdge)
@@ -60,6 +60,7 @@ extension LivelineRenderer {
         showPulse: Bool,
         timestamp: TimeInterval,
         legendSide: LivelineLegendSide,
+        textScale: LivelineTextScale,
         drawsDot: Bool = true,
         drawsLabel: Bool = true
     ) {
@@ -88,7 +89,7 @@ extension LivelineRenderer {
                     at: CGPoint(x: endpoint.point.x + labelOffset, y: endpoint.point.y - 0.5),
                     anchor: anchor,
                     color: endpoint.palette.line,
-                    font: .system(size: 10, weight: .semibold)
+                    font: textScale.font(10, weight: .semibold)
                 )
             }
         }

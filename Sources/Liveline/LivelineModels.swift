@@ -383,6 +383,35 @@ public struct LivelineSeries: Identifiable {
 public enum LivelineThemeMode: String, CaseIterable, Sendable {
     case light
     case dark
+    /// Follows the system appearance.
+    ///
+    /// `LivelineChart` reads `\.colorScheme` from the environment and resolves
+    /// this case to `.light` or `.dark` before the palette is built, so nothing
+    /// downstream — renderer, interaction snapshot, accessibility, audio graph —
+    /// ever sees `.automatic`. The chart re-renders when the system flips
+    /// because the environment change re-evaluates `body`.
+    ///
+    /// Configurations still default to `.dark`; opt in explicitly with
+    /// `LivelineChartConfiguration(theme: .automatic)`.
+    case automatic
+}
+
+extension LivelineThemeMode {
+    /// Resolves `.automatic` against a color scheme. Explicit modes ignore the
+    /// scheme, and the result is never `.automatic`.
+    public func resolved(colorScheme: ColorScheme) -> LivelineThemeMode {
+        switch self {
+        case .light, .dark:
+            return self
+        case .automatic:
+            return colorScheme == .dark ? .dark : .light
+        }
+    }
+
+    /// Whether the mode paints dark surfaces. There is no environment to consult
+    /// here, so an unresolved `.automatic` falls back to the library default,
+    /// `.dark`; `LivelineChart` resolves it before the palette is built.
+    var prefersDarkAppearance: Bool { self != .light }
 }
 
 public enum LivelineMomentum: String, CaseIterable, Sendable {
@@ -425,13 +454,132 @@ public struct LivelineWindowOption: Identifiable, Hashable, Sendable {
     }
 }
 
+/// Which axis an annotation is measured against.
+public enum LivelineAnnotationAxis: String, CaseIterable, Sendable {
+    /// A value on the vertical axis, drawn as a horizontal line or band.
+    case value
+    /// A moment on the time axis, drawn as a vertical line or band. Times are
+    /// in the same units as ``LivelinePoint/time``.
+    case time
+}
+
+/// How an annotation line's stroke is dashed.
+public enum LivelineAnnotationDash: String, CaseIterable, Sendable {
+    case solid
+    case dashed
+    case dotted
+
+    var pattern: [CGFloat] {
+        switch self {
+        case .solid: return []
+        case .dashed: return [4, 4]
+        case .dotted: return [1, 3]
+        }
+    }
+}
+
+/// A single straight annotation line.
+///
+/// A `.value` line is horizontal, sitting at `value` on the vertical axis; a
+/// `.time` line is vertical, sitting at the moment `value` names. Lines are
+/// drawn from the plot's edges and clipped to it.
+///
+/// Only the configuration's single ``LivelineChartAnnotations/referenceLine``
+/// widens a chart's automatic value range. Lines in
+/// ``LivelineChartAnnotations/referenceLines`` are draw-time only: they never
+/// move the range, so scrolling one off the visible range simply hides it.
 public struct LivelineReferenceLine: Hashable, Sendable {
+    /// The value the line sits at — a chart value for `.value`, a time for
+    /// `.time`.
     public var value: Double
     public var label: String?
+    public var axis: LivelineAnnotationAxis
+    /// An explicit stroke color, or `nil` for the theme's reference color.
+    public var color: Color?
+    public var dash: LivelineAnnotationDash
 
+    /// Creates a horizontal reference line at a value.
     public init(value: Double, label: String? = nil) {
         self.value = value
         self.label = label
+        self.axis = .value
+        self.color = nil
+        self.dash = .dashed
+    }
+
+    /// Creates a reference line on either axis.
+    ///
+    /// - Parameters:
+    ///   - value: The value or time the line sits at.
+    ///   - axis: Whether `value` names a chart value or a moment.
+    ///   - label: Optional text drawn on the line.
+    ///   - color: An explicit stroke color, or `nil` for the theme's.
+    ///   - dash: The stroke pattern. Defaults to `.dashed`.
+    public init(
+        value: Double,
+        axis: LivelineAnnotationAxis,
+        label: String? = nil,
+        color: Color? = nil,
+        dash: LivelineAnnotationDash = .dashed
+    ) {
+        self.value = value
+        self.label = label
+        self.axis = axis
+        self.color = color
+        self.dash = dash
+    }
+}
+
+/// A shaded region spanning a value range or a time range.
+///
+/// A `.value` band is horizontal, covering the plot's full width between two
+/// values; a `.time` band is vertical, covering the plot's full height between
+/// two moments. Inverted bounds are normalized, and a band whose bounds are
+/// equal collapses to a hairline rather than disappearing or drawing backwards.
+///
+/// Bands are draw-time only and never widen a chart's automatic value range.
+public struct LivelineReferenceBand: Hashable, Sendable {
+    public var axis: LivelineAnnotationAxis
+    /// One edge of the band. Order does not matter.
+    public var start: Double
+    /// The other edge of the band.
+    public var end: Double
+    public var label: String?
+    /// An explicit fill color, or `nil` for the theme's reference color.
+    public var color: Color?
+    /// The fill's opacity, clamped to `0...1` at the rendering boundary.
+    public var opacity: Double
+
+    /// Creates a shaded band.
+    ///
+    /// - Parameters:
+    ///   - axis: Whether the bounds name chart values or moments.
+    ///   - start: One edge of the band.
+    ///   - end: The other edge.
+    ///   - label: Optional text drawn at the band's leading edge.
+    ///   - color: An explicit fill color, or `nil` for the theme's.
+    ///   - opacity: The fill's opacity. Defaults to `0.12`.
+    public init(
+        axis: LivelineAnnotationAxis = .value,
+        start: Double,
+        end: Double,
+        label: String? = nil,
+        color: Color? = nil,
+        opacity: Double = 0.12
+    ) {
+        self.axis = axis
+        self.start = start
+        self.end = end
+        self.label = label
+        self.color = color
+        self.opacity = opacity
+    }
+
+    /// The band's bounds in ascending order, or `nil` when either edge is not
+    /// a finite number.
+    public var bounds: ClosedRange<Double>? {
+        guard start.isFinite, end.isFinite else { return nil }
+        return start <= end ? start...end : end...start
     }
 }
 
@@ -520,20 +668,96 @@ public struct LivelineDegenOptions: Hashable, Sendable {
 }
 
 
+/// The axis, tooltip, and VoiceOver formatters a chart uses when the caller
+/// supplies none.
+///
+/// Two families are available. The `fixed` pair is locale-independent and
+/// byte-stable, which is what snapshot tests and the `liveline-render` CLI
+/// need; it is what `value` and `time` — and therefore every default argument
+/// in this package — resolve to. The `localized` pair honours the reader's
+/// number, date, and 12/24-hour settings and is what a shipping app should
+/// pass instead:
+///
+/// ```swift
+/// LivelineChartConfiguration(
+///     formatValue: LivelineFormatters.localizedValue,
+///     formatTime: LivelineFormatters.localizedTime
+/// )
+/// ```
 public enum LivelineFormatters {
-    private static let timeFormatter: DateFormatter = {
+    private static let fixedTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "HH:mm:ss"
         return formatter
     }()
 
-    public static func value(_ value: Double) -> String {
+    /// Two fraction digits, a `.` decimal separator, and no grouping,
+    /// regardless of locale.
+    public static func fixedValue(_ value: Double) -> String {
         String(format: "%.2f", value)
     }
 
-    public static func time(_ time: TimeInterval) -> String {
+    /// Zero-padded 24-hour `HH:mm:ss` in the current time zone, regardless of
+    /// locale.
+    public static func fixedTime(_ time: TimeInterval) -> String {
         let date = Date(timeIntervalSince1970: time)
-        return timeFormatter.string(from: date)
+        return fixedTimeFormatter.string(from: date)
+    }
+
+    /// Two fraction digits with the reader's decimal separator and grouping —
+    /// `1.234,57` where `fixedValue` gives `1234.57`.
+    public static func localizedValue(_ value: Double) -> String {
+        localizedValue(value, locale: .autoupdatingCurrent)
+    }
+
+    /// Two fraction digits in an explicit locale. Pass a fixed locale to make
+    /// the result deterministic.
+    public static func localizedValue(_ value: Double, locale: Locale) -> String {
+        value.formatted(
+            .number
+                .precision(.fractionLength(2))
+                .locale(locale)
+        )
+    }
+
+    /// Hours, minutes, and seconds in the reader's locale, honouring their
+    /// 12- or 24-hour preference.
+    public static func localizedTime(_ time: TimeInterval) -> String {
+        localizedTime(time, locale: .autoupdatingCurrent)
+    }
+
+    /// Hours, minutes, and seconds in an explicit locale. Pass a fixed locale
+    /// to make the result deterministic.
+    public static func localizedTime(_ time: TimeInterval, locale: Locale) -> String {
+        Date(timeIntervalSince1970: time).formatted(
+            .dateTime
+                .hour(.defaultDigits(amPM: .abbreviated))
+                .minute(.twoDigits)
+                .second(.twoDigits)
+                .locale(locale)
+        )
+    }
+
+    /// The default value formatter. An alias for ``fixedValue(_:)`` so that
+    /// charts render identically everywhere; prefer ``localizedValue(_:)`` in
+    /// a user-facing app.
+    public static func value(_ value: Double) -> String {
+        fixedValue(value)
+    }
+
+    /// The default time formatter. An alias for ``fixedTime(_:)`` so that
+    /// charts render identically everywhere; prefer ``localizedTime(_:)`` in
+    /// a user-facing app.
+    public static func time(_ time: TimeInterval) -> String {
+        fixedTime(time)
+    }
+
+    /// Currency symbol for the orderbook overlay's size labels. The renderer
+    /// hardcodes `"$"` to keep deterministic snapshots stable; a caller that
+    /// wants locale currency can pass this through
+    /// ``LivelineRenderer/formatOrderSize(_:currencySymbol:)``.
+    static func currencySymbol(for locale: Locale = .autoupdatingCurrent) -> String {
+        locale.currencySymbol ?? "$"
     }
 }

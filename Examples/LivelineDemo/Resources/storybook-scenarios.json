@@ -55,6 +55,11 @@
     "coverage": "Text-only window controls."
   },
   {
+    "id": "line-zoom-pan",
+    "area": "Line",
+    "coverage": "Pinch zoom, drag pan, long-press scrub, and the Live re-engage control."
+  },
+  {
     "id": "line-reference",
     "area": "Line",
     "coverage": "Reference line and label."
@@ -318,5 +323,35 @@
     "id": "funnel-compact",
     "area": "Funnel",
     "coverage": "Tight square stages with labels only."
+  },
+  {
+    "id": "stacked-area-stream",
+    "area": "Stacked area",
+    "coverage": "Centered baseline streamgraph without a value axis."
+  },
+  {
+    "id": "histogram-basic",
+    "area": "Histogram",
+    "coverage": "Automatically binned sample frequencies."
+  },
+  {
+    "id": "bullet-basic",
+    "area": "Bullet",
+    "coverage": "Measure against a target across qualitative bands."
+  },
+  {
+    "id": "treemap-basic",
+    "area": "Treemap",
+    "coverage": "Squarified spend hierarchy with one nested group."
+  },
+  {
+    "id": "sunburst-basic",
+    "area": "Sunburst",
+    "coverage": "Two-ring acquisition breakdown with labelled arcs."
+  },
+  {
+    "id": "sankey-basic",
+    "area": "Sankey",
+    "coverage": "Three-column funnel flow with proportional ribbons."
   }
 ]

@@ -520,6 +520,55 @@ final class LivelineRuntimeTests: XCTestCase {
             (.donut, .donut(data: categories, style: LivelineDonutStyle())),
             (.gauge, .gauge(value: 0.65, range: 0...1, style: LivelineGaugeStyle())),
             (.funnel, .funnel(data: categories, style: LivelineFunnelStyle())),
+            (.histogram, .histogram(values: [1, 2, 2, 3, 3, 3, 4, 5], style: LivelineHistogramStyle())),
+            (
+                .bullet,
+                .bullet(style: LivelineBulletStyle(
+                    measure: 72,
+                    target: 80,
+                    ranges: [
+                        LivelineBulletRange(value: 50, label: "Poor"),
+                        LivelineBulletRange(value: 75, label: "OK"),
+                        LivelineBulletRange(value: 100, label: "Good"),
+                    ]
+                ))
+            ),
+            (
+                .treemap,
+                .treemap(
+                    nodes: [
+                        LivelineTreemapNode(label: "Alpha", value: 6),
+                        LivelineTreemapNode(label: "Beta", children: [
+                            LivelineTreemapNode(label: "Beta 1", value: 3),
+                            LivelineTreemapNode(label: "Beta 2", value: 1),
+                        ]),
+                    ],
+                    style: LivelineTreemapStyle()
+                )
+            ),
+            (
+                .sunburst,
+                .sunburst(
+                    nodes: [
+                        LivelineSunburstNode(label: "Alpha", value: 6),
+                        LivelineSunburstNode(label: "Beta", children: [
+                            LivelineSunburstNode(label: "Beta 1", value: 3),
+                            LivelineSunburstNode(label: "Beta 2", value: 1),
+                        ]),
+                    ],
+                    style: LivelineSunburstStyle()
+                )
+            ),
+            (
+                .sankey,
+                .sankey(
+                    links: [
+                        LivelineSankeyLink(source: "Visits", target: "Signups", value: 40),
+                        LivelineSankeyLink(source: "Signups", target: "Paid", value: 12),
+                    ],
+                    style: LivelineSankeyStyle()
+                )
+            ),
             (.candle, .candle(data: points, value: 5, candles: [LivelineCandle(time: 1, open: 3, high: 6, low: 2, close: 5)], candleWidth: 1, liveCandle: nil, lineData: points, lineValue: 5)),
             (.series, .series([LivelineSeries(id: "a", data: points, value: 5, color: .blue, label: "Alpha")])),
         ]
@@ -806,6 +855,15 @@ final class LivelineRuntimeTests: XCTestCase {
             ("donut", .donut(data: categories, style: LivelineDonutStyle())),
             ("gauge", .gauge(value: 0.65, range: 0...1, style: LivelineGaugeStyle())),
             ("funnel", .funnel(data: categories, style: LivelineFunnelStyle())),
+            ("histogram", .histogram(values: [1, 2, 2, 3, 3, 3, 4, 5], style: LivelineHistogramStyle())),
+            (
+                "bullet",
+                .bullet(style: LivelineBulletStyle(
+                    measure: 72,
+                    target: 80,
+                    ranges: [LivelineBulletRange(value: 50, label: "Poor"), LivelineBulletRange(value: 100, label: "Good")]
+                ))
+            ),
         ]
         let layout = LivelineLayout(
             size: CGSize(width: 320, height: 220),

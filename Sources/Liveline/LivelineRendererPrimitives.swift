@@ -13,19 +13,32 @@ extension LivelineRenderer {
         )
     }
 
-    static func bucketWidth(
-        times: [TimeInterval],
+    /// Normalized samples arrive in ascending time order, so the tightest
+    /// bucket is the smallest positive gap between neighbours. Walking the
+    /// sequence once keeps this measurement off the per-frame allocation path;
+    /// callers pass a lazy projection rather than materializing a time array.
+    static func bucketWidth<Times: Sequence>(
+        sortedTimes: Times,
         layout: LivelineLayout,
         ratio: CGFloat,
         minimum: CGFloat = 2,
         maximum: CGFloat
-    ) -> CGFloat {
-        let sorted = Array(Set(times)).sorted()
-        let deltas = zip(sorted, sorted.dropFirst())
-            .map { $1 - $0 }
-            .filter { $0 > 0 }
-        let fallbackCount = max(sorted.count, 8)
-        let bucket = deltas.min()
+    ) -> CGFloat where Times.Element == TimeInterval {
+        var count = 0
+        var previous: TimeInterval?
+        var smallestDelta: TimeInterval?
+        for time in sortedTimes {
+            count += 1
+            if let previous {
+                let delta = time - previous
+                if delta > 0, delta < smallestDelta ?? .infinity {
+                    smallestDelta = delta
+                }
+            }
+            previous = time
+        }
+        let fallbackCount = max(count, 8)
+        let bucket = smallestDelta
             ?? (layout.rightEdge - layout.leftEdge) / Double(fallbackCount)
         let width = CGFloat(
             bucket / max(layout.rightEdge - layout.leftEdge, 0.001)

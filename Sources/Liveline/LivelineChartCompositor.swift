@@ -18,6 +18,7 @@ struct LivelineCompositorInput {
     var reveal: Double
     var animationTimestamp: TimeInterval
     var deltaTime: TimeInterval
+    var textScale: LivelineTextScale = .standard
 }
 
 enum LivelineContentOverlay {
@@ -33,6 +34,11 @@ enum LivelineContentOverlay {
     case donut(LivelineDonutGeometry, LivelineDonutStyle)
     case gauge(LivelineGaugeRenderGeometry, LivelineGaugeStyle)
     case funnel(LivelineFunnelGeometry, LivelineFunnelStyle)
+    case histogram(LivelineHistogramGeometry, LivelineHistogramStyle)
+    case bullet(LivelineBulletGeometry, LivelineBulletStyle)
+    case treemap(LivelineTreemapGeometry, LivelineTreemapStyle)
+    case sunburst(LivelineSunburstGeometry, LivelineSunburstStyle)
+    case sankey(LivelineSankeyGeometry, LivelineSankeyStyle)
     case standard
 }
 
@@ -87,6 +93,7 @@ extension LivelineRenderer {
                 scrubAmount: input.scrubAmount,
                 smoothValue: input.smoothValue,
                 swingMagnitude: input.swingMagnitude,
+                textScale: input.textScale,
                 timestamp: input.animationTimestamp,
                 deltaTime: input.deltaTime
             )
@@ -174,8 +181,12 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                segments: LivelineMath.waterfallSegments(points: data, initialValue: style.resolvedInitialValue)
-                    .livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                segments: LivelineMath.waterfallSegments(
+                    points: data,
+                    initialValue: style.resolvedInitialValue,
+                    state: state
+                )
+                .livelineVisible(in: layout.leftEdge...layout.rightEdge),
                 style: style,
                 reveal: reveal
             )
@@ -241,6 +252,7 @@ extension LivelineRenderer {
                 palette: palette,
                 geometry: geometry,
                 style: style,
+                textScale: input.textScale,
                 drawLabels: drawText
             )
             return .timeline(geometry, style)
@@ -262,29 +274,131 @@ extension LivelineRenderer {
                 geometry: geometry,
                 style: style,
                 formatValue: config.formatValue,
+                textScale: input.textScale,
                 drawLabels: drawText
             )
             return .heatmap(geometry, style)
 
         case let .radar(data, style):
             let geometry = radarGeometry(points: data, style: style, layout: layout, reveal: reveal)
-            drawRadar(context: &context, palette: palette, geometry: geometry, points: data, style: style, drawLabels: drawText)
+            drawRadar(context: &context, palette: palette, geometry: geometry, points: data, style: style, textScale: input.textScale, drawLabels: drawText)
             return .radar(geometry, data, style)
 
         case let .donut(data, style):
             let geometry = donutGeometry(data: data, style: style, layout: layout, palette: palette, reveal: reveal)
-            drawDonut(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, drawLabels: drawText)
+            drawDonut(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale, drawLabels: drawText)
             return .donut(geometry, style)
 
         case let .gauge(value, range, style):
             let geometry = gaugeRenderGeometry(value: value, range: range, style: style, layout: layout, reveal: reveal)
-            drawGauge(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, drawLabels: drawText)
+            drawGauge(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale, drawLabels: drawText)
             return .gauge(geometry, style)
 
         case let .funnel(data, style):
             let geometry = funnelGeometry(data: data, style: style, layout: layout, palette: palette, reveal: reveal)
-            drawFunnel(context: &context, geometry: geometry, style: style, formatValue: config.formatValue, drawLabels: drawText)
+            drawFunnel(context: &context, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale, drawLabels: drawText)
             return .funnel(geometry, style)
+
+        case let .histogram(values, style):
+            let geometry = histogramGeometry(
+                bins: state.histogramBins(values: values, binning: style.binning),
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: reveal
+            )
+            drawHistogram(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale,
+                drawLabels: drawText
+            )
+            return .histogram(geometry, style)
+
+        case let .bullet(style):
+            let geometry = bulletGeometry(style: style, layout: layout, palette: palette, reveal: reveal)
+            drawBullet(
+                context: &context,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale,
+                drawLabels: drawText
+            )
+            return .bullet(geometry, style)
+
+        case let .treemap(nodes, style):
+            let plotRect = CGRect(
+                x: layout.plotLeftX,
+                y: layout.padding.top,
+                width: layout.chartWidth,
+                height: layout.chartHeight
+            )
+            let geometry = treemapGeometry(
+                nodes: nodes,
+                tiling: state.treemapLayout(nodes: nodes, style: style, in: plotRect),
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: reveal
+            )
+            drawTreemap(
+                context: &context,
+                layout: layout,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale,
+                drawLabels: drawText
+            )
+            return .treemap(geometry, style)
+
+        case let .sunburst(nodes, style):
+            // Radial layout is pure trigonometry over the node values, cheap
+            // enough to follow the donut's idiom and run in the draw pass.
+            let geometry = sunburstGeometry(
+                nodes: nodes,
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: reveal
+            )
+            drawSunburst(
+                context: &context,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale,
+                drawLabels: drawText
+            )
+            return .sunburst(geometry, style)
+
+        case let .sankey(links, style):
+            let geometry = sankeyGeometry(
+                links: links,
+                graph: state.sankeyGraph(links: links),
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: reveal
+            )
+            drawSankey(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale,
+                drawLabels: drawText
+            )
+            return .sankey(geometry, style)
 
         case let .candle(_, _, candles, candleWidth, liveCandle, lineData, lineValue):
             return .candle(
@@ -307,7 +421,8 @@ extension LivelineRenderer {
                     reveal: reveal,
                     timestamp: input.animationTimestamp,
                     deltaTime: input.deltaTime,
-                    smoothValue: input.smoothValue
+                    smoothValue: input.smoothValue,
+                    textScale: input.textScale
                 )
             )
 
@@ -331,7 +446,8 @@ extension LivelineRenderer {
                 alpha: reveal,
                 showPulse: config.pulse && reveal > 0.6 && state.pauseProgress < 0.5,
                 timestamp: input.animationTimestamp,
-                legendSide: config.seriesLegendSide,
+                legendSide: config.seriesLegendSide.resolved(isRTL: layout.isRTL),
+                textScale: input.textScale,
                 drawsLabel: drawText
             )
             return .series(entries: series, endpoints: endpoints)
@@ -359,13 +475,15 @@ extension LivelineRenderer {
                 momentum: resolvedMomentum(config: config, points: input.prepared.primaryVisible),
                 y: livePoint.y,
                 config: config,
+                textScale: input.textScale,
                 alpha: reveal
             )
         case let .timeline(geometry, style):
             drawTimelineLabels(
                 context: &context,
                 geometry: geometry,
-                style: style
+                style: style,
+                textScale: input.textScale
             )
         case let .heatmap(geometry, style):
             drawHeatmapLabels(
@@ -374,16 +492,64 @@ extension LivelineRenderer {
                 palette: palette,
                 geometry: geometry,
                 style: style,
-                formatValue: config.formatValue
+                formatValue: config.formatValue,
+                textScale: input.textScale
             )
         case let .radar(geometry, points, style):
-            drawRadarLabels(context: &context, palette: palette, geometry: geometry, points: points, style: style)
+            drawRadarLabels(context: &context, palette: palette, geometry: geometry, points: points, style: style, textScale: input.textScale)
         case let .donut(geometry, style):
-            drawDonutLabels(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue)
+            drawDonutLabels(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale)
         case let .gauge(geometry, style):
-            drawGaugeLabel(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue)
+            drawGaugeLabel(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale)
         case let .funnel(geometry, style):
-            drawFunnelLabels(context: &context, geometry: geometry, style: style, formatValue: config.formatValue)
+            drawFunnelLabels(context: &context, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale)
+        case let .histogram(geometry, style):
+            drawHistogramLabels(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale
+            )
+        case let .bullet(geometry, style):
+            drawBulletLabels(
+                context: &context,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale
+            )
+        case let .treemap(geometry, style):
+            drawTreemapLabels(
+                context: &context,
+                layout: layout,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale
+            )
+        case let .sunburst(geometry, style):
+            drawSunburstLabels(
+                context: &context,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale
+            )
+        case let .sankey(geometry, style):
+            drawSankeyLabels(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: config.formatValue,
+                textScale: input.textScale
+            )
         case let .series(_, endpoints):
             drawSeriesEndpoints(
                 context: &context,
@@ -391,7 +557,8 @@ extension LivelineRenderer {
                 alpha: reveal,
                 showPulse: false,
                 timestamp: input.animationTimestamp,
-                legendSide: config.seriesLegendSide,
+                legendSide: config.seriesLegendSide.resolved(isRTL: layout.isRTL),
+                textScale: input.textScale,
                 drawsDot: false
             )
         case .candle, .standard:
@@ -409,6 +576,7 @@ extension LivelineRenderer {
         scrubAmount: Double,
         configuration: LivelineChartConfiguration,
         tooltipSelection: LivelineTooltipSelection?,
+        textScale: LivelineTextScale,
         reveal: Double,
         animationTimestamp: TimeInterval
     ) {
@@ -470,12 +638,14 @@ extension LivelineRenderer {
                 alpha: scrubAmount
             )
 
-        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel:
+        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel, .histogram, .bullet,
+             .treemap, .sunburst, .sankey:
             break
         }
 
         switch overlay {
-        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel:
+        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel, .histogram, .bullet,
+             .treemap, .sunburst, .sankey:
             break
         default:
             drawActivePoint(
@@ -495,6 +665,7 @@ extension LivelineRenderer {
             palette: palette,
             selection: tooltipSelection,
             configuration: configuration,
+            textScale: textScale,
             alpha: scrubAmount
         )
     }

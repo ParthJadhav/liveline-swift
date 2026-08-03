@@ -142,9 +142,23 @@ public struct LivelineStackedBarStyle {
     var resolvedSegmentSpacing: CGFloat { segmentSpacing.livelineAtLeast(0, fallback: 1) }
 }
 
+/// Where a stack is anchored on the value axis.
+///
+/// `.zero` stacks upwards from the value axis' zero line. `.centered` offsets
+/// every stack by half its own height so the layers ripple around a shared
+/// middle — the streamgraph presentation. Absolute values stop being readable
+/// in that mode, so a centered chart draws no value axis.
+public enum LivelineStackBaseline: String, CaseIterable, Sendable {
+    case zero
+    case centered
+}
+
 /// Visual options for a stacked-area chart.
 public struct LivelineStackedAreaStyle {
     public var mode: LivelineStackMode
+    /// Anchoring of the stack on the value axis. Defaults to `.zero`; use
+    /// `.centered` for a streamgraph.
+    public var baseline: LivelineStackBaseline
     public var colors: [Color]
     public var fillOpacity: Double
     public var boundaryLineWidth: CGFloat
@@ -152,12 +166,14 @@ public struct LivelineStackedAreaStyle {
 
     public init(
         mode: LivelineStackMode = .standard,
+        baseline: LivelineStackBaseline = .zero,
         colors: [Color] = [],
         fillOpacity: Double = 0.62,
         boundaryLineWidth: CGFloat = 1,
         showsBaseline: Bool = true
     ) {
         self.mode = mode
+        self.baseline = baseline
         self.colors = colors
         self.fillOpacity = fillOpacity
         self.boundaryLineWidth = boundaryLineWidth
@@ -436,4 +452,451 @@ public struct LivelineFunnelStyle {
     var resolvedMinimumWidthRatio: CGFloat { minimumWidthRatio.livelineClamped(0.02, resolvedMaximumWidthRatio, fallback: 0.18) }
     var resolvedSpacing: CGFloat { spacing.livelineAtLeast(0, fallback: 4) }
     var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 4) }
+}
+
+/// How a histogram decides how many bins to split its samples into.
+public enum LivelineHistogramBinning: Hashable, Sendable {
+    /// Freedman–Diaconis, which adapts the bin width to the interquartile
+    /// range, falling back to Sturges when the samples have no spread in
+    /// their middle half.
+    case automatic
+    /// `ceil(log2(n)) + 1` bins, the classic Sturges rule.
+    case sturges
+    /// `2 · IQR · n^(-1/3)` bin width, robust against outliers.
+    case freedmanDiaconis
+    /// An explicit bin count, clamped to `1...512`.
+    case count(Int)
+
+    /// Stable identifier used by the render caches.
+    var cacheIdentifier: String {
+        switch self {
+        case .automatic: return "automatic"
+        case .sturges: return "sturges"
+        case .freedmanDiaconis: return "freedmanDiaconis"
+        case let .count(count): return "count-\(count)"
+        }
+    }
+}
+
+/// One bin of a histogram: a half-open `lowerBound..<upperBound` value interval
+/// and the number of samples that fell inside it. The final bin of a histogram
+/// is closed so the largest sample is counted.
+public struct LivelineHistogramBin: Identifiable, Hashable, Sendable {
+    public var lowerBound: Double
+    public var upperBound: Double
+    public var count: Int
+
+    public var id: Double { lowerBound }
+
+    /// The centre of the bin, used to place labels and hover anchors.
+    public var midpoint: Double { (lowerBound + upperBound) / 2 }
+
+    public init(lowerBound: Double, upperBound: Double, count: Int) {
+        self.lowerBound = min(lowerBound, upperBound)
+        self.upperBound = max(lowerBound, upperBound)
+        self.count = max(count, 0)
+    }
+}
+
+/// Visual options for a histogram.
+public struct LivelineHistogramStyle {
+    public var binning: LivelineHistogramBinning
+    /// Bar fill. Defaults to the chart accent.
+    public var color: Color?
+    /// Gap between neighbouring bars in points. Histogram bars are contiguous
+    /// by convention, so this defaults to a hairline separator.
+    public var barSpacing: CGFloat
+    public var cornerRadius: CGFloat
+    public var fillOpacity: Double
+    public var showsBaseline: Bool
+    /// Draws the value-range labels beneath the first, middle, and last edge.
+    public var showsEdgeLabels: Bool
+    /// Draws each bin's count inside its bar when the bar is wide enough.
+    public var showsCounts: Bool
+
+    public init(
+        binning: LivelineHistogramBinning = .automatic,
+        color: Color? = nil,
+        barSpacing: CGFloat = 1,
+        cornerRadius: CGFloat = 2,
+        fillOpacity: Double = 0.9,
+        showsBaseline: Bool = true,
+        showsEdgeLabels: Bool = true,
+        showsCounts: Bool = false
+    ) {
+        self.binning = binning
+        self.color = color
+        self.barSpacing = barSpacing
+        self.cornerRadius = cornerRadius
+        self.fillOpacity = fillOpacity
+        self.showsBaseline = showsBaseline
+        self.showsEdgeLabels = showsEdgeLabels
+        self.showsCounts = showsCounts
+    }
+
+    var resolvedBarSpacing: CGFloat { barSpacing.livelineClamped(0, 12, fallback: 1) }
+    var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 2) }
+    var resolvedFillOpacity: Double { fillOpacity.livelineClamped(0, 1, fallback: 0.9) }
+}
+
+/// One qualitative band of a bullet chart, running from the previous band's
+/// upper bound — or the axis minimum for the first band — up to `value`.
+public struct LivelineBulletRange: Identifiable, Equatable {
+    /// The band's upper bound on the measure axis.
+    public var value: Double
+    public var label: String?
+    public var color: Color?
+
+    public var id: Double { value }
+
+    public init(value: Double, label: String? = nil, color: Color? = nil) {
+        self.value = value.isFinite ? value : 0
+        self.label = label
+        self.color = color
+    }
+}
+
+/// Visual options and data for a bullet chart: a compact horizontal KPI with
+/// qualitative bands behind a measure bar and a target tick.
+public struct LivelineBulletStyle {
+    /// The value being reported.
+    public var measure: Double
+    /// The value being aimed at, drawn as a tick across the bands.
+    public var target: Double?
+    /// Qualitative bands, ordered from worst to best. Unordered input is sorted
+    /// by `value` before it is drawn.
+    public var ranges: [LivelineBulletRange]
+    /// The measure axis. When `nil` it spans zero (or the smallest supplied
+    /// value) through the largest of measure, target, and band bounds.
+    public var axisRange: ClosedRange<Double>?
+    public var label: String?
+    public var barHeightRatio: CGFloat
+    /// Height of the measure bar, as a fraction of the plot height. It is
+    /// always read relative to `barHeightRatio`, so a capped track scales the
+    /// measure with it.
+    public var measureHeightRatio: CGFloat
+    /// Ceiling on the qualitative track's height, in points. A bullet is a
+    /// compact KPI strip; without a cap a tall frame stretches it into a
+    /// slab.
+    public var maximumBarHeight: CGFloat
+    public var measureColor: Color?
+    public var targetColor: Color?
+    public var bandOpacity: Double
+    public var cornerRadius: CGFloat
+    public var showsValue: Bool
+    /// Draws each band's label under the track, for bands wide enough to hold
+    /// the text.
+    public var showsBandLabels: Bool
+
+    public init(
+        measure: Double,
+        target: Double? = nil,
+        ranges: [LivelineBulletRange] = [],
+        axisRange: ClosedRange<Double>? = nil,
+        label: String? = nil,
+        barHeightRatio: CGFloat = 0.42,
+        measureHeightRatio: CGFloat = 0.18,
+        maximumBarHeight: CGFloat = 44,
+        measureColor: Color? = nil,
+        targetColor: Color? = nil,
+        bandOpacity: Double = 0.34,
+        cornerRadius: CGFloat = 3,
+        showsValue: Bool = true,
+        showsBandLabels: Bool = true
+    ) {
+        self.measure = measure.isFinite ? measure : 0
+        self.target = target.flatMap { $0.isFinite ? $0 : nil }
+        self.ranges = ranges
+        self.axisRange = axisRange
+        self.label = label
+        self.barHeightRatio = barHeightRatio
+        self.measureHeightRatio = measureHeightRatio
+        self.maximumBarHeight = maximumBarHeight
+        self.measureColor = measureColor
+        self.targetColor = targetColor
+        self.bandOpacity = bandOpacity
+        self.cornerRadius = cornerRadius
+        self.showsValue = showsValue
+        self.showsBandLabels = showsBandLabels
+    }
+
+    var resolvedMeasure: Double { LivelineScalar.value(measure) }
+    var resolvedTarget: Double? { target.flatMap { $0.isFinite ? LivelineScalar.value($0) : nil } }
+    var resolvedBarHeightRatio: CGFloat { barHeightRatio.livelineClamped(0.05, 1, fallback: 0.42) }
+    var resolvedMeasureHeightRatio: CGFloat {
+        measureHeightRatio.livelineClamped(0.05, resolvedBarHeightRatio, fallback: min(0.18, resolvedBarHeightRatio))
+    }
+    var resolvedMaximumBarHeight: CGFloat { maximumBarHeight.livelineClamped(6, 400, fallback: 44) }
+    var resolvedBandOpacity: Double { bandOpacity.livelineClamped(0, 1, fallback: 0.34) }
+    var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 3) }
+
+    /// Bands ordered worst to best, with non-finite and non-positive-width
+    /// entries dropped.
+    var resolvedRanges: [LivelineBulletRange] {
+        ranges
+            .filter { $0.value.isFinite }
+            .map { LivelineBulletRange(value: LivelineScalar.value($0.value), label: $0.label, color: $0.color) }
+            .sorted { $0.value < $1.value }
+    }
+
+    /// The measure axis actually drawn, always non-degenerate.
+    var resolvedAxisRange: ClosedRange<Double> {
+        if let axisRange {
+            return LivelineScalar.nondegenerateRange(
+                lower: axisRange.lowerBound,
+                upper: axisRange.upperBound,
+                fallback: 0...1
+            )
+        }
+        let candidates = [resolvedMeasure] + (resolvedTarget.map { [$0] } ?? []) + resolvedRanges.map(\.value)
+        let upper = candidates.max() ?? 1
+        let lower = min(candidates.min() ?? 0, 0)
+        return LivelineScalar.nondegenerateRange(lower: lower, upper: upper, fallback: 0...1)
+    }
+
+    /// The band the measure currently falls in, if any.
+    var containingRange: LivelineBulletRange? {
+        resolvedRanges.first { resolvedMeasure <= $0.value } ?? resolvedRanges.last
+    }
+}
+
+/// One node of a treemap.
+///
+/// A node is either a leaf — it carries its own `value` — or a parent, in which
+/// case its children subdivide the rectangle the parent was allotted and the
+/// parent's own `value` is ignored in favour of the children's sum. Only one
+/// level of nesting is laid out; grandchildren are folded into their parent
+/// leaf so a deeply nested tree still renders rather than silently dropping
+/// data.
+public struct LivelineTreemapNode: Identifiable, Sendable {
+    public var id: String
+    public var label: String
+    public var value: Double
+    /// Overrides the palette ramp for this node's cell.
+    public var color: Color?
+    public var children: [LivelineTreemapNode]
+
+    public init(
+        id: String? = nil,
+        label: String,
+        value: Double = 0,
+        color: Color? = nil,
+        children: [LivelineTreemapNode] = []
+    ) {
+        self.id = id ?? label
+        self.label = label
+        self.value = value.isFinite ? value : 0
+        self.color = color
+        self.children = children
+    }
+
+    /// The area this node claims: its children's total when it has any, its own
+    /// value otherwise. Negative and non-finite values contribute nothing.
+    public var resolvedValue: Double {
+        guard children.isEmpty else {
+            return children.reduce(0) { $0 + max($1.resolvedValue, 0) }
+        }
+        return value.isFinite ? max(value, 0) : 0
+    }
+}
+
+/// Visual options for a treemap.
+public struct LivelineTreemapStyle {
+    /// Gap left between neighbouring cells, in points.
+    public var padding: CGFloat
+    /// Extra gap left around a parent's group of children.
+    public var groupPadding: CGFloat
+    /// Height of the strip reserved at the top of a parent's frame for the
+    /// parent's own label. Zero draws no header, leaving the group's inset as
+    /// its only cue.
+    public var groupHeaderHeight: CGFloat
+    public var cornerRadius: CGFloat
+    public var colors: [Color]
+    public var fillOpacity: Double
+    public var showsLabels: Bool
+    public var showsValues: Bool
+    /// A cell narrower than this draws no label at all — the text would spill
+    /// past its own rectangle. Scaled by the Dynamic Type factor at draw time.
+    public var minimumLabelWidth: CGFloat
+    /// A cell shorter than this draws no label.
+    public var minimumLabelHeight: CGFloat
+
+    public init(
+        padding: CGFloat = 2,
+        groupPadding: CGFloat = 2,
+        groupHeaderHeight: CGFloat = 20,
+        cornerRadius: CGFloat = 3,
+        colors: [Color] = [],
+        fillOpacity: Double = 0.9,
+        showsLabels: Bool = true,
+        showsValues: Bool = true,
+        minimumLabelWidth: CGFloat = 54,
+        minimumLabelHeight: CGFloat = 22
+    ) {
+        self.padding = padding
+        self.groupPadding = groupPadding
+        self.groupHeaderHeight = groupHeaderHeight
+        self.cornerRadius = cornerRadius
+        self.colors = colors
+        self.fillOpacity = fillOpacity
+        self.showsLabels = showsLabels
+        self.showsValues = showsValues
+        self.minimumLabelWidth = minimumLabelWidth
+        self.minimumLabelHeight = minimumLabelHeight
+    }
+
+    var resolvedPadding: CGFloat { padding.livelineClamped(0, 24, fallback: 2) }
+    var resolvedGroupPadding: CGFloat { groupPadding.livelineClamped(0, 24, fallback: 2) }
+    var resolvedGroupHeaderHeight: CGFloat {
+        showsLabels ? groupHeaderHeight.livelineClamped(0, 60, fallback: 20) : 0
+    }
+    var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 3) }
+    var resolvedFillOpacity: Double { fillOpacity.livelineClamped(0, 1, fallback: 0.9) }
+    var resolvedMinimumLabelWidth: CGFloat { minimumLabelWidth.livelineClamped(0, 400, fallback: 54) }
+    var resolvedMinimumLabelHeight: CGFloat { minimumLabelHeight.livelineClamped(0, 400, fallback: 22) }
+    /// Inset from a cell's edge to its label, in points.
+    var labelInset: CGFloat { 10 }
+}
+
+/// One node of a sunburst.
+///
+/// Top-level nodes fill the inner ring in proportion to their value; each
+/// node's children divide that node's own angular span across the outer ring.
+/// Two levels are laid out — a sunburst deeper than that stops being legible at
+/// chart sizes — and deeper descendants are folded into their nearest drawn
+/// ancestor.
+public struct LivelineSunburstNode: Identifiable, Sendable {
+    public var id: String
+    public var label: String
+    public var value: Double
+    public var color: Color?
+    public var children: [LivelineSunburstNode]
+
+    public init(
+        id: String? = nil,
+        label: String,
+        value: Double = 0,
+        color: Color? = nil,
+        children: [LivelineSunburstNode] = []
+    ) {
+        self.id = id ?? label
+        self.label = label
+        self.value = value.isFinite ? value : 0
+        self.color = color
+        self.children = children
+    }
+
+    /// The angular weight this node claims: its children's total when it has
+    /// any, its own value otherwise.
+    public var resolvedValue: Double {
+        guard children.isEmpty else {
+            return children.reduce(0) { $0 + max($1.resolvedValue, 0) }
+        }
+        return value.isFinite ? max(value, 0) : 0
+    }
+}
+
+/// Visual options for a sunburst.
+public struct LivelineSunburstStyle {
+    /// Radius of the hollow centre as a fraction of the outer radius.
+    public var innerRadiusRatio: CGFloat
+    /// The inner ring's share of the drawable band. The outer ring takes the
+    /// rest, minus `ringSpacing`.
+    public var innerRingRatio: CGFloat
+    /// Gap between the two rings, in points.
+    public var ringSpacing: CGFloat
+    /// Angular gap left between neighbouring segments.
+    public var gapDegrees: Double
+    public var colors: [Color]
+    public var showsLabels: Bool
+    public var showsValues: Bool
+    /// An arc narrower than this sweeps too little to hold a label.
+    public var minimumLabelDegrees: Double
+
+    public init(
+        innerRadiusRatio: CGFloat = 0.3,
+        innerRingRatio: CGFloat = 0.45,
+        ringSpacing: CGFloat = 2,
+        gapDegrees: Double = 1,
+        colors: [Color] = [],
+        showsLabels: Bool = true,
+        showsValues: Bool = false,
+        minimumLabelDegrees: Double = 18
+    ) {
+        self.innerRadiusRatio = innerRadiusRatio
+        self.innerRingRatio = innerRingRatio
+        self.ringSpacing = ringSpacing
+        self.gapDegrees = gapDegrees
+        self.colors = colors
+        self.showsLabels = showsLabels
+        self.showsValues = showsValues
+        self.minimumLabelDegrees = minimumLabelDegrees
+    }
+
+    var resolvedInnerRadiusRatio: CGFloat { innerRadiusRatio.livelineClamped(0, 0.8, fallback: 0.3) }
+    var resolvedInnerRingRatio: CGFloat { innerRingRatio.livelineClamped(0.15, 0.85, fallback: 0.45) }
+    var resolvedRingSpacing: CGFloat { ringSpacing.livelineClamped(0, 24, fallback: 2) }
+    var resolvedGapDegrees: Double { gapDegrees.livelineClamped(0, 20, fallback: 1) }
+    var resolvedMinimumLabelDegrees: Double { minimumLabelDegrees.livelineClamped(0, 180, fallback: 18) }
+}
+
+/// One flow of a Sankey diagram, from a named source node to a named target.
+///
+/// Nodes are derived from the link endpoints, so a label that appears as a
+/// target in one link and a source in another is the same node.
+public struct LivelineSankeyLink: Identifiable, Sendable {
+    public var source: String
+    public var target: String
+    public var value: Double
+    public var color: Color?
+
+    public var id: String { "\(source)→\(target)" }
+
+    public init(source: String, target: String, value: Double, color: Color? = nil) {
+        self.source = source
+        self.target = target
+        self.value = value.isFinite ? max(value, 0) : 0
+        self.color = color
+    }
+}
+
+/// Visual options for a Sankey diagram.
+public struct LivelineSankeyStyle {
+    /// Width of a node's column bar, in points.
+    public var nodeWidth: CGFloat
+    /// Vertical gap between two nodes stacked in the same column.
+    public var nodeSpacing: CGFloat
+    public var linkOpacity: Double
+    public var cornerRadius: CGFloat
+    public var colors: [Color]
+    public var showsLabels: Bool
+    public var showsValues: Bool
+    /// A node bar shorter than this draws no label.
+    public var minimumLabelHeight: CGFloat
+
+    public init(
+        nodeWidth: CGFloat = 10,
+        nodeSpacing: CGFloat = 8,
+        linkOpacity: Double = 0.38,
+        cornerRadius: CGFloat = 2,
+        colors: [Color] = [],
+        showsLabels: Bool = true,
+        showsValues: Bool = false,
+        minimumLabelHeight: CGFloat = 12
+    ) {
+        self.nodeWidth = nodeWidth
+        self.nodeSpacing = nodeSpacing
+        self.linkOpacity = linkOpacity
+        self.cornerRadius = cornerRadius
+        self.colors = colors
+        self.showsLabels = showsLabels
+        self.showsValues = showsValues
+        self.minimumLabelHeight = minimumLabelHeight
+    }
+
+    var resolvedNodeWidth: CGFloat { nodeWidth.livelineClamped(1, 60, fallback: 10) }
+    var resolvedNodeSpacing: CGFloat { nodeSpacing.livelineClamped(0, 80, fallback: 8) }
+    var resolvedLinkOpacity: Double { linkOpacity.livelineClamped(0, 1, fallback: 0.38) }
+    var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 2) }
+    var resolvedMinimumLabelHeight: CGFloat { minimumLabelHeight.livelineClamped(0, 200, fallback: 12) }
 }
