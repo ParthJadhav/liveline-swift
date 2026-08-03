@@ -22,6 +22,9 @@ enum LivelineChartContent {
     case funnel(data: [LivelineCategoryValue], style: LivelineFunnelStyle)
     case histogram(values: [Double], style: LivelineHistogramStyle)
     case bullet(style: LivelineBulletStyle)
+    case treemap(nodes: [LivelineTreemapNode], style: LivelineTreemapStyle)
+    case sunburst(nodes: [LivelineSunburstNode], style: LivelineSunburstStyle)
+    case sankey(links: [LivelineSankeyLink], style: LivelineSankeyStyle)
     case candle(
         data: [LivelinePoint],
         value: Double,
@@ -56,6 +59,9 @@ enum LivelineChartKind: Hashable, CaseIterable {
     case funnel
     case histogram
     case bullet
+    case treemap
+    case sunburst
+    case sankey
     case candle
     case series
 }
@@ -204,6 +210,12 @@ extension LivelineChartContent {
             return self
 
         case .bullet:
+            return self
+
+        case .treemap, .sunburst, .sankey:
+            // Hierarchies and flows are keyed by label rather than time, and
+            // the layout passes already drop non-positive weights, so there is
+            // nothing an ordering pass could normalize here.
             return self
 
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
@@ -371,6 +383,36 @@ extension LivelineChartContent {
                 kind: .bullet,
                 capabilities: .radial,
                 currentValue: style.resolvedMeasure,
+                momentumPoints: [],
+                latestTime: nil
+            )
+
+        case let .treemap(nodes, _):
+            return semantics(
+                kind: .treemap,
+                capabilities: .radial,
+                currentValue: nodes.reduce(0) { $0 + $1.resolvedValue },
+                momentumPoints: [],
+                latestTime: nil
+            )
+
+        case let .sunburst(nodes, _):
+            return semantics(
+                kind: .sunburst,
+                capabilities: .radial,
+                currentValue: nodes.reduce(0) { $0 + $1.resolvedValue },
+                momentumPoints: [],
+                latestTime: nil
+            )
+
+        case let .sankey(links, _):
+            return semantics(
+                kind: .sankey,
+                capabilities: .radial,
+                // The sum of the flows the caller supplied. Cycle breaking can
+                // only lower it, and running the layout here would repeat the
+                // graph walk on every body evaluation.
+                currentValue: links.reduce(0) { $0 + max($1.value, 0) },
                 momentumPoints: [],
                 latestTime: nil
             )

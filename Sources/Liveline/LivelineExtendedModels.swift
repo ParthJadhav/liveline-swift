@@ -644,3 +644,233 @@ public struct LivelineBulletStyle {
         resolvedRanges.first { resolvedMeasure <= $0.value } ?? resolvedRanges.last
     }
 }
+
+/// One node of a treemap.
+///
+/// A node is either a leaf — it carries its own `value` — or a parent, in which
+/// case its children subdivide the rectangle the parent was allotted and the
+/// parent's own `value` is ignored in favour of the children's sum. Only one
+/// level of nesting is laid out; grandchildren are folded into their parent
+/// leaf so a deeply nested tree still renders rather than silently dropping
+/// data.
+public struct LivelineTreemapNode: Identifiable, Sendable {
+    public var id: String
+    public var label: String
+    public var value: Double
+    /// Overrides the palette ramp for this node's cell.
+    public var color: Color?
+    public var children: [LivelineTreemapNode]
+
+    public init(
+        id: String? = nil,
+        label: String,
+        value: Double = 0,
+        color: Color? = nil,
+        children: [LivelineTreemapNode] = []
+    ) {
+        self.id = id ?? label
+        self.label = label
+        self.value = value.isFinite ? value : 0
+        self.color = color
+        self.children = children
+    }
+
+    /// The area this node claims: its children's total when it has any, its own
+    /// value otherwise. Negative and non-finite values contribute nothing.
+    public var resolvedValue: Double {
+        guard children.isEmpty else {
+            return children.reduce(0) { $0 + max($1.resolvedValue, 0) }
+        }
+        return value.isFinite ? max(value, 0) : 0
+    }
+}
+
+/// Visual options for a treemap.
+public struct LivelineTreemapStyle {
+    /// Gap left between neighbouring cells, in points.
+    public var padding: CGFloat
+    /// Extra gap left around a parent's group of children.
+    public var groupPadding: CGFloat
+    public var cornerRadius: CGFloat
+    public var colors: [Color]
+    public var fillOpacity: Double
+    public var showsLabels: Bool
+    public var showsValues: Bool
+    /// A cell narrower than this draws no label at all — the text would spill
+    /// past its own rectangle. Scaled by the Dynamic Type factor at draw time.
+    public var minimumLabelWidth: CGFloat
+    /// A cell shorter than this draws no label.
+    public var minimumLabelHeight: CGFloat
+
+    public init(
+        padding: CGFloat = 2,
+        groupPadding: CGFloat = 2,
+        cornerRadius: CGFloat = 3,
+        colors: [Color] = [],
+        fillOpacity: Double = 0.9,
+        showsLabels: Bool = true,
+        showsValues: Bool = true,
+        minimumLabelWidth: CGFloat = 42,
+        minimumLabelHeight: CGFloat = 20
+    ) {
+        self.padding = padding
+        self.groupPadding = groupPadding
+        self.cornerRadius = cornerRadius
+        self.colors = colors
+        self.fillOpacity = fillOpacity
+        self.showsLabels = showsLabels
+        self.showsValues = showsValues
+        self.minimumLabelWidth = minimumLabelWidth
+        self.minimumLabelHeight = minimumLabelHeight
+    }
+
+    var resolvedPadding: CGFloat { padding.livelineClamped(0, 24, fallback: 2) }
+    var resolvedGroupPadding: CGFloat { groupPadding.livelineClamped(0, 24, fallback: 2) }
+    var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 3) }
+    var resolvedFillOpacity: Double { fillOpacity.livelineClamped(0, 1, fallback: 0.9) }
+    var resolvedMinimumLabelWidth: CGFloat { minimumLabelWidth.livelineClamped(0, 400, fallback: 42) }
+    var resolvedMinimumLabelHeight: CGFloat { minimumLabelHeight.livelineClamped(0, 400, fallback: 20) }
+}
+
+/// One node of a sunburst.
+///
+/// Top-level nodes fill the inner ring in proportion to their value; each
+/// node's children divide that node's own angular span across the outer ring.
+/// Two levels are laid out — a sunburst deeper than that stops being legible at
+/// chart sizes — and deeper descendants are folded into their nearest drawn
+/// ancestor.
+public struct LivelineSunburstNode: Identifiable, Sendable {
+    public var id: String
+    public var label: String
+    public var value: Double
+    public var color: Color?
+    public var children: [LivelineSunburstNode]
+
+    public init(
+        id: String? = nil,
+        label: String,
+        value: Double = 0,
+        color: Color? = nil,
+        children: [LivelineSunburstNode] = []
+    ) {
+        self.id = id ?? label
+        self.label = label
+        self.value = value.isFinite ? value : 0
+        self.color = color
+        self.children = children
+    }
+
+    /// The angular weight this node claims: its children's total when it has
+    /// any, its own value otherwise.
+    public var resolvedValue: Double {
+        guard children.isEmpty else {
+            return children.reduce(0) { $0 + max($1.resolvedValue, 0) }
+        }
+        return value.isFinite ? max(value, 0) : 0
+    }
+}
+
+/// Visual options for a sunburst.
+public struct LivelineSunburstStyle {
+    /// Radius of the hollow centre as a fraction of the outer radius.
+    public var innerRadiusRatio: CGFloat
+    /// The inner ring's share of the drawable band. The outer ring takes the
+    /// rest, minus `ringSpacing`.
+    public var innerRingRatio: CGFloat
+    /// Gap between the two rings, in points.
+    public var ringSpacing: CGFloat
+    /// Angular gap left between neighbouring segments.
+    public var gapDegrees: Double
+    public var colors: [Color]
+    public var showsLabels: Bool
+    public var showsValues: Bool
+    /// An arc narrower than this sweeps too little to hold a label.
+    public var minimumLabelDegrees: Double
+
+    public init(
+        innerRadiusRatio: CGFloat = 0.3,
+        innerRingRatio: CGFloat = 0.45,
+        ringSpacing: CGFloat = 2,
+        gapDegrees: Double = 1,
+        colors: [Color] = [],
+        showsLabels: Bool = true,
+        showsValues: Bool = false,
+        minimumLabelDegrees: Double = 18
+    ) {
+        self.innerRadiusRatio = innerRadiusRatio
+        self.innerRingRatio = innerRingRatio
+        self.ringSpacing = ringSpacing
+        self.gapDegrees = gapDegrees
+        self.colors = colors
+        self.showsLabels = showsLabels
+        self.showsValues = showsValues
+        self.minimumLabelDegrees = minimumLabelDegrees
+    }
+
+    var resolvedInnerRadiusRatio: CGFloat { innerRadiusRatio.livelineClamped(0, 0.8, fallback: 0.3) }
+    var resolvedInnerRingRatio: CGFloat { innerRingRatio.livelineClamped(0.15, 0.85, fallback: 0.45) }
+    var resolvedRingSpacing: CGFloat { ringSpacing.livelineClamped(0, 24, fallback: 2) }
+    var resolvedGapDegrees: Double { gapDegrees.livelineClamped(0, 20, fallback: 1) }
+    var resolvedMinimumLabelDegrees: Double { minimumLabelDegrees.livelineClamped(0, 180, fallback: 18) }
+}
+
+/// One flow of a Sankey diagram, from a named source node to a named target.
+///
+/// Nodes are derived from the link endpoints, so a label that appears as a
+/// target in one link and a source in another is the same node.
+public struct LivelineSankeyLink: Identifiable, Sendable {
+    public var source: String
+    public var target: String
+    public var value: Double
+    public var color: Color?
+
+    public var id: String { "\(source)→\(target)" }
+
+    public init(source: String, target: String, value: Double, color: Color? = nil) {
+        self.source = source
+        self.target = target
+        self.value = value.isFinite ? max(value, 0) : 0
+        self.color = color
+    }
+}
+
+/// Visual options for a Sankey diagram.
+public struct LivelineSankeyStyle {
+    /// Width of a node's column bar, in points.
+    public var nodeWidth: CGFloat
+    /// Vertical gap between two nodes stacked in the same column.
+    public var nodeSpacing: CGFloat
+    public var linkOpacity: Double
+    public var cornerRadius: CGFloat
+    public var colors: [Color]
+    public var showsLabels: Bool
+    public var showsValues: Bool
+    /// A node bar shorter than this draws no label.
+    public var minimumLabelHeight: CGFloat
+
+    public init(
+        nodeWidth: CGFloat = 10,
+        nodeSpacing: CGFloat = 8,
+        linkOpacity: Double = 0.38,
+        cornerRadius: CGFloat = 2,
+        colors: [Color] = [],
+        showsLabels: Bool = true,
+        showsValues: Bool = false,
+        minimumLabelHeight: CGFloat = 12
+    ) {
+        self.nodeWidth = nodeWidth
+        self.nodeSpacing = nodeSpacing
+        self.linkOpacity = linkOpacity
+        self.cornerRadius = cornerRadius
+        self.colors = colors
+        self.showsLabels = showsLabels
+        self.showsValues = showsValues
+        self.minimumLabelHeight = minimumLabelHeight
+    }
+
+    var resolvedNodeWidth: CGFloat { nodeWidth.livelineClamped(1, 60, fallback: 10) }
+    var resolvedNodeSpacing: CGFloat { nodeSpacing.livelineClamped(0, 80, fallback: 8) }
+    var resolvedLinkOpacity: Double { linkOpacity.livelineClamped(0, 1, fallback: 0.38) }
+    var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 2) }
+    var resolvedMinimumLabelHeight: CGFloat { minimumLabelHeight.livelineClamped(0, 200, fallback: 12) }
+}

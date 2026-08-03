@@ -1,6 +1,6 @@
 # Liveline Swift
 
-Native SwiftUI real-time charts for iOS apps. Liveline includes line, candlestick, multi-series, bar, range-band, scatter, step, lollipop, bubble, box-plot, waterfall, error-bar, dumbbell, stacked-bar, stacked-area, timeline, heatmap, radar, donut, gauge, funnel, histogram, and bullet renderers with typed customization.
+Native SwiftUI real-time charts for iOS apps. Liveline includes line, candlestick, multi-series, bar, range-band, scatter, step, lollipop, bubble, box-plot, waterfall, error-bar, dumbbell, stacked-bar, stacked-area, timeline, heatmap, radar, donut, gauge, funnel, histogram, bullet, treemap, sunburst, and Sankey renderers with typed customization.
 
 This repository is a Swift Package. Any iOS app can add it with Swift Package Manager and import `Liveline`.
 

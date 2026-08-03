@@ -233,6 +233,37 @@ struct LivelineAudioGraphModel: Equatable {
             explicitValueRange = axisRange.lowerBound < axisRange.upperBound ? axisRange : nil
             series = [categorical(LivelineStrings.labelValue, isContinuous: false, samples)]
 
+        case let .treemap(nodes, _):
+            let cells = LivelineChartAccessibilityModel.treemapCells(nodes)
+            isCategorical = true
+            categoryOrder = cells.map(\.label)
+            series = [categorical(LivelineStrings.labelValue, isContinuous: false, cells.map { ($0.label, $0.value) })]
+
+        case let .sunburst(nodes, _):
+            let cells = LivelineChartAccessibilityModel.sunburstCells(nodes)
+            isCategorical = true
+            categoryOrder = cells.map(\.label)
+            series = [categorical(LivelineStrings.labelValue, isContinuous: false, cells.map { ($0.label, $0.value) })]
+
+        case let .sankey(links, _):
+            // A flow diagram has no axis to sweep, but the link magnitudes do
+            // rank meaningfully against each other, so they sonify as one
+            // categorical series in the order the caller wrote them.
+            let graph = LivelineMath.sankeyGraph(links: links)
+            let samples = graph.links.map { link in
+                (
+                    String(
+                        format: LivelineStrings.labelFlowRouteFormat,
+                        graph.nodes[link.sourceIndex].label,
+                        graph.nodes[link.targetIndex].label
+                    ),
+                    link.value
+                )
+            }
+            isCategorical = true
+            categoryOrder = samples.map(\.0)
+            series = [categorical(LivelineStrings.labelFlow, isContinuous: false, samples)]
+
         case let .candle(data, _, candles, _, liveCandle, lineData, _):
             if configuration.lineMode, !lineData.isEmpty {
                 series = [timed(LivelineStrings.labelPrice, isContinuous: true, lineData.map { ($0.time, $0.value) })]

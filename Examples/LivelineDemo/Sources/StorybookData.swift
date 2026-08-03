@@ -221,6 +221,47 @@ enum StorybookData {
         }
     }
 
+    /// Cloud spend split across three services, one of which breaks down
+    /// further — enough to exercise both treemap levels.
+    static var treemap: [LivelineTreemapNode] {
+        [
+            LivelineTreemapNode(label: "Compute", value: 480, color: blue),
+            LivelineTreemapNode(label: "Storage", color: violet, children: [
+                LivelineTreemapNode(label: "Hot", value: 180),
+                LivelineTreemapNode(label: "Cold", value: 96),
+            ]),
+            LivelineTreemapNode(label: "Network", value: 210, color: cyan),
+            LivelineTreemapNode(label: "Observability", value: 120, color: green),
+            LivelineTreemapNode(label: "Other", value: 54, color: orange),
+        ]
+    }
+
+    static var sunburst: [LivelineSunburstNode] {
+        [
+            LivelineSunburstNode(label: "Direct", value: 320, color: blue),
+            LivelineSunburstNode(label: "Search", color: violet, children: [
+                LivelineSunburstNode(label: "Organic", value: 210),
+                LivelineSunburstNode(label: "Paid", value: 90),
+            ]),
+            LivelineSunburstNode(label: "Social", color: cyan, children: [
+                LivelineSunburstNode(label: "Posts", value: 120),
+                LivelineSunburstNode(label: "Ads", value: 60),
+            ]),
+            LivelineSunburstNode(label: "Referral", value: 110, color: green),
+        ]
+    }
+
+    static var sankey: [LivelineSankeyLink] {
+        [
+            LivelineSankeyLink(source: "Visits", target: "Signups", value: 420, color: blue),
+            LivelineSankeyLink(source: "Visits", target: "Bounced", value: 580, color: red),
+            LivelineSankeyLink(source: "Signups", target: "Activated", value: 260, color: violet),
+            LivelineSankeyLink(source: "Signups", target: "Dormant", value: 160, color: orange),
+            LivelineSankeyLink(source: "Activated", target: "Paid", value: 120, color: green),
+            LivelineSankeyLink(source: "Activated", target: "Churned", value: 140, color: cyan),
+        ]
+    }
+
     static var timeline: [LivelineTimelineItem] {
         [
             LivelineTimelineItem(id: "design", label: "Design", start: baseTime - 170, end: baseTime - 118, lane: 0),

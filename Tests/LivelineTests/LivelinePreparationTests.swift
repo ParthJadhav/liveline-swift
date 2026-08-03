@@ -146,6 +146,106 @@ final class LivelinePreparationTests: XCTestCase {
         XCTAssertEqual(grown, LivelineMath.waterfallSegments(points: extended, initialValue: 20))
     }
 
+    func testTreemapLayoutIsMemoizedPerNodeSetAndPlotSize() {
+        let nodes = [
+            LivelineTreemapNode(label: "A", value: 6),
+            LivelineTreemapNode(label: "B", value: 4),
+        ]
+        let style = LivelineTreemapStyle()
+        let state = LivelineRenderState()
+        let rect = CGRect(x: 0, y: 0, width: 200, height: 120)
+
+        let tiles = state.treemapTiles(nodes: nodes, style: style, in: rect)
+        XCTAssertEqual(tiles.count, 2)
+        XCTAssertTrue(
+            state.treemapTiles(nodes: nodes, style: style, in: rect).livelineSharesStorage(with: tiles)
+        )
+        // A resize is the one input a radial kind would not have; the treemap
+        // must fall out of the memo when the plot changes shape.
+        XCTAssertFalse(
+            state.treemapTiles(nodes: nodes, style: style, in: rect.insetBy(dx: 4, dy: 0))
+                .livelineSharesStorage(with: tiles)
+        )
+        XCTAssertFalse(
+            state.treemapTiles(nodes: nodes, style: LivelineTreemapStyle(padding: 8), in: rect)
+                .livelineSharesStorage(with: tiles)
+        )
+
+        let content = LivelineChartContent.treemap(nodes: nodes, style: style)
+        let prepared = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 0,
+            rightEdge: 10,
+            config: LivelineChartConfiguration(),
+            state: state
+        )
+        XCTAssertTrue(prepared.hasData)
+        XCTAssertEqual(prepared.primaryValue, 10)
+        XCTAssertFalse(
+            LivelineChartPreparer.prepare(
+                for: .treemap(nodes: [], style: style),
+                hiddenSeries: [],
+                leftEdge: 0,
+                rightEdge: 10,
+                config: LivelineChartConfiguration()
+            ).hasData
+        )
+    }
+
+    func testSankeyGraphIsMemoizedOnTheLinksAndSurvivesResizes() {
+        let links = [
+            LivelineSankeyLink(source: "A", target: "B", value: 10),
+            LivelineSankeyLink(source: "B", target: "C", value: 4),
+        ]
+        let state = LivelineRenderState()
+
+        let graph = state.sankeyGraph(links: links)
+        XCTAssertEqual(graph.nodes.count, 3)
+        XCTAssertEqual(state.sankeyGraph(links: links), graph)
+        XCTAssertNotEqual(
+            state.sankeyGraph(links: [LivelineSankeyLink(source: "A", target: "B", value: 10)]),
+            graph
+        )
+
+        let content = LivelineChartContent.sankey(links: links, style: LivelineSankeyStyle())
+        let configuration = LivelineChartConfiguration()
+        let prepared = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 0,
+            rightEdge: 10,
+            config: configuration,
+            state: state
+        )
+        XCTAssertEqual(prepared.rangePoints.map(\.value), [10, 4])
+        XCTAssertEqual(prepared.primaryValue, 14)
+
+        // A flow chart's prepared layout does depend on the links, so its cache
+        // key has to change with them.
+        let key = LivelineChartPreparer.cacheKey(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 0,
+            rightEdge: 10,
+            config: configuration
+        )
+        XCTAssertNotNil(key)
+        XCTAssertNotEqual(
+            key,
+            LivelineChartPreparer.cacheKey(
+                for: .sankey(
+                    links: [LivelineSankeyLink(source: "A", target: "Z", value: 10)],
+                    style: LivelineSankeyStyle()
+                ),
+                hiddenSeries: [],
+                leftEdge: 0,
+                rightEdge: 10,
+                config: configuration
+            )
+        )
+    }
+
     func testHistogramPreparationBinsOnceAndSpansTheCountAxis() {
         let values = [1.0, 2, 2, 3, 3, 3, 4, 9]
         let content = LivelineChartContent.histogram(values: values, style: LivelineHistogramStyle(binning: .count(4)))

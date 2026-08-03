@@ -347,4 +347,49 @@ extension StorybookCatalog {
             configuration: StorybookData.staticSnapshotConfig(theme: .light, window: 180, suffix: "%")
         )
     }
+
+    static let treemapBasic = chart(
+        id: .treemapBasic,
+        group: "Treemap",
+        title: "Cloud Spend",
+        detail: "Squarified areas; Storage subdivides into its own children.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            treemap: StorybookData.treemap,
+            color: StorybookData.blue,
+            style: LivelineTreemapStyle(padding: 3, cornerRadius: 4),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "")
+        )
+    }
+
+    static let sunburstBasic = chart(
+        id: .sunburstBasic,
+        group: "Sunburst",
+        title: "Acquisition Mix",
+        detail: "Inner ring by channel, outer ring by sub-channel.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            sunburst: StorybookData.sunburst,
+            color: StorybookData.blue,
+            style: LivelineSunburstStyle(),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "")
+        )
+    }
+
+    static let sankeyBasic = chart(
+        id: .sankeyBasic,
+        group: "Sankey",
+        title: "Funnel Flow",
+        detail: "Columns from longest-path layering; ribbons scale with value.",
+        background: StorybookData.darkBackground
+    ) {
+        LivelineChart(
+            sankey: StorybookData.sankey,
+            color: StorybookData.blue,
+            style: LivelineSankeyStyle(nodeWidth: 9, nodeSpacing: 10),
+            configuration: StorybookData.staticSnapshotConfig(theme: .dark, window: 180, suffix: "")
+        )
+    }
 }

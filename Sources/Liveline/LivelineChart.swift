@@ -292,6 +292,79 @@ public struct LivelineChart: View {
         self.init(content: .bullet(style: style), accent: color, configuration: configuration)
     }
 
+    /// Creates a treemap: nested rectangles whose areas are proportional to
+    /// their values, packed by the squarified algorithm.
+    ///
+    /// ```swift
+    /// LivelineChart(treemap: [
+    ///     LivelineTreemapNode(label: "Compute", value: 480),
+    ///     LivelineTreemapNode(label: "Storage", children: [
+    ///         LivelineTreemapNode(label: "Hot", value: 180),
+    ///         LivelineTreemapNode(label: "Cold", value: 60),
+    ///     ]),
+    /// ])
+    /// ```
+    ///
+    /// A flat list of leaves and a one-level hierarchy are both accepted; a
+    /// node with children ignores its own `value` in favour of their sum.
+    /// Non-positive weights occupy no area and are dropped.
+    public init(
+        treemap nodes: [LivelineTreemapNode],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineTreemapStyle = LivelineTreemapStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .treemap(nodes: nodes, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a sunburst: two concentric rings where the inner ring is the
+    /// top-level nodes and the outer ring subdivides each node's own span among
+    /// its children.
+    ///
+    /// ```swift
+    /// LivelineChart(sunburst: [
+    ///     LivelineSunburstNode(label: "Direct", value: 320),
+    ///     LivelineSunburstNode(label: "Search", children: [
+    ///         LivelineSunburstNode(label: "Organic", value: 210),
+    ///         LivelineSunburstNode(label: "Paid", value: 90),
+    ///     ]),
+    /// ])
+    /// ```
+    ///
+    /// Like every radial kind, a sunburst reads clockwise in both layout
+    /// directions.
+    public init(
+        sunburst nodes: [LivelineSunburstNode],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineSunburstStyle = LivelineSunburstStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .sunburst(nodes: nodes, style: style), accent: color, configuration: configuration)
+    }
+
+    /// Creates a Sankey diagram from a flat list of flows.
+    ///
+    /// ```swift
+    /// LivelineChart(sankey: [
+    ///     LivelineSankeyLink(source: "Visits", target: "Signups", value: 420),
+    ///     LivelineSankeyLink(source: "Signups", target: "Paid", value: 120),
+    /// ])
+    /// ```
+    ///
+    /// Nodes are derived from the link endpoints and placed in columns by a
+    /// single longest-path pass; their vertical order inside a column is the
+    /// order the links were written, with no crossing minimization. A cycle is
+    /// broken by dropping the link that closes it. In a right-to-left layout
+    /// the flow runs right to left.
+    public init(
+        sankey links: [LivelineSankeyLink],
+        color: Color = Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
+        style: LivelineSankeyStyle = LivelineSankeyStyle(),
+        configuration: LivelineChartConfiguration = LivelineChartConfiguration()
+    ) {
+        self.init(content: .sankey(links: links, style: style), accent: color, configuration: configuration)
+    }
+
     public init(
         series: [LivelineSeries],
         configuration: LivelineChartConfiguration = LivelineChartConfiguration()

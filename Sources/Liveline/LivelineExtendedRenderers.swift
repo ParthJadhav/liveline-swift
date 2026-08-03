@@ -975,3 +975,245 @@ extension LivelineRenderer {
     }
 
 }
+
+extension LivelineRenderer {
+    static func drawTreemap(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        geometry: LivelineTreemapGeometry,
+        style: LivelineTreemapStyle,
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale,
+        drawLabels: Bool = true
+    ) {
+        guard !geometry.cells.isEmpty, geometry.progress > 0.001 else { return }
+        var layer = context
+        layer.clip(to: plotClip(layout))
+
+        for cell in geometry.cells {
+            var cellLayer = layer
+            cellLayer.opacity *= cell.reveal
+            let radius = min(style.resolvedCornerRadius, cell.rect.width / 2, cell.rect.height / 2)
+            cellLayer.fill(
+                Path(roundedRect: cell.rect, cornerRadius: max(radius, 0)),
+                with: .color(cell.color.opacity(style.resolvedFillOpacity * cell.opacity))
+            )
+        }
+
+        if drawLabels {
+            drawTreemapLabels(
+                context: &context,
+                layout: layout,
+                geometry: geometry,
+                style: style,
+                formatValue: formatValue,
+                textScale: textScale
+            )
+        }
+    }
+
+    static func drawTreemapLabels(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        geometry: LivelineTreemapGeometry,
+        style: LivelineTreemapStyle,
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale
+    ) {
+        guard style.showsLabels || style.showsValues else { return }
+        var clipped = context
+        clipped.clip(to: plotClip(layout))
+        // Dynamic Type grows the glyphs but not the cell, so the threshold a
+        // cell has to clear grows with it.
+        let minimumWidth = textScale.scaled(style.resolvedMinimumLabelWidth)
+        let minimumHeight = textScale.scaled(style.resolvedMinimumLabelHeight)
+        let lineHeight = textScale.scaled(12)
+
+        for cell in geometry.cells where cell.reveal > 0.65 {
+            guard cell.rect.width >= minimumWidth, cell.rect.height >= minimumHeight else { continue }
+            var labelLayer = clipped
+            labelLayer.opacity *= LivelineMath.easedReveal((cell.reveal - 0.65) / 0.35)
+            let origin = CGPoint(x: cell.rect.minX + 6, y: cell.rect.minY + textScale.scaled(9))
+            if style.showsLabels {
+                drawText(
+                    cell.node.label,
+                    context: &labelLayer,
+                    at: origin,
+                    anchor: .leading,
+                    color: .white.opacity(0.94),
+                    font: textScale.font(10, weight: .semibold)
+                )
+            }
+            // The value needs a second line, which only the taller cells have.
+            guard style.showsValues else { continue }
+            guard !style.showsLabels || cell.rect.height >= minimumHeight + lineHeight else { continue }
+            drawText(
+                formatValue(cell.value),
+                context: &labelLayer,
+                at: CGPoint(x: origin.x, y: style.showsLabels ? origin.y + lineHeight : origin.y),
+                anchor: .leading,
+                color: .white.opacity(0.74),
+                font: textScale.font(9, weight: .regular, design: .monospaced)
+            )
+        }
+    }
+
+    static func drawSunburst(
+        context: inout GraphicsContext,
+        palette: LivelinePalette,
+        geometry: LivelineSunburstGeometry,
+        style: LivelineSunburstStyle,
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale,
+        drawLabels: Bool = true
+    ) {
+        guard !geometry.segments.isEmpty, geometry.total > 0, geometry.progress > 0.001 else { return }
+        let layer = context
+
+        for segment in geometry.segments where segment.revealedEnd > segment.span.start {
+            var arc = Path()
+            arc.addArc(
+                center: geometry.center,
+                radius: segment.pathRadius,
+                startAngle: .degrees(segment.span.start),
+                endAngle: .degrees(segment.revealedEnd),
+                clockwise: false
+            )
+            layer.stroke(
+                arc,
+                with: .color(segment.color),
+                style: StrokeStyle(lineWidth: segment.ringWidth, lineCap: .butt)
+            )
+        }
+
+        if drawLabels {
+            drawSunburstLabels(
+                context: &context,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: formatValue,
+                textScale: textScale
+            )
+        }
+    }
+
+    static func drawSunburstLabels(
+        context: inout GraphicsContext,
+        palette: LivelinePalette,
+        geometry: LivelineSunburstGeometry,
+        style: LivelineSunburstStyle,
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale
+    ) {
+        guard style.showsLabels, geometry.total > 0 else { return }
+        var labelLayer = context
+        labelLayer.opacity *= LivelineMath.easedReveal((geometry.progress - 0.5) / 0.5)
+        for segment in geometry.segments where segment.isFullyRevealed {
+            // A narrow wedge cannot hold a horizontal label without spilling
+            // over its neighbours.
+            guard segment.span.fullSweep >= style.resolvedMinimumLabelDegrees else { continue }
+            let angle = segment.span.middle * Double.pi / 180
+            let label = style.showsValues
+                ? "\(segment.label) \(formatValue(segment.value))"
+                : segment.label
+            let isOuter = segment.span.depth > 0
+            let radius = isOuter ? geometry.outerRadius + textScale.scaled(13) : segment.pathRadius
+            // An inner label sits *inside* its wedge, so the wedge also has to
+            // be long enough along the arc to hold the glyphs; an outer label
+            // hangs off the rim and only needs the sweep check above.
+            if !isOuter {
+                let arcLength = segment.span.fullSweep * Double.pi / 180 * Double(segment.pathRadius)
+                guard arcLength >= Double(textScale.scaled(CGFloat(label.count) * 5.4)) else { continue }
+            }
+            drawText(
+                label,
+                context: &labelLayer,
+                at: LivelineMath.polarPoint(center: geometry.center, radius: radius, angle: angle),
+                anchor: isOuter ? extendedRadialAnchor(angle: angle) : .center,
+                color: isOuter ? palette.gridLabel : .white.opacity(0.94),
+                font: textScale.font(9, weight: .medium)
+            )
+        }
+    }
+
+    static func drawSankey(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        geometry: LivelineSankeyGeometry,
+        style: LivelineSankeyStyle,
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale,
+        drawLabels: Bool = true
+    ) {
+        guard !geometry.nodes.isEmpty, geometry.progress > 0.001 else { return }
+        var layer = context
+        layer.clip(to: plotClip(layout))
+
+        for link in geometry.links {
+            layer.fill(link.path, with: .color(link.color.opacity(style.resolvedLinkOpacity)))
+        }
+
+        var nodeLayer = layer
+        nodeLayer.opacity *= min(geometry.progress * 2, 1)
+        for node in geometry.nodes {
+            nodeLayer.fill(
+                Path(
+                    roundedRect: node.rect,
+                    cornerRadius: min(style.resolvedCornerRadius, node.rect.width / 2)
+                ),
+                with: .color(node.color)
+            )
+        }
+
+        if drawLabels {
+            drawSankeyLabels(
+                context: &context,
+                layout: layout,
+                palette: palette,
+                geometry: geometry,
+                style: style,
+                formatValue: formatValue,
+                textScale: textScale
+            )
+        }
+    }
+
+    static func drawSankeyLabels(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        geometry: LivelineSankeyGeometry,
+        style: LivelineSankeyStyle,
+        formatValue: (Double) -> String,
+        textScale: LivelineTextScale
+    ) {
+        guard style.showsLabels else { return }
+        var labelLayer = context
+        labelLayer.opacity *= LivelineMath.easedReveal((geometry.progress - 0.45) / 0.55)
+        let minimumHeight = textScale.scaled(style.resolvedMinimumLabelHeight)
+        let inset = textScale.scaled(5)
+
+        for node in geometry.nodes where node.rect.height >= minimumHeight {
+            // A node hugging the right edge has no room outside it, so its
+            // label flips to the inboard side. Stated in physical coordinates,
+            // this holds for a mirrored right-to-left layout unchanged.
+            let leading = node.rect.maxX > geometry.plotRect.maxX - textScale.scaled(40)
+            let label = style.showsValues
+                ? "\(node.node.label) \(formatValue(node.node.throughput))"
+                : node.node.label
+            drawText(
+                label,
+                context: &labelLayer,
+                at: CGPoint(
+                    x: leading ? node.rect.minX - inset : node.rect.maxX + inset,
+                    y: node.rect.midY
+                ),
+                anchor: leading ? .trailing : .leading,
+                color: palette.gridLabel,
+                font: textScale.font(9, weight: .medium)
+            )
+        }
+    }
+}

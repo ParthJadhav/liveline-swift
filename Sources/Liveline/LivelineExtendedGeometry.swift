@@ -533,3 +533,334 @@ extension LivelineRenderer {
         CGPoint(x: (layout.plotLeftX + layout.rightX) / 2, y: layout.padding.top + layout.chartHeight / 2)
     }
 }
+
+struct LivelineTreemapCell {
+    var node: LivelineTreemapNode
+    /// The top-level node this cell belongs to, when the cell is a child.
+    var parentLabel: String?
+    var rect: CGRect
+    var color: Color
+    /// Multiplier applied on top of the style's fill opacity, used to separate
+    /// siblings that share a group colour.
+    var opacity: Double
+    var value: Double
+    /// Fraction of the whole treemap this cell occupies, in `0...1`.
+    var share: Double
+    var reveal: Double
+}
+
+struct LivelineTreemapGeometry {
+    var progress: Double
+    var plotRect: CGRect
+    var total: Double
+    var cells: [LivelineTreemapCell]
+}
+
+struct LivelineSunburstSegment {
+    var span: LivelineSunburstSpan
+    var label: String
+    var value: Double
+    var color: Color
+    var innerRadius: CGFloat
+    var outerRadius: CGFloat
+    /// The span's end after the reveal animation has swept it.
+    var revealedEnd: Double
+    var isFullyRevealed: Bool
+    /// Fraction of the whole sunburst this segment's own value represents.
+    var share: Double
+
+    var pathRadius: CGFloat { (innerRadius + outerRadius) / 2 }
+    var ringWidth: CGFloat { max(outerRadius - innerRadius, 1) }
+}
+
+struct LivelineSunburstGeometry {
+    var progress: Double
+    var center: CGPoint
+    var innerRadius: CGFloat
+    var outerRadius: CGFloat
+    var total: Double
+    var segments: [LivelineSunburstSegment]
+}
+
+struct LivelineSankeyNodeMark {
+    var node: LivelineSankeyNode
+    var index: Int
+    var rect: CGRect
+    var color: Color
+}
+
+struct LivelineSankeyLinkMark {
+    var link: LivelineSankeyResolvedLink
+    var sourceLabel: String
+    var targetLabel: String
+    var path: Path
+    var color: Color
+    var thickness: CGFloat
+    /// The ribbon's midpoint, used as the hover anchor.
+    var anchor: CGPoint
+}
+
+struct LivelineSankeyGeometry {
+    var progress: Double
+    var plotRect: CGRect
+    var total: Double
+    var nodes: [LivelineSankeyNodeMark]
+    var links: [LivelineSankeyLinkMark]
+}
+
+extension LivelineRenderer {
+    /// Squarified cells across the whole plot. The layout itself is a pure
+    /// function of the values and the rectangle — this pass only attaches
+    /// colours, shares, and the reveal stagger.
+    static func treemapGeometry(
+        nodes: [LivelineTreemapNode],
+        tiles: [LivelineTreemapTile],
+        style: LivelineTreemapStyle,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        reveal: Double
+    ) -> LivelineTreemapGeometry {
+        let progress = LivelineMath.easedReveal(reveal)
+        let plotRect = CGRect(
+            x: layout.plotLeftX,
+            y: layout.padding.top,
+            width: layout.chartWidth,
+            height: layout.chartHeight
+        )
+        let total = nodes.reduce(0) { $0 + $1.resolvedValue }
+        let cells = tiles.enumerated().compactMap { index, tile -> LivelineTreemapCell? in
+            guard let topIndex = tile.path.first, nodes.indices.contains(topIndex) else { return nil }
+            let parent = nodes[topIndex]
+            let node: LivelineTreemapNode
+            let childIndex: Int?
+            if tile.path.count > 1, parent.children.indices.contains(tile.path[1]) {
+                node = parent.children[tile.path[1]]
+                childIndex = tile.path[1]
+            } else {
+                node = parent
+                childIndex = nil
+            }
+            let localReveal = LivelineMath.staggeredReveal(index: index, count: tiles.count, reveal: reveal)
+            guard localReveal > 0.001 else { return nil }
+            let base = node.color
+                ?? parent.color
+                ?? extendedSeriesColor(index: topIndex, colors: style.colors, palette: palette)
+            // Siblings inside a group share the parent's hue, separated by a
+            // shallow opacity ramp rather than a second unrelated colour.
+            let opacity = childIndex.map { max(1 - Double($0) * 0.11, 0.55) } ?? 1
+            return LivelineTreemapCell(
+                node: node,
+                parentLabel: childIndex == nil ? nil : parent.label,
+                // Cells tile the plot in reading order, so a right-to-left
+                // layout mirrors them just like it mirrors a bar chart.
+                rect: layout.mirrored(tile.rect),
+                color: base,
+                opacity: opacity,
+                value: tile.value,
+                share: total > 0 ? tile.value / total : 0,
+                reveal: localReveal
+            )
+        }
+        return LivelineTreemapGeometry(progress: progress, plotRect: plotRect, total: total, cells: cells)
+    }
+
+    /// Two concentric rings of annular segments. Radial kinds are never
+    /// mirrored: a right-to-left reader still reads a ring clockwise.
+    static func sunburstGeometry(
+        nodes: [LivelineSunburstNode],
+        style: LivelineSunburstStyle,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        reveal: Double
+    ) -> LivelineSunburstGeometry {
+        let progress = LivelineMath.easedReveal(reveal)
+        let center = plotCenter(layout)
+        let outerRadius = max(12, min(layout.chartWidth, layout.chartHeight) * (style.showsLabels ? 0.36 : 0.45))
+        let holeRadius = outerRadius * style.resolvedInnerRadiusRatio
+        let spacing = min(style.resolvedRingSpacing, max(outerRadius - holeRadius - 4, 0))
+        let band = max(outerRadius - holeRadius - spacing, 2)
+        let innerThickness = max(band * style.resolvedInnerRingRatio, 1)
+        let outerThickness = max(band - innerThickness, 1)
+        let total = nodes.reduce(0) { $0 + $1.resolvedValue }
+
+        let spans = LivelineMath.sunburstSpans(nodes: nodes, gapDegrees: style.resolvedGapDegrees)
+        let segments = spans.compactMap { span -> LivelineSunburstSegment? in
+            guard let topIndex = span.path.first, nodes.indices.contains(topIndex) else { return nil }
+            let parent = nodes[topIndex]
+            let node: LivelineSunburstNode
+            let childIndex: Int?
+            if span.depth == 1, parent.children.indices.contains(span.path[1]) {
+                node = parent.children[span.path[1]]
+                childIndex = span.path[1]
+            } else {
+                node = parent
+                childIndex = nil
+            }
+            let base = node.color
+                ?? parent.color
+                ?? extendedSeriesColor(index: topIndex, colors: style.colors, palette: palette)
+            let color = childIndex.map { base.opacity(max(1 - Double($0) * 0.13, 0.5)) } ?? base
+            let inner = span.depth == 0 ? holeRadius : holeRadius + innerThickness + spacing
+            let outer = span.depth == 0 ? holeRadius + innerThickness : holeRadius + innerThickness + spacing + outerThickness
+            let revealedEnd = span.start + (span.end - span.start) * progress
+            return LivelineSunburstSegment(
+                span: span,
+                label: node.label,
+                value: span.value,
+                color: color,
+                innerRadius: inner,
+                outerRadius: outer,
+                revealedEnd: revealedEnd,
+                isFullyRevealed: progress >= 0.98,
+                share: total > 0 ? span.value / total : 0
+            )
+        }
+        return LivelineSunburstGeometry(
+            progress: progress,
+            center: center,
+            innerRadius: holeRadius,
+            outerRadius: outerRadius,
+            total: total,
+            segments: segments
+        )
+    }
+
+    /// Node bars per column with cubic ribbons between them. The columns run in
+    /// the reading direction, so a right-to-left layout flows right to left.
+    static func sankeyGeometry(
+        links: [LivelineSankeyLink],
+        graph: LivelineSankeyGraph,
+        style: LivelineSankeyStyle,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        reveal: Double
+    ) -> LivelineSankeyGeometry {
+        let progress = LivelineMath.easedReveal(reveal)
+        let plotRect = CGRect(
+            x: layout.plotLeftX,
+            y: layout.padding.top,
+            width: layout.chartWidth,
+            height: layout.chartHeight
+        )
+        guard !graph.nodes.isEmpty, graph.columnCount > 0, plotRect.width > 0, plotRect.height > 0 else {
+            return LivelineSankeyGeometry(
+                progress: progress,
+                plotRect: plotRect,
+                total: graph.total,
+                nodes: [],
+                links: []
+            )
+        }
+
+        let nodeWidth = min(style.resolvedNodeWidth, plotRect.width / CGFloat(max(graph.columnCount, 1)) / 2)
+        let spacing = style.resolvedNodeSpacing
+        let columns = (0..<graph.columnCount).map { graph.indices(inColumn: $0) }
+
+        // One value-to-pixel scale shared by every column, so a node's height
+        // means the same thing wherever it sits.
+        var scale = CGFloat.greatestFiniteMagnitude
+        for column in columns where !column.isEmpty {
+            let throughput = column.reduce(0) { $0 + graph.nodes[$1].throughput }
+            let available = plotRect.height - spacing * CGFloat(column.count - 1)
+            guard throughput > 0, available > 0 else { continue }
+            scale = min(scale, available / CGFloat(throughput))
+        }
+        guard scale.isFinite, scale > 0 else {
+            return LivelineSankeyGeometry(
+                progress: progress,
+                plotRect: plotRect,
+                total: graph.total,
+                nodes: [],
+                links: []
+            )
+        }
+
+        let columnStep = graph.columnCount > 1
+            ? (plotRect.width - nodeWidth) / CGFloat(graph.columnCount - 1)
+            : 0
+        var rects = [CGRect](repeating: .zero, count: graph.nodes.count)
+        for (columnIndex, column) in columns.enumerated() {
+            guard !column.isEmpty else { continue }
+            let heights = column.map { max(CGFloat(graph.nodes[$0].throughput) * scale, 1) }
+            let stackHeight = heights.reduce(0, +) + spacing * CGFloat(column.count - 1)
+            var y = plotRect.minY + (plotRect.height - stackHeight) / 2
+            let x = plotRect.minX + CGFloat(columnIndex) * columnStep
+            for (offset, nodeIndex) in column.enumerated() {
+                rects[nodeIndex] = CGRect(x: x, y: y, width: nodeWidth, height: heights[offset])
+                y += heights[offset] + spacing
+            }
+        }
+
+        // Ribbons stack at both ends in link order — the same order the caller
+        // wrote them, which is what keeps the picture stable across frames.
+        var sourceCursor = [CGFloat](repeating: 0, count: graph.nodes.count)
+        var targetCursor = [CGFloat](repeating: 0, count: graph.nodes.count)
+        let linkMarks = graph.links.compactMap { link -> LivelineSankeyLinkMark? in
+            let sourceRect = rects[link.sourceIndex]
+            let targetRect = rects[link.targetIndex]
+            let thickness = max(CGFloat(link.value) * scale, 1)
+            let startY = sourceRect.minY + sourceCursor[link.sourceIndex]
+            let endY = targetRect.minY + targetCursor[link.targetIndex]
+            sourceCursor[link.sourceIndex] += thickness
+            targetCursor[link.targetIndex] += thickness
+
+            let x1 = sourceRect.maxX
+            let x2 = targetRect.minX
+            guard x2 > x1 else { return nil }
+            let sweep = (x2 - x1) * CGFloat(progress)
+            let controlOffset = (x2 - x1) / 2
+            var path = Path()
+            path.move(to: CGPoint(x: x1, y: startY))
+            path.addCurve(
+                to: CGPoint(x: x1 + sweep, y: startY + (endY - startY) * CGFloat(progress)),
+                control1: CGPoint(x: x1 + controlOffset, y: startY),
+                control2: CGPoint(x: x2 - controlOffset, y: endY)
+            )
+            path.addLine(to: CGPoint(
+                x: x1 + sweep,
+                y: startY + (endY - startY) * CGFloat(progress) + thickness
+            ))
+            path.addCurve(
+                to: CGPoint(x: x1, y: startY + thickness),
+                control1: CGPoint(x: x2 - controlOffset, y: endY + thickness),
+                control2: CGPoint(x: x1 + controlOffset, y: startY + thickness)
+            )
+            path.closeSubpath()
+
+            let color = links.indices.contains(link.linkIndex) ? links[link.linkIndex].color : nil
+            return LivelineSankeyLinkMark(
+                link: link,
+                sourceLabel: graph.nodes[link.sourceIndex].label,
+                targetLabel: graph.nodes[link.targetIndex].label,
+                path: layout.mirrored(path),
+                color: color ?? extendedSeriesColor(
+                    index: link.sourceIndex,
+                    colors: style.colors,
+                    palette: palette
+                ),
+                thickness: thickness,
+                anchor: CGPoint(
+                    x: layout.mirrored((x1 + x2) / 2),
+                    y: (startY + endY) / 2 + thickness / 2
+                )
+            )
+        }
+
+        let nodeMarks = graph.nodes.enumerated().compactMap { index, node -> LivelineSankeyNodeMark? in
+            guard rects[index].height > 0 else { return nil }
+            return LivelineSankeyNodeMark(
+                node: node,
+                index: index,
+                rect: layout.mirrored(rects[index]),
+                color: extendedSeriesColor(index: index, colors: style.colors, palette: palette)
+            )
+        }
+        return LivelineSankeyGeometry(
+            progress: progress,
+            plotRect: plotRect,
+            total: graph.total,
+            nodes: nodeMarks,
+            links: linkMarks
+        )
+    }
+}

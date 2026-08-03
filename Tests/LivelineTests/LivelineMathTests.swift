@@ -2,6 +2,382 @@ import XCTest
 @testable import Liveline
 
 final class LivelineMathTests: XCTestCase {
+    // MARK: - Squarified treemap
+
+    private func aspectRatio(_ rect: CGRect) -> CGFloat {
+        guard rect.width > 0, rect.height > 0 else { return .greatestFiniteMagnitude }
+        return max(rect.width / rect.height, rect.height / rect.width)
+    }
+
+    func testSquarifiedRectsAllocateAreaInProportionToValue() {
+        let values = [6.0, 6, 4, 3, 2, 2, 1]
+        let frame = CGRect(x: 10, y: 20, width: 300, height: 200)
+        let rects = LivelineMath.squarifiedRects(values: values, in: frame)
+
+        XCTAssertEqual(rects.count, values.count)
+        let total = values.reduce(0, +)
+        let frameArea = Double(frame.width * frame.height)
+        for (value, rect) in zip(values, rects) {
+            XCTAssertEqual(Double(rect.width * rect.height), value / total * frameArea, accuracy: 0.5)
+            XCTAssertTrue(frame.insetBy(dx: -0.001, dy: -0.001).contains(rect), "\(rect) escaped the frame")
+        }
+        // The tiles cover the frame exactly once.
+        XCTAssertEqual(
+            rects.reduce(0.0) { $0 + Double($1.width * $1.height) },
+            frameArea,
+            accuracy: 1
+        )
+    }
+
+    func testSquarifiedRectsKeepCellsCloseToSquare() {
+        let values = (1...24).map { Double($0) }
+        let rects = LivelineMath.squarifiedRects(values: values, in: CGRect(x: 0, y: 0, width: 400, height: 300))
+
+        // Squarifying exists to bound this; a naive slice-and-dice layout of
+        // the same values produces ratios an order of magnitude worse.
+        for (value, rect) in zip(values, rects) {
+            XCTAssertLessThan(aspectRatio(rect), 5, "value \(value) produced \(rect)")
+        }
+        XCTAssertLessThan(rects.map(aspectRatio).reduce(0, +) / CGFloat(rects.count), 2.5)
+    }
+
+    func testSquarifiedRectsDropNonPositiveValuesAndDegenerateFrames() {
+        let values = [4.0, 0, -3, .nan, 2, .infinity]
+        let rects = LivelineMath.squarifiedRects(values: values, in: CGRect(x: 0, y: 0, width: 100, height: 100))
+
+        XCTAssertEqual(rects.count, values.count)
+        XCTAssertEqual(rects[1], .zero)
+        XCTAssertEqual(rects[2], .zero)
+        XCTAssertEqual(rects[3], .zero)
+        XCTAssertEqual(rects[5], .zero)
+        XCTAssertGreaterThan(rects[0].width * rects[0].height, 0)
+        XCTAssertEqual(
+            Double(rects[0].width * rects[0].height) / Double(rects[4].width * rects[4].height),
+            2,
+            accuracy: 0.01
+        )
+
+        XCTAssertTrue(LivelineMath.squarifiedRects(values: [], in: CGRect(x: 0, y: 0, width: 10, height: 10)).isEmpty)
+        XCTAssertEqual(
+            LivelineMath.squarifiedRects(values: [1, 2], in: CGRect(x: 0, y: 0, width: 0, height: 10)),
+            [.zero, .zero]
+        )
+        XCTAssertEqual(
+            LivelineMath.squarifiedRects(values: [0, 0], in: CGRect(x: 0, y: 0, width: 10, height: 10)),
+            [.zero, .zero]
+        )
+    }
+
+    func testSquarifiedRectsAreDeterministicAcrossRuns() {
+        let values = [5.0, 5, 3, 3, 1]
+        let frame = CGRect(x: 4, y: 6, width: 220, height: 140)
+        let first = LivelineMath.squarifiedRects(values: values, in: frame)
+
+        for _ in 0..<4 {
+            XCTAssertEqual(LivelineMath.squarifiedRects(values: values, in: frame), first)
+        }
+        // Equal values are ordered by their original index, never by hash order.
+        XCTAssertEqual(first[2].origin.y <= first[3].origin.y || first[2].origin.x <= first[3].origin.x, true)
+    }
+
+    func testTreemapTilesSubdivideOnlyNodesThatHaveChildren() {
+        let nodes = [
+            LivelineTreemapNode(label: "Flat", value: 10),
+            LivelineTreemapNode(label: "Group", children: [
+                LivelineTreemapNode(label: "A", value: 6),
+                LivelineTreemapNode(label: "B", value: 4),
+            ]),
+        ]
+        let tiles = LivelineMath.treemapTiles(nodes: nodes, in: CGRect(x: 0, y: 0, width: 200, height: 200))
+
+        XCTAssertEqual(tiles.map(\.path), [[0], [1, 0], [1, 1]])
+        XCTAssertEqual(tiles.map(\.value), [10, 6, 4])
+        // The parent's own weight is its children's sum, so the two halves of
+        // the frame are equal.
+        XCTAssertEqual(
+            Double(tiles[0].rect.width * tiles[0].rect.height),
+            Double((tiles[1].rect.width * tiles[1].rect.height) + (tiles[2].rect.width * tiles[2].rect.height)),
+            accuracy: 1
+        )
+        XCTAssertTrue(LivelineMath.treemapTiles(nodes: [], in: CGRect(x: 0, y: 0, width: 10, height: 10)).isEmpty)
+        XCTAssertTrue(
+            LivelineMath.treemapTiles(
+                nodes: nodes,
+                in: CGRect(x: 0, y: 0, width: 0, height: 200)
+            ).isEmpty
+        )
+    }
+
+    func testTreemapPaddingShrinksEveryCellSymmetrically() {
+        let nodes = [
+            LivelineTreemapNode(label: "A", value: 1),
+            LivelineTreemapNode(label: "B", value: 1),
+        ]
+        let frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        let bare = LivelineMath.treemapTiles(nodes: nodes, in: frame)
+        let padded = LivelineMath.treemapTiles(nodes: nodes, in: frame, padding: 4)
+
+        XCTAssertEqual(padded.count, bare.count)
+        for (plain, inset) in zip(bare, padded) {
+            XCTAssertEqual(inset.rect, plain.rect.insetBy(dx: 2, dy: 2))
+        }
+    }
+
+    // MARK: - Sunburst spans
+
+    func testSunburstChildSpansTileTheirParentExactly() {
+        let nodes = [
+            LivelineSunburstNode(label: "Solo", value: 100),
+            LivelineSunburstNode(label: "Split", children: [
+                LivelineSunburstNode(label: "A", value: 60),
+                LivelineSunburstNode(label: "B", value: 40),
+            ]),
+        ]
+        let spans = LivelineMath.sunburstSpans(nodes: nodes)
+
+        XCTAssertEqual(spans.map(\.path), [[0], [1], [1, 0], [1, 1]])
+        XCTAssertEqual(spans.map(\.depth), [0, 0, 1, 1])
+        // Equal parents split the circle in half, starting at twelve o'clock.
+        XCTAssertEqual(spans[0].fullStart, -90, accuracy: 1e-9)
+        XCTAssertEqual(spans[0].fullSweep, 180, accuracy: 1e-9)
+        XCTAssertEqual(spans[1].fullSweep, 180, accuracy: 1e-9)
+
+        let parent = spans[1]
+        let children = spans.filter { $0.depth == 1 }
+        XCTAssertEqual(children.map(\.fullSweep).reduce(0, +), parent.fullSweep, accuracy: 1e-9)
+        XCTAssertEqual(children.first?.fullStart ?? 0, parent.fullStart, accuracy: 1e-9)
+        XCTAssertEqual(children.last?.fullEnd ?? 0, parent.fullEnd, accuracy: 1e-9)
+        for (previous, next) in zip(children, children.dropFirst()) {
+            XCTAssertEqual(previous.fullEnd, next.fullStart, accuracy: 1e-9)
+        }
+        XCTAssertEqual(children[0].fullSweep / children[1].fullSweep, 1.5, accuracy: 1e-9)
+    }
+
+    func testSunburstGapsInsetEachSpanWithoutMovingItsBounds() {
+        let nodes = (0..<4).map { LivelineSunburstNode(label: "N\($0)", value: 1) }
+        let spans = LivelineMath.sunburstSpans(nodes: nodes, gapDegrees: 6)
+
+        for span in spans {
+            XCTAssertEqual(span.start, span.fullStart + 3, accuracy: 1e-9)
+            XCTAssertEqual(span.end, span.fullEnd - 3, accuracy: 1e-9)
+            XCTAssertLessThan(span.start, span.end)
+        }
+
+        // A gap wider than the wedge is clamped rather than inverting it.
+        let slivers = LivelineMath.sunburstSpans(
+            nodes: [LivelineSunburstNode(label: "Big", value: 999), LivelineSunburstNode(label: "Tiny", value: 1)],
+            gapDegrees: 20
+        )
+        for span in slivers {
+            XCTAssertLessThanOrEqual(span.start, span.end)
+        }
+        XCTAssertTrue(LivelineMath.sunburstSpans(nodes: []).isEmpty)
+        XCTAssertTrue(LivelineMath.sunburstSpans(nodes: [LivelineSunburstNode(label: "Zero", value: 0)]).isEmpty)
+    }
+
+    // MARK: - Sankey layout
+
+    func testSankeyGraphLayersNodesByLongestPathFromTheSources() {
+        let graph = LivelineMath.sankeyGraph(links: [
+            LivelineSankeyLink(source: "A", target: "B", value: 10),
+            LivelineSankeyLink(source: "B", target: "D", value: 6),
+            LivelineSankeyLink(source: "A", target: "C", value: 5),
+            LivelineSankeyLink(source: "C", target: "D", value: 4),
+            // A shortcut edge must not pull D back to column 1.
+            LivelineSankeyLink(source: "A", target: "D", value: 2),
+        ])
+
+        // Nodes appear in the order the links first mention them, which is
+        // A, B, then D (from B→D), then C.
+        XCTAssertEqual(graph.nodes.map(\.label), ["A", "B", "D", "C"])
+        XCTAssertEqual(graph.nodes.map(\.column), [0, 1, 2, 1])
+        XCTAssertEqual(graph.columnCount, 3)
+        XCTAssertEqual(graph.indices(inColumn: 1), [1, 3])
+        XCTAssertEqual(graph.nodes[0].outflow, 17)
+        XCTAssertEqual(graph.nodes[0].inflow, 0)
+        XCTAssertEqual(graph.nodes[2].inflow, 12)
+        XCTAssertEqual(graph.nodes[2].throughput, 12)
+        XCTAssertEqual(graph.total, 27)
+        XCTAssertTrue(graph.droppedLinkIndices.isEmpty)
+    }
+
+    func testSankeyGraphBreaksCyclesAtTheRepeatedNodeAndTerminates() {
+        let graph = LivelineMath.sankeyGraph(links: [
+            LivelineSankeyLink(source: "A", target: "B", value: 4),
+            LivelineSankeyLink(source: "B", target: "C", value: 3),
+            LivelineSankeyLink(source: "C", target: "A", value: 2),
+        ])
+
+        XCTAssertEqual(graph.droppedLinkIndices, [2])
+        XCTAssertEqual(graph.links.map(\.linkIndex), [0, 1])
+        XCTAssertEqual(graph.nodes.map(\.column), [0, 1, 2])
+
+        // A two-node cycle, a self-loop, and a zero flow all resolve without
+        // hanging or producing a node with no column.
+        let tangled = LivelineMath.sankeyGraph(links: [
+            LivelineSankeyLink(source: "A", target: "B", value: 5),
+            LivelineSankeyLink(source: "B", target: "A", value: 5),
+            LivelineSankeyLink(source: "B", target: "B", value: 1),
+            LivelineSankeyLink(source: "B", target: "C", value: 0),
+        ])
+        XCTAssertEqual(tangled.droppedLinkIndices, [1, 2, 3])
+        XCTAssertEqual(tangled.links.map(\.linkIndex), [0])
+        XCTAssertEqual(tangled.nodes.map(\.label), ["A", "B", "C"])
+        XCTAssertEqual(tangled.nodes.map(\.column), [0, 1, 0])
+
+        XCTAssertEqual(LivelineMath.sankeyGraph(links: []).nodes.count, 0)
+    }
+
+    func testSankeyGeometryScalesRibbonThicknessWithValue() {
+        let links = [
+            LivelineSankeyLink(source: "A", target: "B", value: 30),
+            LivelineSankeyLink(source: "A", target: "C", value: 10),
+        ]
+        let layout = LivelineLayout(
+            size: CGSize(width: 400, height: 240),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 40,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let geometry = LivelineRenderer.sankeyGeometry(
+            links: links,
+            graph: LivelineMath.sankeyGraph(links: links),
+            style: LivelineSankeyStyle(),
+            layout: layout,
+            palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
+            reveal: 1
+        )
+
+        XCTAssertEqual(geometry.links.count, 2)
+        XCTAssertEqual(geometry.nodes.count, 3)
+        XCTAssertEqual(
+            Double(geometry.links[0].thickness / geometry.links[1].thickness),
+            3,
+            accuracy: 0.001
+        )
+        // The source bar is as tall as everything leaving it.
+        XCTAssertEqual(
+            geometry.nodes[0].rect.height,
+            geometry.links[0].thickness + geometry.links[1].thickness,
+            accuracy: 0.001
+        )
+        // Ribbons stack at the source in link order, without overlapping.
+        XCTAssertLessThan(geometry.links[0].anchor.y, geometry.links[1].anchor.y)
+        XCTAssertLessThan(geometry.nodes[0].rect.maxX, geometry.nodes[1].rect.minX)
+        XCTAssertEqual(geometry.nodes[1].rect.minX, geometry.nodes[2].rect.minX, accuracy: 0.001)
+    }
+
+    func testSankeyGeometryMirrorsTheFlowInRightToLeftLayouts() {
+        let links = [LivelineSankeyLink(source: "A", target: "B", value: 10)]
+        func geometry(isRTL: Bool) -> LivelineSankeyGeometry {
+            LivelineRenderer.sankeyGeometry(
+                links: links,
+                graph: LivelineMath.sankeyGraph(links: links),
+                style: LivelineSankeyStyle(),
+                layout: LivelineLayout(
+                    size: CGSize(width: 400, height: 240),
+                    padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+                    minValue: 0,
+                    maxValue: 10,
+                    leftEdge: 0,
+                    rightEdge: 10,
+                    isRTL: isRTL
+                ),
+                palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
+                reveal: 1
+            )
+        }
+
+        let ltr = geometry(isRTL: false)
+        let rtl = geometry(isRTL: true)
+        XCTAssertLessThan(ltr.nodes[0].rect.minX, ltr.nodes[1].rect.minX)
+        XCTAssertGreaterThan(rtl.nodes[0].rect.minX, rtl.nodes[1].rect.minX)
+        XCTAssertEqual(rtl.nodes[0].rect.width, ltr.nodes[0].rect.width, accuracy: 0.001)
+        XCTAssertEqual(rtl.nodes[0].rect.height, ltr.nodes[0].rect.height, accuracy: 0.001)
+    }
+
+    func testTreemapGeometryMirrorsCellsInRightToLeftLayouts() {
+        let nodes = [
+            LivelineTreemapNode(label: "A", value: 3),
+            LivelineTreemapNode(label: "B", value: 1),
+        ]
+        func geometry(isRTL: Bool) -> LivelineTreemapGeometry {
+            let layout = LivelineLayout(
+                size: CGSize(width: 320, height: 200),
+                padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+                minValue: 0,
+                maxValue: 4,
+                leftEdge: 0,
+                rightEdge: 10,
+                isRTL: isRTL
+            )
+            let rect = CGRect(
+                x: layout.plotLeftX,
+                y: layout.padding.top,
+                width: layout.chartWidth,
+                height: layout.chartHeight
+            )
+            return LivelineRenderer.treemapGeometry(
+                nodes: nodes,
+                tiles: LivelineMath.treemapTiles(nodes: nodes, in: rect),
+                style: LivelineTreemapStyle(),
+                layout: layout,
+                palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
+                reveal: 1
+            )
+        }
+
+        let ltr = geometry(isRTL: false)
+        let rtl = geometry(isRTL: true)
+        XCTAssertEqual(ltr.cells.map(\.node.label), ["A", "B"])
+        XCTAssertEqual(rtl.cells.map(\.node.label), ["A", "B"])
+        XCTAssertLessThan(ltr.cells[0].rect.minX, ltr.cells[1].rect.minX)
+        XCTAssertGreaterThan(rtl.cells[0].rect.minX, rtl.cells[1].rect.minX)
+        XCTAssertEqual(ltr.cells[0].share, 0.75, accuracy: 1e-9)
+    }
+
+    func testSunburstGeometryIsNeverMirroredAndStacksItsTwoRings() {
+        let nodes = [
+            LivelineSunburstNode(label: "Alpha", value: 3),
+            LivelineSunburstNode(label: "Beta", children: [
+                LivelineSunburstNode(label: "B1", value: 1),
+            ]),
+        ]
+        func geometry(isRTL: Bool) -> LivelineSunburstGeometry {
+            LivelineRenderer.sunburstGeometry(
+                nodes: nodes,
+                style: LivelineSunburstStyle(),
+                layout: LivelineLayout(
+                    size: CGSize(width: 320, height: 240),
+                    padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+                    minValue: 0,
+                    maxValue: 4,
+                    leftEdge: 0,
+                    rightEdge: 10,
+                    isRTL: isRTL
+                ),
+                palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
+                reveal: 1
+            )
+        }
+
+        let ltr = geometry(isRTL: false)
+        let rtl = geometry(isRTL: true)
+        XCTAssertEqual(ltr.center, rtl.center)
+        XCTAssertEqual(ltr.segments.map(\.span.fullStart), rtl.segments.map(\.span.fullStart))
+        XCTAssertEqual(ltr.segments.map(\.label), ["Alpha", "Beta", "B1"])
+        XCTAssertEqual(ltr.total, 4)
+
+        let inner = ltr.segments[0]
+        let outer = ltr.segments[2]
+        XCTAssertEqual(inner.innerRadius, ltr.innerRadius, accuracy: 0.001)
+        XCTAssertGreaterThanOrEqual(outer.innerRadius, inner.outerRadius)
+        XCTAssertEqual(outer.outerRadius, ltr.outerRadius, accuracy: 0.001)
+        XCTAssertEqual(inner.share, 0.75, accuracy: 1e-9)
+    }
+
     // MARK: - Histogram binning
 
     func testHistogramBinsCountSamplesAgainstContiguousEdges() {

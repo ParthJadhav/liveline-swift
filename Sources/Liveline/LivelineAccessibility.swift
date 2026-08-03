@@ -342,6 +342,42 @@ struct LivelineChartAccessibilityModel: Equatable {
                 )
             }
 
+        case let .treemap(nodes, _):
+            let cells = treemapCells(nodes)
+            let total = cells.reduce(0) { $0 + $1.value }
+            entries = cells.enumerated().map { index, cell in
+                LivelineAccessibilityEntry(
+                    id: "treemap-\(cell.id)-\(index)",
+                    label: cell.label,
+                    value: shareDescription(cell.value, total: total, formatValue: formatValue)
+                )
+            }
+
+        case let .sunburst(nodes, _):
+            let cells = sunburstCells(nodes)
+            let total = nodes.reduce(0) { $0 + $1.resolvedValue }
+            entries = cells.enumerated().map { index, cell in
+                LivelineAccessibilityEntry(
+                    id: "sunburst-\(cell.id)-\(index)",
+                    label: cell.label,
+                    value: shareDescription(cell.value, total: total, formatValue: formatValue)
+                )
+            }
+
+        case let .sankey(links, _):
+            let graph = LivelineMath.sankeyGraph(links: links)
+            entries = graph.links.enumerated().map { index, link in
+                LivelineAccessibilityEntry(
+                    id: "sankey-\(link.linkIndex)-\(index)",
+                    label: String(
+                        format: LivelineStrings.labelFlowRouteFormat,
+                        graph.nodes[link.sourceIndex].label,
+                        graph.nodes[link.targetIndex].label
+                    ),
+                    value: formatValue(link.value)
+                )
+            }
+
         case let .candle(data, _, candles, _, liveCandle, lineData, _):
             if configuration.lineMode, !lineData.isEmpty {
                 entries = pointEntries(lineData)
@@ -430,6 +466,48 @@ struct LivelineChartAccessibilityModel: Equatable {
         return summary
     }
 
+    /// The drawn cells of a treemap: a node's children when it has any, the
+    /// node itself otherwise, with zero-weight entries dropped exactly as the
+    /// layout drops them.
+    static func treemapCells(_ nodes: [LivelineTreemapNode]) -> [(id: String, label: String, value: Double)] {
+        nodes.flatMap { node -> [(id: String, label: String, value: Double)] in
+            guard node.children.isEmpty else {
+                return node.children
+                    .filter { $0.resolvedValue > 0 }
+                    .map { (id: "\(node.id)-\($0.id)", label: $0.label, value: $0.resolvedValue) }
+            }
+            guard node.resolvedValue > 0 else { return [] }
+            return [(id: node.id, label: node.label, value: node.resolvedValue)]
+        }
+    }
+
+    /// Both rings of a sunburst, outer ring immediately after the parent it
+    /// subdivides, which is the order a VoiceOver reader swipes through.
+    static func sunburstCells(_ nodes: [LivelineSunburstNode]) -> [(id: String, label: String, value: Double)] {
+        nodes.flatMap { node -> [(id: String, label: String, value: Double)] in
+            guard node.resolvedValue > 0 else { return [] }
+            return [(id: node.id, label: node.label, value: node.resolvedValue)]
+                + node.children
+                    .filter { $0.resolvedValue > 0 }
+                    .map { (id: "\(node.id)-\($0.id)", label: $0.label, value: $0.resolvedValue) }
+        }
+    }
+
+    /// "12, 30.0 percent" — the value alongside its share of the whole, the
+    /// same phrasing a donut segment is read with.
+    static func shareDescription(
+        _ value: Double,
+        total: Double,
+        formatValue: (Double) -> String
+    ) -> String {
+        guard total > 0 else { return formatValue(value) }
+        return String(
+            format: LivelineStrings.accessibilityDonutValueFormat,
+            formatValue(value),
+            (value / total * 100).formatted(.number.precision(.fractionLength(1)))
+        )
+    }
+
     private static func accessibleEntryCount(
         content: LivelineChartContent,
         configuration: LivelineChartConfiguration,
@@ -472,6 +550,12 @@ struct LivelineChartAccessibilityModel: Equatable {
             return LivelineMath.histogramBins(values: values, binning: style.binning).count
         case let .bullet(style):
             return 1 + style.resolvedRanges.count
+        case let .treemap(nodes, _):
+            return treemapCells(nodes).count
+        case let .sunburst(nodes, _):
+            return sunburstCells(nodes).count
+        case let .sankey(links, _):
+            return LivelineMath.sankeyGraph(links: links).links.count
         case let .candle(data, _, candles, _, liveCandle, lineData, _):
             if configuration.lineMode, !lineData.isEmpty {
                 return lineData.count
@@ -593,6 +677,20 @@ struct LivelineAccessibilityModelKey: Equatable {
             ] + style.resolvedRanges.map(\.value)
             identifiers = [style.label ?? ""] + style.resolvedRanges.map { $0.label ?? "" }
 
+        case let .treemap(nodes, style):
+            variants = nodes.map(\.resolvedValue)
+            identifiers = nodes.map(\.label) + nodes.flatMap { $0.children.map(\.label) }
+                + ["\(style.showsValues)"]
+
+        case let .sunburst(nodes, style):
+            variants = nodes.map(\.resolvedValue)
+            identifiers = nodes.map(\.label) + nodes.flatMap { $0.children.map(\.label) }
+                + ["\(style.showsValues)"]
+
+        case let .sankey(links, _):
+            variants = links.map(\.value)
+            identifiers = links.flatMap { [$0.source, $0.target] }
+
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
             shapes = [
                 data.livelineShape(lastValue: data.last?.value ?? 0),
@@ -672,6 +770,9 @@ private extension LivelineChartKind {
         case .funnel: return LivelineStrings.chartKindFunnel
         case .histogram: return LivelineStrings.chartKindHistogram
         case .bullet: return LivelineStrings.chartKindBullet
+        case .treemap: return LivelineStrings.chartKindTreemap
+        case .sunburst: return LivelineStrings.chartKindSunburst
+        case .sankey: return LivelineStrings.chartKindSankey
         case .candle: return LivelineStrings.chartKindCandle
         case .series: return LivelineStrings.chartKindSeries
         }

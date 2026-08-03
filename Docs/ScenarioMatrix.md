@@ -107,6 +107,9 @@ The machine-readable manifest at `Examples/LivelineDemo/Resources/storybook-scen
 | `stacked-area-stream` | Stacked area | Centered baseline streamgraph without a value axis. |
 | `histogram-basic` | Histogram | Automatically binned sample frequencies. |
 | `bullet-basic` | Bullet | Measure against a target across qualitative bands. |
+| `treemap-basic` | Treemap | Squarified spend hierarchy with one nested group. |
+| `sunburst-basic` | Sunburst | Two-ring acquisition breakdown with labelled arcs. |
+| `sankey-basic` | Sankey | Three-column funnel flow with proportional ribbons. |
 <!-- END GENERATED SCENARIO TABLE -->
 
 ## Parity Notes

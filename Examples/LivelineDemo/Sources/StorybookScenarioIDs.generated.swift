@@ -70,4 +70,7 @@ enum StorybookScenarioID: String, CaseIterable {
     case stackedAreaStream = "stacked-area-stream"
     case histogramBasic = "histogram-basic"
     case bulletBasic = "bullet-basic"
+    case treemapBasic = "treemap-basic"
+    case sunburstBasic = "sunburst-basic"
+    case sankeyBasic = "sankey-basic"
 }

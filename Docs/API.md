@@ -35,6 +35,9 @@ LivelineChart(gauge:range:color:style:configuration:)
 LivelineChart(funnel:color:style:configuration:)
 LivelineChart(histogram:color:style:configuration:)
 LivelineChart(bullet:color:configuration:)
+LivelineChart(treemap:color:style:configuration:)
+LivelineChart(sunburst:color:style:configuration:)
+LivelineChart(sankey:color:style:configuration:)
 ```
 
 ## Data Types
@@ -98,9 +101,14 @@ LivelineTimelineItem(id: "build", label: "Build", start: start, end: end, lane: 
 LivelineHeatmapCell(time: unixSeconds, row: 2, value: 0.84)
 LivelineRadarPoint(label: "Speed", value: 84)
 LivelineCategoryValue(id: "pro", label: "Pro", value: 42)
+LivelineTreemapNode(label: "Storage", children: [LivelineTreemapNode(label: "Hot", value: 180)])
+LivelineSunburstNode(label: "Search", children: [LivelineSunburstNode(label: "Paid", value: 90)])
+LivelineSankeyLink(source: "Visits", target: "Signups", value: 420)
 ```
 
 Error bounds, reversed timeline intervals, negative lanes, non-finite stacked values, heatmap rows, and negative categorical values are normalized at initialization.
+
+`LivelineTreemapNode` and `LivelineSunburstNode` accept either a flat list of leaves or one level of nesting; a node with children takes its weight from their sum. `LivelineSankeyLink` derives its nodes from the endpoint labels — layering is a single longest-path pass with no crossing minimization, and a link that closes a cycle is dropped.
 
 ## Chart Styles
 

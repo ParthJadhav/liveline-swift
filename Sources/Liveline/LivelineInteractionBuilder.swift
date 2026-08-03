@@ -378,6 +378,116 @@ enum LivelineInteractionBuilder {
                 region: .rect(geometry.plotRect)
             )]
 
+        case let .treemap(nodes, style):
+            let plotRect = CGRect(
+                x: layout.plotLeftX,
+                y: layout.padding.top,
+                width: layout.chartWidth,
+                height: layout.chartHeight
+            )
+            let geometry = LivelineRenderer.treemapGeometry(
+                nodes: nodes,
+                tiles: LivelineMath.treemapTiles(
+                    nodes: nodes,
+                    in: plotRect,
+                    padding: style.resolvedPadding,
+                    groupPadding: style.resolvedGroupPadding
+                ),
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: 1
+            )
+            return interactionMarks(geometry.cells, nearestTo: targetLocation, rect: \.rect)
+                .enumerated()
+                .map { index, cell in
+                    target(
+                        time: Double(index),
+                        value: cell.value,
+                        anchor: CGPoint(x: cell.rect.midX, y: cell.rect.minY),
+                        heading: cell.node.label,
+                        rows: [
+                            row(LivelineStrings.labelValue, value(cell.value), cell.color),
+                            row(LivelineStrings.labelShare, percentage(cell.share * 100), cell.color),
+                        ],
+                        region: .rect(cell.rect)
+                    )
+                }
+
+        case let .sunburst(nodes, style):
+            let geometry = LivelineRenderer.sunburstGeometry(
+                nodes: nodes,
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: 1
+            )
+            guard geometry.total > 0 else { return [] }
+            return geometry.segments.enumerated().map { index, segment in
+                target(
+                    time: Double(index),
+                    value: segment.value,
+                    anchor: LivelineMath.polarPoint(
+                        center: geometry.center,
+                        radius: segment.pathRadius,
+                        angle: segment.span.middle * Double.pi / 180
+                    ),
+                    heading: segment.label,
+                    rows: [
+                        row(LivelineStrings.labelValue, value(segment.value), segment.color),
+                        row(LivelineStrings.labelShare, percentage(segment.share * 100), segment.color),
+                    ],
+                    region: .sector(
+                        center: geometry.center,
+                        innerRadius: segment.innerRadius,
+                        outerRadius: segment.outerRadius,
+                        startAngle: segment.span.fullStart * Double.pi / 180,
+                        endAngle: segment.span.fullEnd * Double.pi / 180
+                    )
+                )
+            }
+
+        case let .sankey(links, style):
+            let geometry = LivelineRenderer.sankeyGeometry(
+                links: links,
+                graph: LivelineMath.sankeyGraph(links: links),
+                style: style,
+                layout: layout,
+                palette: palette,
+                reveal: 1
+            )
+            // A link's ribbon is a curve; its bounding box is the closest a
+            // rect region can get, and node bars take precedence because they
+            // sit on top of every ribbon that touches them.
+            let linkTargets = geometry.links.enumerated().map { index, link in
+                target(
+                    time: Double(index),
+                    value: link.link.value,
+                    anchor: link.anchor,
+                    heading: String(
+                        format: LivelineStrings.labelFlowRouteFormat,
+                        link.sourceLabel,
+                        link.targetLabel
+                    ),
+                    rows: [row(LivelineStrings.labelFlow, value(link.link.value), link.color)],
+                    region: .rect(link.path.boundingRect)
+                )
+            }
+            let nodeTargets = geometry.nodes.map { mark in
+                target(
+                    time: Double(mark.index),
+                    value: mark.node.throughput,
+                    anchor: CGPoint(x: mark.rect.midX, y: mark.rect.minY),
+                    heading: mark.node.label,
+                    rows: [
+                        row(LivelineStrings.labelInbound, value(mark.node.inflow), mark.color),
+                        row(LivelineStrings.labelOutbound, value(mark.node.outflow), mark.color),
+                    ],
+                    region: .rect(mark.rect)
+                )
+            }
+            return linkTargets + nodeTargets
+
         case let .candle(_, _, candles, candleWidth, liveCandle, lineData, _):
             // Once candles have morphed into line mode, the visible geometry is
             // the dense line series rather than the candle highs and bodies.
@@ -581,6 +691,12 @@ enum LivelineInteractionBuilder {
             ),
             region: region
         )
+    }
+
+    /// A share of a whole, to one decimal place — the same phrasing the donut
+    /// chart's tooltip uses.
+    private static func percentage(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(1))) + "%"
     }
 
     private static func row(_ label: String, _ value: String, _ color: Color) -> LivelineTooltipRow {

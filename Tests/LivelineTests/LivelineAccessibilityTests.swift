@@ -275,6 +275,149 @@ final class LivelineAccessibilityTests: XCTestCase {
         )
     }
 
+    func testHierarchyAndFlowAccessibilityReadEachCellWithItsShare() {
+        let configuration = LivelineChartConfiguration(
+            formatValue: { String(Int($0)) },
+            formatTime: { "T\(Int($0))" }
+        )
+
+        let treemap = LivelineChartContent.treemap(
+            nodes: [
+                LivelineTreemapNode(label: "Compute", value: 50),
+                LivelineTreemapNode(label: "Storage", children: [
+                    LivelineTreemapNode(label: "Hot", value: 30),
+                    LivelineTreemapNode(label: "Cold", value: 20),
+                    LivelineTreemapNode(label: "Empty", value: 0),
+                ]),
+                LivelineTreemapNode(label: "Dropped", value: -4),
+            ],
+            style: LivelineTreemapStyle()
+        )
+        let treemapModel = LivelineChartAccessibilityModel.make(
+            content: treemap,
+            semantics: treemap.semantics(),
+            configuration: configuration,
+            hiddenSeries: []
+        )
+
+        XCTAssertEqual(treemapModel.label, "Treemap")
+        // Only drawn cells are read: a parent is replaced by its children, and
+        // zero or negative weights never take up space.
+        XCTAssertEqual(treemapModel.entries.map(\.label), ["Compute", "Hot", "Cold"])
+        XCTAssertEqual(treemapModel.entryCount, 3)
+        XCTAssertEqual(treemapModel.entries.map(\.value), ["50, 50.0 percent", "30, 30.0 percent", "20, 20.0 percent"])
+        XCTAssertEqual(treemapModel.value(at: 1), "Hot, 30, 30.0 percent, 2 of 3")
+
+        let sunburst = LivelineChartContent.sunburst(
+            nodes: [
+                LivelineSunburstNode(label: "Direct", value: 60),
+                LivelineSunburstNode(label: "Search", children: [
+                    LivelineSunburstNode(label: "Organic", value: 30),
+                    LivelineSunburstNode(label: "Paid", value: 10),
+                ]),
+            ],
+            style: LivelineSunburstStyle()
+        )
+        let sunburstModel = LivelineChartAccessibilityModel.make(
+            content: sunburst,
+            semantics: sunburst.semantics(),
+            configuration: configuration,
+            hiddenSeries: []
+        )
+
+        XCTAssertEqual(sunburstModel.label, "Sunburst chart")
+        // A parent is read before the children that subdivide it.
+        XCTAssertEqual(sunburstModel.entries.map(\.label), ["Direct", "Search", "Organic", "Paid"])
+        XCTAssertEqual(sunburstModel.entryCount, 4)
+        XCTAssertEqual(sunburstModel.entries[1].value, "40, 40.0 percent")
+        XCTAssertEqual(sunburstModel.entries[3].value, "10, 10.0 percent")
+
+        let sankey = LivelineChartContent.sankey(
+            links: [
+                LivelineSankeyLink(source: "Visits", target: "Signups", value: 40),
+                LivelineSankeyLink(source: "Signups", target: "Paid", value: 12),
+                // Closes a cycle, so it never reaches the reader either.
+                LivelineSankeyLink(source: "Paid", target: "Visits", value: 3),
+            ],
+            style: LivelineSankeyStyle()
+        )
+        let sankeyModel = LivelineChartAccessibilityModel.make(
+            content: sankey,
+            semantics: sankey.semantics(),
+            configuration: configuration,
+            hiddenSeries: []
+        )
+
+        XCTAssertEqual(sankeyModel.label, "Sankey diagram")
+        XCTAssertEqual(sankeyModel.entries.map(\.label), ["Visits to Signups", "Signups to Paid"])
+        XCTAssertEqual(sankeyModel.entries.map(\.value), ["40", "12"])
+        XCTAssertEqual(sankeyModel.entryCount, 2)
+
+        for empty in [
+            LivelineChartContent.treemap(nodes: [], style: LivelineTreemapStyle()),
+            LivelineChartContent.sunburst(nodes: [], style: LivelineSunburstStyle()),
+            LivelineChartContent.sankey(links: [], style: LivelineSankeyStyle()),
+        ] {
+            let model = LivelineChartAccessibilityModel.make(
+                content: empty,
+                semantics: empty.semantics(),
+                configuration: configuration,
+                hiddenSeries: []
+            )
+            XCTAssertEqual(model.entryCount, 0)
+            XCTAssertEqual(model.summary, configuration.emptyText)
+        }
+    }
+
+    func testAudioGraphSonifiesHierarchyCellsAndFlowLinksAsCategories() {
+        let configuration = LivelineChartConfiguration(
+            formatValue: { String(Int($0)) },
+            formatTime: { "T\(Int($0))" }
+        )
+
+        let treemap = LivelineChartContent.treemap(
+            nodes: [
+                LivelineTreemapNode(label: "Compute", value: 50),
+                LivelineTreemapNode(label: "Storage", children: [
+                    LivelineTreemapNode(label: "Hot", value: 30),
+                ]),
+            ],
+            style: LivelineTreemapStyle()
+        )
+        let treemapModel = LivelineAudioGraphModel.make(
+            content: treemap,
+            semantics: treemap.semantics(),
+            configuration: configuration,
+            hiddenSeries: [],
+            activeWindow: 60,
+            title: "Treemap",
+            summary: "80"
+        )
+        XCTAssertEqual(treemapModel.xAxis, .categories(["Compute", "Hot"]))
+        XCTAssertEqual(treemapModel.series.first?.points.map(\.value), [50, 30])
+
+        let sankey = LivelineChartContent.sankey(
+            links: [
+                LivelineSankeyLink(source: "Visits", target: "Signups", value: 40),
+                LivelineSankeyLink(source: "Signups", target: "Paid", value: 12),
+            ],
+            style: LivelineSankeyStyle()
+        )
+        let sankeyModel = LivelineAudioGraphModel.make(
+            content: sankey,
+            semantics: sankey.semantics(),
+            configuration: configuration,
+            hiddenSeries: [],
+            activeWindow: 60,
+            title: "Sankey diagram",
+            summary: "52"
+        )
+        XCTAssertEqual(sankeyModel.xAxis, .categories(["Visits to Signups", "Signups to Paid"]))
+        XCTAssertEqual(sankeyModel.series.count, 1)
+        XCTAssertFalse(sankeyModel.series[0].isContinuous)
+        XCTAssertEqual(sankeyModel.series[0].points.map(\.value), [40, 12])
+    }
+
     func testSummaryOnlyAccessibilityModelAvoidsFormattingDenseEntries() {
         let points = (0..<10_000).map {
             LivelinePoint(time: Double($0), value: Double($0))

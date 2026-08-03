@@ -411,6 +411,37 @@ enum LivelineChartPreparer {
                 primaryValue: style.resolvedMeasure
             )
 
+        case let .treemap(nodes, _):
+            // Hierarchy kinds carry no axis; the range points exist only so
+            // `hasData` can tell an empty chart from a populated one.
+            let values = nodes.map(\.resolvedValue).filter { $0 > 0 }
+            return LivelinePreparedChart(
+                primaryVisible: [],
+                rangePoints: values.enumerated().map { LivelinePoint(time: Double($0.offset), value: $0.element) },
+                rangeOverride: 0...max(values.max() ?? 1, 1),
+                primaryValue: values.reduce(0, +)
+            )
+
+        case let .sunburst(nodes, _):
+            let values = nodes.map(\.resolvedValue).filter { $0 > 0 }
+            return LivelinePreparedChart(
+                primaryVisible: [],
+                rangePoints: values.enumerated().map { LivelinePoint(time: Double($0.offset), value: $0.element) },
+                rangeOverride: 0...max(values.max() ?? 1, 1),
+                primaryValue: values.reduce(0, +)
+            )
+
+        case let .sankey(links, _):
+            let graph = state?.sankeyGraph(links: links) ?? LivelineMath.sankeyGraph(links: links)
+            return LivelinePreparedChart(
+                primaryVisible: [],
+                rangePoints: graph.links.enumerated().map {
+                    LivelinePoint(time: Double($0.offset), value: $0.element.value)
+                },
+                rangeOverride: 0...max(graph.links.map(\.value).max() ?? 1, 1),
+                primaryValue: graph.total
+            )
+
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
             let visibleRange = (leftEdge - 2)...rightEdge
             let lineSource = lineData.isEmpty ? data : lineData
@@ -595,7 +626,20 @@ enum LivelineChartPreparer {
             ]
             identifiers = [style.binning.cacheIdentifier]
 
-        case .radar, .donut, .gauge, .funnel, .bullet, .candle:
+        case let .sankey(links, style):
+            kind = .sankey
+            shapes = [
+                LivelineDataShape(
+                    storage: links.livelineStorageIdentity,
+                    count: links.count,
+                    firstTime: 0,
+                    lastTime: 0,
+                    lastValue: links.last?.value ?? 0
+                ),
+            ]
+            identifiers = [links.first?.source ?? "", links.last?.target ?? "", "\(style.resolvedNodeWidth)"]
+
+        case .radar, .donut, .gauge, .funnel, .bullet, .treemap, .sunburst, .candle:
             // Aggregates over unordered data or a live candle: not worth a key
             // that would have to restate the whole payload.
             return nil

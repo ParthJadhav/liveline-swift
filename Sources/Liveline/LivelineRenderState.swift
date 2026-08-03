@@ -69,6 +69,10 @@ final class LivelineRenderState: ObservableObject {
     private var waterfallCache: [LivelineWaterfallSegment] = []
     private var histogramKey: LivelineHistogramKey?
     private var histogramCache: [LivelineHistogramBin] = []
+    private var treemapKey: LivelineTreemapKey?
+    private var treemapCache: [LivelineTreemapTile] = []
+    private var sankeyKey: LivelineSankeyKey?
+    private var sankeyCache: LivelineSankeyGraph?
     private var paletteCache: [LivelinePaletteKey: LivelinePalette] = [:]
     private var legendGutterCache: [LivelineLegendGutterKey: CGFloat] = [:]
     private var accessibilityModelKey: LivelineAccessibilityModelKey?
@@ -177,6 +181,52 @@ final class LivelineRenderState: ObservableObject {
         return bins
     }
 
+    /// Squarifying walks and sorts the whole node set, so it is memoized on the
+    /// nodes' identity *and* the rectangle they are packed into: unlike the
+    /// radial kinds, a treemap's layout changes with the plot size, and that is
+    /// exactly what makes it worth caching rather than recomputing per frame.
+    func treemapTiles(
+        nodes: [LivelineTreemapNode],
+        style: LivelineTreemapStyle,
+        in rect: CGRect
+    ) -> [LivelineTreemapTile] {
+        let key = LivelineTreemapKey(
+            storage: nodes.livelineStorageIdentity,
+            count: nodes.count,
+            firstValue: nodes.first?.resolvedValue ?? 0,
+            lastValue: nodes.last?.resolvedValue ?? 0,
+            rect: rect,
+            padding: style.resolvedPadding,
+            groupPadding: style.resolvedGroupPadding
+        )
+        if treemapKey == key { return treemapCache }
+        let tiles = LivelineMath.treemapTiles(
+            nodes: nodes,
+            in: rect,
+            padding: style.resolvedPadding,
+            groupPadding: style.resolvedGroupPadding
+        )
+        treemapKey = key
+        treemapCache = tiles
+        return tiles
+    }
+
+    /// Cycle breaking and layering walk every edge; the result depends only on
+    /// the links, never on the plot size, so it survives a resize.
+    func sankeyGraph(links: [LivelineSankeyLink]) -> LivelineSankeyGraph {
+        let key = LivelineSankeyKey(
+            storage: links.livelineStorageIdentity,
+            count: links.count,
+            firstValue: links.first?.value ?? 0,
+            lastValue: links.last?.value ?? 0
+        )
+        if sankeyKey == key, let cached = sankeyCache { return cached }
+        let graph = LivelineMath.sankeyGraph(links: links)
+        sankeyKey = key
+        sankeyCache = graph
+        return graph
+    }
+
     func frame(for timestamp: TimeInterval, isPaused: Bool) -> LivelineAnimationFrame {
         defer { lastTimestamp = timestamp }
         let deltaMilliseconds: TimeInterval
@@ -279,6 +329,10 @@ final class LivelineRenderState: ObservableObject {
         waterfallCache.removeAll(keepingCapacity: true)
         histogramKey = nil
         histogramCache.removeAll(keepingCapacity: true)
+        treemapKey = nil
+        treemapCache.removeAll(keepingCapacity: true)
+        sankeyKey = nil
+        sankeyCache = nil
         paletteCache.removeAll(keepingCapacity: true)
         legendGutterCache.removeAll(keepingCapacity: true)
         accessibilityModelKey = nil
@@ -364,6 +418,23 @@ struct LivelineHistogramKey: Equatable {
     var first: Double
     var last: Double
     var binning: LivelineHistogramBinning
+}
+
+struct LivelineTreemapKey: Equatable {
+    var storage: UInt
+    var count: Int
+    var firstValue: Double
+    var lastValue: Double
+    var rect: CGRect
+    var padding: CGFloat
+    var groupPadding: CGFloat
+}
+
+struct LivelineSankeyKey: Equatable {
+    var storage: UInt
+    var count: Int
+    var firstValue: Double
+    var lastValue: Double
 }
 
 struct LivelineLegendGutterKey: Hashable {

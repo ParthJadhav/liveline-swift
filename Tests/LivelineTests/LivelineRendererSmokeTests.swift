@@ -91,6 +91,26 @@ final class LivelineRendererSmokeTests: XCTestCase {
                 ),
                 configuration: config
             ))),
+            ("treemap", AnyView(LivelineChart(treemap: [
+                LivelineTreemapNode(label: "Alpha", value: 6),
+                LivelineTreemapNode(label: "Beta", children: [
+                    LivelineTreemapNode(label: "Beta 1", value: 3),
+                    LivelineTreemapNode(label: "Beta 2", value: 1),
+                ]),
+                LivelineTreemapNode(label: "Gamma", value: 2),
+            ], configuration: config))),
+            ("sunburst", AnyView(LivelineChart(sunburst: [
+                LivelineSunburstNode(label: "Alpha", value: 6),
+                LivelineSunburstNode(label: "Beta", children: [
+                    LivelineSunburstNode(label: "Beta 1", value: 3),
+                    LivelineSunburstNode(label: "Beta 2", value: 1),
+                ]),
+            ], configuration: config))),
+            ("sankey", AnyView(LivelineChart(sankey: [
+                LivelineSankeyLink(source: "Visits", target: "Signups", value: 40),
+                LivelineSankeyLink(source: "Visits", target: "Bounced", value: 60),
+                LivelineSankeyLink(source: "Signups", target: "Paid", value: 12),
+            ], configuration: config))),
             ("candle", AnyView(LivelineChart(
                 data: points,
                 value: 5,

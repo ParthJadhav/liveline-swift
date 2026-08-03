@@ -338,5 +338,20 @@
     "id": "bullet-basic",
     "area": "Bullet",
     "coverage": "Measure against a target across qualitative bands."
+  },
+  {
+    "id": "treemap-basic",
+    "area": "Treemap",
+    "coverage": "Squarified spend hierarchy with one nested group."
+  },
+  {
+    "id": "sunburst-basic",
+    "area": "Sunburst",
+    "coverage": "Two-ring acquisition breakdown with labelled arcs."
+  },
+  {
+    "id": "sankey-basic",
+    "area": "Sankey",
+    "coverage": "Three-column funnel flow with proportional ribbons."
   }
 ]

@@ -533,6 +533,42 @@ final class LivelineRuntimeTests: XCTestCase {
                     ]
                 ))
             ),
+            (
+                .treemap,
+                .treemap(
+                    nodes: [
+                        LivelineTreemapNode(label: "Alpha", value: 6),
+                        LivelineTreemapNode(label: "Beta", children: [
+                            LivelineTreemapNode(label: "Beta 1", value: 3),
+                            LivelineTreemapNode(label: "Beta 2", value: 1),
+                        ]),
+                    ],
+                    style: LivelineTreemapStyle()
+                )
+            ),
+            (
+                .sunburst,
+                .sunburst(
+                    nodes: [
+                        LivelineSunburstNode(label: "Alpha", value: 6),
+                        LivelineSunburstNode(label: "Beta", children: [
+                            LivelineSunburstNode(label: "Beta 1", value: 3),
+                            LivelineSunburstNode(label: "Beta 2", value: 1),
+                        ]),
+                    ],
+                    style: LivelineSunburstStyle()
+                )
+            ),
+            (
+                .sankey,
+                .sankey(
+                    links: [
+                        LivelineSankeyLink(source: "Visits", target: "Signups", value: 40),
+                        LivelineSankeyLink(source: "Signups", target: "Paid", value: 12),
+                    ],
+                    style: LivelineSankeyStyle()
+                )
+            ),
             (.candle, .candle(data: points, value: 5, candles: [LivelineCandle(time: 1, open: 3, high: 6, low: 2, close: 5)], candleWidth: 1, liveCandle: nil, lineData: points, lineValue: 5)),
             (.series, .series([LivelineSeries(id: "a", data: points, value: 5, color: .blue, label: "Alpha")])),
         ]

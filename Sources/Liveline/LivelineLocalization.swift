@@ -39,6 +39,9 @@ enum LivelineStrings {
     static let chartKindFunnel = localized("chart.kind.funnel", "Funnel chart", "VoiceOver name for a funnel chart")
     static let chartKindHistogram = localized("chart.kind.histogram", "Histogram", "VoiceOver name for a histogram")
     static let chartKindBullet = localized("chart.kind.bullet", "Bullet chart", "VoiceOver name for a bullet chart")
+    static let chartKindTreemap = localized("chart.kind.treemap", "Treemap", "VoiceOver name for a treemap")
+    static let chartKindSunburst = localized("chart.kind.sunburst", "Sunburst chart", "VoiceOver name for a sunburst chart")
+    static let chartKindSankey = localized("chart.kind.sankey", "Sankey diagram", "VoiceOver name for a Sankey flow diagram")
     static let chartKindCandle = localized("chart.kind.candle", "Candlestick chart", "VoiceOver name for a candlestick chart")
     static let chartKindSeries = localized("chart.kind.series", "Multi-series chart", "VoiceOver name for a chart with several series")
 
@@ -75,6 +78,9 @@ enum LivelineStrings {
     static let labelCount = localized("label.count", "Count", "Label for the number of samples in a histogram bin")
     static let labelMeasure = localized("label.measure", "Measure", "Label for the value a bullet chart reports")
     static let labelBullet = localized("label.bullet", "Bullet", "Tooltip heading for a bullet chart")
+    static let labelFlow = localized("label.flow", "Flow", "Label for the value carried by one Sankey link")
+    static let labelInbound = localized("label.inbound", "In", "Label for everything flowing into a Sankey node")
+    static let labelOutbound = localized("label.outbound", "Out", "Label for everything flowing out of a Sankey node")
     static let labelGaugeValue = localized("label.gaugeValue", "Gauge value", "Label for the value a gauge is showing")
 
     /// A histogram bin's value interval. `%1$@` is the lower bound, `%2$@` the
@@ -162,6 +168,9 @@ enum LivelineStrings {
     /// `%1$@` is the value phrase, `%2$@` the range's lower bound, `%3$@` its
     /// upper bound.
     static let accessibilityGaugeValueFormat = localized("accessibility.gauge.value.format", "%1$@, range %2$@ to %3$@", "VoiceOver value for a gauge")
+
+    /// One Sankey flow. `%1$@` is the source node, `%2$@` the target node.
+    static let labelFlowRouteFormat = localized("label.flowRoute.format", "%1$@ to %2$@", "Tooltip heading and VoiceOver label naming one Sankey flow from its source to its target")
 
     /// `%1$@` is the measure, `%2$@` the band's upper bound.
     static let accessibilityBulletBandValueFormat = localized("accessibility.bullet.band.value.format", "Up to %1$@", "VoiceOver value for one qualitative band of a bullet chart; %1$@ is the band's upper bound")

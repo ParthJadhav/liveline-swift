@@ -210,6 +210,9 @@ enum StorybookCatalog {
         funnelCompact,
         histogramBasic,
         bulletBasic,
+        treemapBasic,
+        sunburstBasic,
+        sankeyBasic,
     ]
 
     static let all = definitions
