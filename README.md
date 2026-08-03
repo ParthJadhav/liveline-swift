@@ -48,11 +48,22 @@ Each cell is captured from the included deterministic iOS Storybook.
 
 ## Requirements
 
-- iOS 16+
+- iOS 15+
 - Swift 5.9+
 - Xcode 15+
 
-The package also declares macOS 13, tvOS 16, watchOS 9, and visionOS 1 support. The included demo app targets iOS.
+The package also declares macOS 12, tvOS 16, watchOS 8, and visionOS 1 support. The included demo app targets iOS.
+
+A few features need a newer OS than the package floor and are gated, so the rest of the library keeps working without them:
+
+| Feature | Needs |
+| --- | --- |
+| Image export (`LivelineChartImageExporter`, `exportedImage`, `exportedPNGData`) | iOS 16, macOS 13, watchOS 9 |
+| Wrapping horizontal `LivelineLegend` (falls back to a single non-wrapping row) | iOS 16, macOS 13, watchOS 9 |
+| Pointer hover inspection (scrubbing is unaffected) | iOS 16, macOS 13 |
+| Pinch to zoom (drag to pan is unaffected) | iOS 17, macOS 14, visionOS 1 |
+
+tvOS stays at 16 because `onTapGesture` — how the Siri Remote enters and leaves chart inspection — is unavailable before it.
 
 ## Installation
 

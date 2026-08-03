@@ -1,5 +1,22 @@
 # API Overview
 
+## Platform requirements
+
+The package floor is iOS 15, macOS 12, tvOS 16, watchOS 8, and visionOS 1 — the
+releases that introduced `Canvas`, `TimelineView`, and `GraphicsContext`, which
+is the entire rendering surface. tvOS is a release higher because
+`onTapGesture`, how the Siri Remote enters and leaves inspection, is tvOS 16.
+
+Four features need a newer OS and are gated so the rest of the library keeps
+working without them:
+
+| Feature | Needs | Below that |
+| --- | --- | --- |
+| `LivelineChartImageExporter`, `exportedImage`, `exportedPNGData` | iOS 16, macOS 13, watchOS 9 | Unavailable (`@available`-gated) |
+| Wrapping horizontal `LivelineLegend` | iOS 16, macOS 13, watchOS 9 | Renders as a single non-wrapping row |
+| Pointer hover inspection | iOS 16, macOS 13 | No hover; scrubbing is unaffected |
+| Pinch to zoom | iOS 17, macOS 14, visionOS 1 | No pinch; drag to pan is unaffected |
+
 ## `LivelineChart`
 
 `LivelineChart` is the only view most apps need. It fills its parent, so give it a height.
@@ -436,6 +453,11 @@ LivelineLegend(items: [
 ], axis: .vertical)
 ```
 
+A horizontal legend wraps onto further rows when its width runs out, which keeps
+a wide key readable at accessibility type sizes. Wrapping uses SwiftUI's `Layout`
+protocol (iOS 16, macOS 13, watchOS 9); below that the horizontal legend renders
+as one non-wrapping row instead.
+
 `LivelineLegendItem.items(donut:style:accent:)`,
 `items(funnel:style:accent:)`, and `items(stacked:colors:accent:)` derive rows
 that match the colors those renderers resolve.
@@ -582,7 +604,10 @@ copy each frame.
 ## Image export
 
 `LivelineChartImageExporter` renders a chart to a platform image or PNG data on
-the main actor:
+the main actor. It is built on `ImageRenderer`, so the type and both
+`LivelineChart` conveniences require iOS 16, macOS 13, tvOS 16, or watchOS 9 —
+a release above the package floor. Wrap calls in `if #available` when your app
+deploys lower.
 
 ```swift
 let exporter = LivelineChartImageExporter(

@@ -209,9 +209,19 @@ public struct LivelineLegend: View {
         case .horizontal:
             // A wrapping row keeps a wide key usable at accessibility type
             // sizes, where a fixed HStack would clip its trailing entries.
-            LivelineLegendWrap(spacing: 14, rowSpacing: 6) {
-                ForEach(items) { item in
-                    row(item, labelColor: labelColor)
+            // `Layout` is iOS 16 / macOS 13, one release above the package
+            // floor, so the two oldest releases fall back to a plain row.
+            if #available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *) {
+                LivelineLegendWrap(spacing: 14, rowSpacing: 6) {
+                    ForEach(items) { item in
+                        row(item, labelColor: labelColor)
+                    }
+                }
+            } else {
+                HStack(spacing: 14) {
+                    ForEach(items) { item in
+                        row(item, labelColor: labelColor)
+                    }
                 }
             }
         case .vertical:
@@ -262,8 +272,9 @@ public struct LivelineLegend: View {
 }
 
 /// Lays subviews out left to right, wrapping to a new line when the proposed
-/// width runs out. `Layout` is available on every platform Liveline supports,
-/// so no availability gate is needed.
+/// width runs out. `Layout` arrived one release above the package floor, so the
+/// horizontal legend gates on it and falls back to a non-wrapping `HStack`.
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
 private struct LivelineLegendWrap: Layout {
     var spacing: CGFloat
     var rowSpacing: CGFloat

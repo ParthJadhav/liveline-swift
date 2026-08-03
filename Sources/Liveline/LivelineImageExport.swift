@@ -63,6 +63,12 @@ extension EnvironmentValues {
 /// Both entry points return `nil` when the platform cannot produce a
 /// rasterization — a headless environment with no rendering service, or a size
 /// that rounds to zero pixels.
+///
+/// Export is built on `ImageRenderer`, which is iOS 16 / macOS 13 / watchOS 9 —
+/// one release above the rest of the package — so this type and its convenience
+/// methods on ``LivelineChart`` carry an availability gate. Nothing else in the
+/// library depends on it; charts render normally on the older releases.
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
 @MainActor
 public struct LivelineChartImageExporter {
     /// The point size of the exported image.
@@ -191,6 +197,7 @@ public struct LivelineChartImageExporter {
     }
 }
 
+@available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
 public extension LivelineChart {
     /// Renders this chart to a platform image at a pinned renderer time.
     ///
