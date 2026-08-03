@@ -341,7 +341,7 @@ extension LivelineRenderer {
             )
             let geometry = treemapGeometry(
                 nodes: nodes,
-                tiles: state.treemapTiles(nodes: nodes, style: style, in: plotRect),
+                tiling: state.treemapLayout(nodes: nodes, style: style, in: plotRect),
                 style: style,
                 layout: layout,
                 palette: palette,

@@ -70,7 +70,7 @@ final class LivelineRenderState: ObservableObject {
     private var histogramKey: LivelineHistogramKey?
     private var histogramCache: [LivelineHistogramBin] = []
     private var treemapKey: LivelineTreemapKey?
-    private var treemapCache: [LivelineTreemapTile] = []
+    private var treemapCache: LivelineTreemapLayout = .empty
     private var sankeyKey: LivelineSankeyKey?
     private var sankeyCache: LivelineSankeyGraph?
     private var paletteCache: [LivelinePaletteKey: LivelinePalette] = [:]
@@ -185,11 +185,11 @@ final class LivelineRenderState: ObservableObject {
     /// nodes' identity *and* the rectangle they are packed into: unlike the
     /// radial kinds, a treemap's layout changes with the plot size, and that is
     /// exactly what makes it worth caching rather than recomputing per frame.
-    func treemapTiles(
+    func treemapLayout(
         nodes: [LivelineTreemapNode],
         style: LivelineTreemapStyle,
         in rect: CGRect
-    ) -> [LivelineTreemapTile] {
+    ) -> LivelineTreemapLayout {
         let key = LivelineTreemapKey(
             storage: nodes.livelineStorageIdentity,
             count: nodes.count,
@@ -197,18 +197,20 @@ final class LivelineRenderState: ObservableObject {
             lastValue: nodes.last?.resolvedValue ?? 0,
             rect: rect,
             padding: style.resolvedPadding,
-            groupPadding: style.resolvedGroupPadding
+            groupPadding: style.resolvedGroupPadding,
+            groupHeaderHeight: style.resolvedGroupHeaderHeight
         )
         if treemapKey == key { return treemapCache }
-        let tiles = LivelineMath.treemapTiles(
+        let tiling = LivelineMath.treemapLayout(
             nodes: nodes,
             in: rect,
             padding: style.resolvedPadding,
-            groupPadding: style.resolvedGroupPadding
+            groupPadding: style.resolvedGroupPadding,
+            groupHeaderHeight: style.resolvedGroupHeaderHeight
         )
         treemapKey = key
-        treemapCache = tiles
-        return tiles
+        treemapCache = tiling
+        return tiling
     }
 
     /// Cycle breaking and layering walk every edge; the result depends only on
@@ -330,7 +332,7 @@ final class LivelineRenderState: ObservableObject {
         histogramKey = nil
         histogramCache.removeAll(keepingCapacity: true)
         treemapKey = nil
-        treemapCache.removeAll(keepingCapacity: true)
+        treemapCache = .empty
         sankeyKey = nil
         sankeyCache = nil
         paletteCache.removeAll(keepingCapacity: true)
@@ -428,6 +430,7 @@ struct LivelineTreemapKey: Equatable {
     var rect: CGRect
     var padding: CGFloat
     var groupPadding: CGFloat
+    var groupHeaderHeight: CGFloat
 }
 
 struct LivelineSankeyKey: Equatable {

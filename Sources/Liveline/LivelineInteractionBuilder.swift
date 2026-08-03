@@ -387,11 +387,12 @@ enum LivelineInteractionBuilder {
             )
             let geometry = LivelineRenderer.treemapGeometry(
                 nodes: nodes,
-                tiles: LivelineMath.treemapTiles(
+                tiling: LivelineMath.treemapLayout(
                     nodes: nodes,
                     in: plotRect,
                     padding: style.resolvedPadding,
-                    groupPadding: style.resolvedGroupPadding
+                    groupPadding: style.resolvedGroupPadding,
+                    groupHeaderHeight: style.resolvedGroupHeaderHeight
                 ),
                 style: style,
                 layout: layout,

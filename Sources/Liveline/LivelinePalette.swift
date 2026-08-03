@@ -22,6 +22,45 @@ struct LivelineRGBA: Hashable {
         Color(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
     }
 
+    /// Perceived lightness, used to decide whether a surface is a dark one.
+    var luminance: Double { 0.2126 * red + 0.7152 * green + 0.0722 * blue }
+
+    /// Hue in `0..<1`, saturation and brightness in `0...1`. Written out rather
+    /// than bridged through `UIColor`/`NSColor` so the conversion is available
+    /// on every platform and is a pure function of the components.
+    var hsb: (hue: Double, saturation: Double, brightness: Double) {
+        let maximum = Swift.max(red, green, blue)
+        let minimum = Swift.min(red, green, blue)
+        let delta = maximum - minimum
+        guard delta > 0, maximum > 0 else { return (0, 0, maximum) }
+        let hue: Double
+        switch maximum {
+        case red: hue = ((green - blue) / delta).truncatingRemainder(dividingBy: 6)
+        case green: hue = (blue - red) / delta + 2
+        default: hue = (red - green) / delta + 4
+        }
+        return ((hue < 0 ? hue + 6 : hue) / 6, delta / maximum, maximum)
+    }
+
+    static func fromHSB(hue: Double, saturation: Double, brightness: Double, alpha: Double = 1) -> LivelineRGBA {
+        let sector = (hue - hue.rounded(.down)) * 6
+        let index = Int(sector)
+        let fraction = sector - Double(index)
+        let p = brightness * (1 - saturation)
+        let q = brightness * (1 - saturation * fraction)
+        let t = brightness * (1 - saturation * (1 - fraction))
+        let channels: (Double, Double, Double)
+        switch index {
+        case 0: channels = (brightness, t, p)
+        case 1: channels = (q, brightness, p)
+        case 2: channels = (p, brightness, t)
+        case 3: channels = (p, q, brightness)
+        case 4: channels = (t, p, brightness)
+        default: channels = (brightness, p, q)
+        }
+        return LivelineRGBA(red: channels.0, green: channels.1, blue: channels.2, alpha: alpha)
+    }
+
     func blended(to target: LivelineRGBA, t: Double) -> LivelineRGBA {
         let progress = min(max(t, 0), 1)
         return LivelineRGBA(

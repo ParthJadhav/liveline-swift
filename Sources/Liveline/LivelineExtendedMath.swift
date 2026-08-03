@@ -334,6 +334,25 @@ struct LivelineTreemapTile: Equatable {
     var rect: CGRect
 }
 
+/// The frame a parent node owns, with the strip reserved at its top for the
+/// parent's own label. `headerRect` is `nil` when the frame is too small to
+/// spend rows on a header, in which case the group reads through its inset
+/// alone.
+struct LivelineTreemapGroupFrame: Equatable {
+    var index: Int
+    var rect: CGRect
+    var headerRect: CGRect?
+}
+
+/// A squarified treemap: one tile per drawn cell, plus the frames of the
+/// parents whose children those cells are.
+struct LivelineTreemapLayout: Equatable {
+    var tiles: [LivelineTreemapTile]
+    var groups: [LivelineTreemapGroupFrame]
+
+    static let empty = LivelineTreemapLayout(tiles: [], groups: [])
+}
+
 /// One angular span of a sunburst. `fullStart`/`fullEnd` are the exact
 /// proportional bounds — a parent's children tile its full span end to end —
 /// while `start`/`end` are those bounds inset by the style's gap, which is what
@@ -494,17 +513,25 @@ extension LivelineMath {
 
     /// Lays out one or two levels of a treemap: top-level nodes are squarified
     /// across `rect`, and any node with children has its own rectangle
-    /// squarified again among them. Only leaves are returned, so a flat list of
-    /// nodes and a nested one both produce one tile per drawn cell.
-    static func treemapTiles(
+    /// squarified again among them. Only leaves become tiles, so a flat list of
+    /// nodes and a nested one both produce one tile per drawn cell; the frame a
+    /// parent owns is reported separately so the parent can be drawn as a
+    /// labelled group rather than dissolving into unrelated cells.
+    static func treemapLayout(
         nodes: [LivelineTreemapNode],
         in rect: CGRect,
         padding: CGFloat = 0,
-        groupPadding: CGFloat = 0
-    ) -> [LivelineTreemapTile] {
-        guard !nodes.isEmpty, rect.width > 0, rect.height > 0 else { return [] }
+        groupPadding: CGFloat = 0,
+        groupHeaderHeight: CGFloat = 0
+    ) -> LivelineTreemapLayout {
+        guard !nodes.isEmpty, rect.width > 0, rect.height > 0 else { return .empty }
         let inset = Swift.max(padding, 0) / 2
         let group = Swift.max(groupPadding, 0)
+        // Half the gutter comes off the plot itself: an edge cell then sits the
+        // same distance from the plot edge as two neighbours sit from each
+        // other, instead of hugging the boundary at half the gap.
+        let frame = rect.insetBy(dx: inset, dy: inset)
+        guard frame.width > 0.5, frame.height > 0.5 else { return .empty }
 
         func padded(_ rect: CGRect) -> CGRect? {
             let result = rect.insetBy(dx: inset, dy: inset)
@@ -512,8 +539,9 @@ extension LivelineMath {
             return result
         }
 
-        let topRects = squarifiedRects(values: nodes.map(\.resolvedValue), in: rect)
+        let topRects = squarifiedRects(values: nodes.map(\.resolvedValue), in: frame)
         var tiles: [LivelineTreemapTile] = []
+        var groups: [LivelineTreemapGroupFrame] = []
         for (index, node) in nodes.enumerated() {
             let frame = topRects[index]
             guard frame.width > 0, frame.height > 0 else { continue }
@@ -523,8 +551,28 @@ extension LivelineMath {
                 }
                 continue
             }
-            let inner = frame.insetBy(dx: group / 2, dy: group / 2)
+            // The group's own rectangle lines up with its leaf siblings; its
+            // children are inset inside it, which is what makes the nesting
+            // legible without a second colour ramp.
+            guard let groupRect = padded(frame) else { continue }
+            let requested = Swift.max(groupHeaderHeight, 0)
+            let header: CGRect? = requested >= 12
+                && groupRect.height >= requested * 3
+                && groupRect.width >= 48
+                ? CGRect(x: groupRect.minX, y: groupRect.minY, width: groupRect.width, height: requested)
+                : nil
+            // The gap under the header matches the group's own side margin, so
+            // the children sit in an evenly inset well rather than hanging off
+            // the header strip.
+            let top = groupRect.minY + (header.map { $0.height + group } ?? group)
+            let inner = CGRect(
+                x: groupRect.minX + group,
+                y: top,
+                width: groupRect.width - group * 2,
+                height: groupRect.maxY - group - top
+            )
             guard inner.width > 0, inner.height > 0 else { continue }
+            groups.append(LivelineTreemapGroupFrame(index: index, rect: groupRect, headerRect: header))
             let childRects = squarifiedRects(values: node.children.map(\.resolvedValue), in: inner)
             for (childIndex, child) in node.children.enumerated() {
                 let childFrame = childRects[childIndex]
@@ -534,7 +582,7 @@ extension LivelineMath {
                 )
             }
         }
-        return tiles
+        return LivelineTreemapLayout(tiles: tiles, groups: groups)
     }
 
     // MARK: - Sunburst

@@ -88,23 +88,39 @@ final class LivelineMathTests: XCTestCase {
                 LivelineTreemapNode(label: "B", value: 4),
             ]),
         ]
-        let tiles = LivelineMath.treemapTiles(nodes: nodes, in: CGRect(x: 0, y: 0, width: 200, height: 200))
+        let frame = CGRect(x: 0, y: 0, width: 200, height: 200)
+        let layout = LivelineMath.treemapLayout(nodes: nodes, in: frame)
+        let tiles = layout.tiles
 
         XCTAssertEqual(tiles.map(\.path), [[0], [1, 0], [1, 1]])
         XCTAssertEqual(tiles.map(\.value), [10, 6, 4])
+        // Only the nested node reports a frame, and with no header height asked
+        // for there is no strip to reserve.
+        XCTAssertEqual(layout.groups.map(\.index), [1])
+        XCTAssertNil(layout.groups.first?.headerRect)
         // The parent's own weight is its children's sum, so the two halves of
         // the frame are equal.
-        XCTAssertEqual(
-            Double(tiles[0].rect.width * tiles[0].rect.height),
-            Double((tiles[1].rect.width * tiles[1].rect.height) + (tiles[2].rect.width * tiles[2].rect.height)),
-            accuracy: 1
-        )
-        XCTAssertTrue(LivelineMath.treemapTiles(nodes: [], in: CGRect(x: 0, y: 0, width: 10, height: 10)).isEmpty)
+        let leafArea = Double(tiles[0].rect.width) * Double(tiles[0].rect.height)
+        let childArea = Double(tiles[1].rect.width) * Double(tiles[1].rect.height)
+            + Double(tiles[2].rect.width) * Double(tiles[2].rect.height)
+        XCTAssertEqual(leafArea, childArea, accuracy: 1)
+
+        // Asking for a header takes the strip off the top of the group's frame;
+        // the children start below it.
+        let headed = LivelineMath.treemapLayout(nodes: nodes, in: frame, groupHeaderHeight: 20)
+        let header = try? XCTUnwrap(headed.groups.first?.headerRect)
+        XCTAssertEqual(header?.height, 20)
+        XCTAssertEqual(header?.minY, headed.groups.first?.rect.minY)
+        for tile in headed.tiles where tile.path.count > 1 {
+            XCTAssertGreaterThanOrEqual(tile.rect.minY, (header?.maxY ?? 0))
+        }
+
+        XCTAssertTrue(LivelineMath.treemapLayout(nodes: [], in: CGRect(x: 0, y: 0, width: 10, height: 10)).tiles.isEmpty)
         XCTAssertTrue(
-            LivelineMath.treemapTiles(
+            LivelineMath.treemapLayout(
                 nodes: nodes,
                 in: CGRect(x: 0, y: 0, width: 0, height: 200)
-            ).isEmpty
+            ).tiles.isEmpty
         )
     }
 
@@ -114,13 +130,28 @@ final class LivelineMathTests: XCTestCase {
             LivelineTreemapNode(label: "B", value: 1),
         ]
         let frame = CGRect(x: 0, y: 0, width: 100, height: 100)
-        let bare = LivelineMath.treemapTiles(nodes: nodes, in: frame)
-        let padded = LivelineMath.treemapTiles(nodes: nodes, in: frame, padding: 4)
+        // Half the gutter comes off the plot, so a padded layout is the bare
+        // layout of the already-inset frame with each cell inset again.
+        let bare = LivelineMath.treemapLayout(nodes: nodes, in: frame.insetBy(dx: 2, dy: 2)).tiles
+        let padded = LivelineMath.treemapLayout(nodes: nodes, in: frame, padding: 4).tiles
 
         XCTAssertEqual(padded.count, bare.count)
         for (plain, inset) in zip(bare, padded) {
             XCTAssertEqual(inset.rect, plain.rect.insetBy(dx: 2, dy: 2))
         }
+
+        // Gutters are uniform: the margin against the plot edge is the same as
+        // the gap between two neighbours.
+        let first = padded[0].rect
+        let second = padded[1].rect
+        let covered = first.union(second)
+        XCTAssertEqual(Double(covered.minX - frame.minX), 4, accuracy: 1e-9)
+        XCTAssertEqual(Double(covered.minY - frame.minY), 4, accuracy: 1e-9)
+        XCTAssertEqual(Double(frame.maxX - covered.maxX), 4, accuracy: 1e-9)
+        XCTAssertEqual(Double(frame.maxY - covered.maxY), 4, accuracy: 1e-9)
+        // Whichever way the two cells were split, they are one gutter apart.
+        let gap = Swift.max(second.minX - first.maxX, second.minY - first.maxY)
+        XCTAssertEqual(Double(gap), 4, accuracy: 1e-9)
     }
 
     // MARK: - Sunburst spans
@@ -321,7 +352,7 @@ final class LivelineMathTests: XCTestCase {
             )
             return LivelineRenderer.treemapGeometry(
                 nodes: nodes,
-                tiles: LivelineMath.treemapTiles(nodes: nodes, in: rect),
+                tiling: LivelineMath.treemapLayout(nodes: nodes, in: rect),
                 style: LivelineTreemapStyle(),
                 layout: layout,
                 palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
@@ -336,6 +367,57 @@ final class LivelineMathTests: XCTestCase {
         XCTAssertLessThan(ltr.cells[0].rect.minX, ltr.cells[1].rect.minX)
         XCTAssertGreaterThan(rtl.cells[0].rect.minX, rtl.cells[1].rect.minX)
         XCTAssertEqual(ltr.cells[0].share, 0.75, accuracy: 1e-9)
+    }
+
+    func testTreemapGeometryReportsAGroupMarkForEveryNestedParent() {
+        let nodes = [
+            LivelineTreemapNode(label: "Flat", value: 10),
+            LivelineTreemapNode(label: "Group", children: [
+                LivelineTreemapNode(label: "A", value: 6),
+                LivelineTreemapNode(label: "B", value: 4),
+            ]),
+        ]
+        let layout = LivelineLayout(
+            size: CGSize(width: 300, height: 200),
+            padding: LivelineResolvedPadding(top: 10, right: 10, bottom: 10, left: 10),
+            minValue: 0,
+            maxValue: 1,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let rect = CGRect(
+            x: layout.plotLeftX,
+            y: layout.padding.top,
+            width: layout.chartWidth,
+            height: layout.chartHeight
+        )
+        let style = LivelineTreemapStyle()
+        let geometry = LivelineRenderer.treemapGeometry(
+            nodes: nodes,
+            tiling: LivelineMath.treemapLayout(
+                nodes: nodes,
+                in: rect,
+                padding: style.resolvedPadding,
+                groupPadding: style.resolvedGroupPadding,
+                groupHeaderHeight: style.resolvedGroupHeaderHeight
+            ),
+            style: style,
+            layout: layout,
+            palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
+            reveal: 1
+        )
+
+        // The parent is not a cell — it is the frame its children sit in, with
+        // a header strip carrying its own name.
+        XCTAssertEqual(geometry.cells.map(\.node.label), ["Flat", "A", "B"])
+        XCTAssertEqual(geometry.groups.map(\.node.label), ["Group"])
+        XCTAssertEqual(geometry.groups.first?.value, 10)
+        let group = geometry.groups[0]
+        XCTAssertNotNil(group.headerRect)
+        for cell in geometry.cells where cell.parentIndex == 1 {
+            XCTAssertTrue(group.rect.contains(cell.rect))
+            XCTAssertGreaterThanOrEqual(cell.rect.minY, group.headerRect?.maxY ?? 0)
+        }
     }
 
     func testSunburstGeometryIsNeverMirroredAndStacksItsTwoRings() {
@@ -539,6 +621,38 @@ final class LivelineMathTests: XCTestCase {
         XCTAssertEqual(geometry.targetX ?? 0, layout.plotLeftX + layout.chartWidth * 0.8, accuracy: 0.001)
         // The measure bar is thinner than the qualitative track it sits on.
         XCTAssertLessThan(geometry.measureRect.height, geometry.trackRect.height)
+        // Both are centred on the same line, so the measure reads as sitting
+        // inside the bands rather than beside them.
+        XCTAssertEqual(geometry.measureRect.midY, geometry.trackRect.midY, accuracy: 0.001)
+    }
+
+    func testBulletTrackStopsGrowingPastItsMaximumHeight() {
+        let style = LivelineBulletStyle(measure: 50, axisRange: 0...100, maximumBarHeight: 30)
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 420),
+            padding: LivelineResolvedPadding(top: 10, right: 20, bottom: 10, left: 20),
+            minValue: 0,
+            maxValue: 100,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let geometry = LivelineRenderer.bulletGeometry(
+            style: style,
+            layout: layout,
+            palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
+            reveal: 1
+        )
+
+        // A tall frame leaves whitespace around a centred strip instead of
+        // inflating the bar into a slab.
+        XCTAssertEqual(geometry.trackRect.height, 30, accuracy: 0.001)
+        XCTAssertEqual(geometry.trackRect.midY, layout.padding.top + layout.chartHeight / 2, accuracy: 0.001)
+        // The measure keeps its share of the track once the cap bites.
+        XCTAssertEqual(
+            Double(geometry.measureRect.height / geometry.trackRect.height),
+            Double(style.resolvedMeasureHeightRatio / style.resolvedBarHeightRatio),
+            accuracy: 0.001
+        )
     }
 
     func testBulletStyleDerivesItsAxisAndContainingBand() {

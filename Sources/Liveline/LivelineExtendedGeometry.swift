@@ -460,8 +460,21 @@ extension LivelineRenderer {
         )
         let axisRange = style.resolvedAxisRange
         let centerY = plotRect.midY
-        let trackHeight = max(plotRect.height * style.resolvedBarHeightRatio, 6)
-        let measureHeight = max(plotRect.height * style.resolvedMeasureHeightRatio, 3)
+        // A bullet is a strip, not a slab: past the cap the extra height stays
+        // as whitespace around a centred track rather than inflating the bar.
+        let trackHeight = max(
+            min(plotRect.height * style.resolvedBarHeightRatio, style.resolvedMaximumBarHeight),
+            6
+        )
+        // The measure keeps its proportion of the track once the cap bites, so
+        // the classic "thin bar inside a wider band" reading survives a resize.
+        let measureHeight = max(
+            min(
+                trackHeight * (style.resolvedMeasureHeightRatio / style.resolvedBarHeightRatio),
+                trackHeight
+            ),
+            3
+        )
         let trackRect = CGRect(
             x: plotRect.minX,
             y: centerY - trackHeight / 2,
@@ -538,6 +551,8 @@ struct LivelineTreemapCell {
     var node: LivelineTreemapNode
     /// The top-level node this cell belongs to, when the cell is a child.
     var parentLabel: String?
+    /// Index of that top-level node, when the cell is a child.
+    var parentIndex: Int?
     var rect: CGRect
     var color: Color
     /// Multiplier applied on top of the style's fill opacity, used to separate
@@ -549,11 +564,25 @@ struct LivelineTreemapCell {
     var reveal: Double
 }
 
+/// A parent node's frame, drawn behind its children so the nesting reads as a
+/// group rather than as unrelated neighbours.
+struct LivelineTreemapGroupMark {
+    var node: LivelineTreemapNode
+    var rect: CGRect
+    /// The strip at the top of `rect` the parent's own label occupies, when the
+    /// frame was large enough to reserve one.
+    var headerRect: CGRect?
+    var color: Color
+    var value: Double
+    var reveal: Double
+}
+
 struct LivelineTreemapGeometry {
     var progress: Double
     var plotRect: CGRect
     var total: Double
     var cells: [LivelineTreemapCell]
+    var groups: [LivelineTreemapGroupMark] = []
 }
 
 struct LivelineSunburstSegment {
@@ -614,12 +643,13 @@ extension LivelineRenderer {
     /// colours, shares, and the reveal stagger.
     static func treemapGeometry(
         nodes: [LivelineTreemapNode],
-        tiles: [LivelineTreemapTile],
+        tiling: LivelineTreemapLayout,
         style: LivelineTreemapStyle,
         layout: LivelineLayout,
         palette: LivelinePalette,
         reveal: Double
     ) -> LivelineTreemapGeometry {
+        let tiles = tiling.tiles
         let progress = LivelineMath.easedReveal(reveal)
         let plotRect = CGRect(
             x: layout.plotLeftX,
@@ -651,6 +681,7 @@ extension LivelineRenderer {
             return LivelineTreemapCell(
                 node: node,
                 parentLabel: childIndex == nil ? nil : parent.label,
+                parentIndex: childIndex == nil ? nil : topIndex,
                 // Cells tile the plot in reading order, so a right-to-left
                 // layout mirrors them just like it mirrors a bar chart.
                 rect: layout.mirrored(tile.rect),
@@ -661,7 +692,29 @@ extension LivelineRenderer {
                 reveal: localReveal
             )
         }
-        return LivelineTreemapGeometry(progress: progress, plotRect: plotRect, total: total, cells: cells)
+        // A group appears once its first child does, so the header never floats
+        // over an empty frame mid-reveal.
+        let groups = tiling.groups.compactMap { frame -> LivelineTreemapGroupMark? in
+            guard nodes.indices.contains(frame.index) else { return nil }
+            let node = nodes[frame.index]
+            let childReveal = cells.filter { $0.parentIndex == frame.index }.map(\.reveal).max() ?? 0
+            guard childReveal > 0.001 else { return nil }
+            return LivelineTreemapGroupMark(
+                node: node,
+                rect: layout.mirrored(frame.rect),
+                headerRect: frame.headerRect.map { layout.mirrored($0) },
+                color: node.color ?? extendedSeriesColor(index: frame.index, colors: style.colors, palette: palette),
+                value: node.resolvedValue,
+                reveal: childReveal
+            )
+        }
+        return LivelineTreemapGeometry(
+            progress: progress,
+            plotRect: plotRect,
+            total: total,
+            cells: cells,
+            groups: groups
+        )
     }
 
     /// Two concentric rings of annular segments. Radial kinds are never

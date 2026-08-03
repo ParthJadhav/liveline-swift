@@ -866,7 +866,7 @@ extension LivelineRenderer {
         for band in geometry.bands where band.rect.width > 0 {
             trackLayer.fill(
                 Path(roundedRect: band.rect, cornerRadius: min(trackRadius, band.rect.width / 2)),
-                with: .color(band.color.opacity(style.resolvedBandOpacity))
+                with: .color(bulletBandFill(band.color, palette: palette, style: style))
             )
         }
 
@@ -887,7 +887,7 @@ extension LivelineRenderer {
         if let targetX = geometry.targetX {
             var targetLayer = layer
             targetLayer.opacity *= LivelineMath.easedReveal((geometry.progress - 0.6) / 0.4)
-            let overhang = geometry.trackRect.height * 0.18
+            let overhang = bulletTargetOverhang(trackHeight: geometry.trackRect.height)
             var tick = Path()
             tick.move(to: CGPoint(x: targetX, y: geometry.trackRect.minY - overhang))
             tick.addLine(to: CGPoint(x: targetX, y: geometry.trackRect.maxY + overhang))
@@ -910,6 +910,60 @@ extension LivelineRenderer {
         }
     }
 
+    /// Bands are composited straight onto the theme background instead of being
+    /// alpha-blended over whatever is beneath them: a translucent red over a
+    /// near-black plot with a light track under it lands on brown, which is the
+    /// one colour a "danger" band must not be.
+    static func bulletBandFill(
+        _ color: Color,
+        palette: LivelinePalette,
+        style: LivelineBulletStyle
+    ) -> Color {
+        let weight = style.resolvedBandOpacity
+        guard let rgba = color.livelineRGBA() else { return color.opacity(weight) }
+        let solid = LivelineRGBA(red: rgba.red, green: rgba.green, blue: rgba.blue, alpha: 1)
+        guard palette.backgroundRGB.luminance < 0.5 else {
+            // On a light surface a plain composite already lands on a clean
+            // pastel tint of the band's own hue.
+            return palette.backgroundRGB.blended(to: solid, t: weight).color
+        }
+        // On a dark surface the same composite drags a pastel red or amber
+        // through brown, because the near-black background eats the band's
+        // lightness before its chroma. Compositing over a neutral mid-dark grey
+        // instead lands the band where a muted UI palette puts it: light enough
+        // that red reads red and amber reads gold, dark enough that the measure
+        // bar still sits in front of it.
+        let neutral = LivelineRGBA(red: 0.32, green: 0.32, blue: 0.34, alpha: 1)
+        let tinted = neutral.blended(to: solid, t: min(weight * 1.5, 1))
+        let (hue, saturation, brightness) = tinted.hsb
+        // The composite dilutes chroma along with lightness; a small boost puts
+        // the hue back, and the ceiling keeps the band behind the measure bar
+        // rather than beside it.
+        let saturated = min(saturation * 1.3, 0.75)
+        // The floor tracks the requested weight, so a band asked to be faint
+        // still is, while the default weight lands in muted-UI territory
+        // instead of the near-black end of the hue.
+        let base = min(max(brightness, 0.34 + 0.7 * weight), 0.9)
+        let candidate = LivelineRGBA.fromHSB(hue: hue, saturation: saturated, brightness: base)
+        // Yellow and green carry far more luminance than red at the same
+        // brightness, so an untouched ramp reads as one loud band beside two
+        // quiet ones. A light correction toward equal luminance evens the
+        // weights; a heavy one is what turns amber into olive.
+        let ratio = candidate.luminance > 0 ? 0.38 / candidate.luminance : 1
+        let factor = min(max(1 + (ratio - 1) * 0.2, 0.94), 1.12)
+        return LivelineRGBA.fromHSB(
+            hue: hue,
+            saturation: saturated,
+            brightness: min(base * factor, 0.9)
+        ).color
+    }
+
+    /// A few points of overhang is enough to read the target tick against the
+    /// bands; scaled with the track it turns into a tower.
+    static func bulletTargetOverhang(trackHeight: CGFloat) -> CGFloat {
+        min(max(trackHeight * 0.14, 3), 6)
+    }
+
     static func drawBulletLabels(
         context: inout GraphicsContext,
         palette: LivelinePalette,
@@ -920,6 +974,7 @@ extension LivelineRenderer {
     ) {
         var labelLayer = context
         labelLayer.opacity *= LivelineMath.easedReveal((geometry.progress - 0.35) / 0.65)
+        let captionY = geometry.trackRect.minY - textScale.scaled(18)
 
         if let label = style.label, !label.isEmpty {
             drawText(
@@ -927,7 +982,7 @@ extension LivelineRenderer {
                 context: &labelLayer,
                 at: CGPoint(
                     x: geometry.isRTL ? geometry.plotRect.maxX : geometry.plotRect.minX,
-                    y: geometry.trackRect.minY - textScale.scaled(12)
+                    y: captionY
                 ),
                 anchor: geometry.isRTL ? .trailing : .leading,
                 color: palette.gridLabel,
@@ -935,18 +990,68 @@ extension LivelineRenderer {
             )
         }
 
+        if style.showsBandLabels {
+            drawBulletBandLabels(
+                context: &labelLayer,
+                palette: palette,
+                geometry: geometry,
+                textScale: textScale
+            )
+        }
+
         guard style.showsValue else { return }
+        let text = formatValue(geometry.displayedMeasure)
+        let font = textScale.font(16, weight: .semibold, design: .rounded)
+        let size = measureText(text, context: labelLayer, font: font)
+        // The value sits at the reading end of the track. The target tick's
+        // overhang normally stops short of the caption line; when a tall track
+        // pushes it up into the text, the value steps aside rather than being
+        // struck through.
+        var edge = geometry.isRTL ? geometry.plotRect.minX : geometry.plotRect.maxX
+        let tickTop = geometry.trackRect.minY - bulletTargetOverhang(trackHeight: geometry.trackRect.height)
+        if let targetX = geometry.targetX, tickTop < captionY + size.height / 2 + 2 {
+            let clearance = textScale.scaled(10)
+            if geometry.isRTL {
+                if targetX < edge + size.width + clearance {
+                    edge = min(targetX + clearance, geometry.plotRect.maxX - size.width)
+                }
+            } else if targetX > edge - size.width - clearance {
+                edge = max(targetX - clearance, geometry.plotRect.minX + size.width)
+            }
+        }
         drawText(
-            formatValue(geometry.displayedMeasure),
+            text,
             context: &labelLayer,
-            at: CGPoint(
-                x: geometry.isRTL ? geometry.plotRect.minX : geometry.plotRect.maxX,
-                y: geometry.trackRect.minY - textScale.scaled(12)
-            ),
+            at: CGPoint(x: edge, y: captionY),
             anchor: geometry.isRTL ? .leading : .trailing,
             color: palette.tooltipText,
-            font: textScale.font(16, weight: .semibold, design: .rounded)
+            font: font
         )
+    }
+
+    /// One label per band, centred under the band it names and drawn only where
+    /// the band is wide enough to hold the whole string.
+    static func drawBulletBandLabels(
+        context: inout GraphicsContext,
+        palette: LivelinePalette,
+        geometry: LivelineBulletGeometry,
+        textScale: LivelineTextScale
+    ) {
+        let font = textScale.font(10, weight: .medium)
+        let baseline = geometry.trackRect.maxY + textScale.scaled(13)
+        for band in geometry.bands {
+            guard let label = band.range.label, !label.isEmpty, band.rect.width > 0 else { continue }
+            let width = measureText(label, context: context, font: font).width
+            guard band.rect.width >= width + textScale.scaled(10) else { continue }
+            drawText(
+                label,
+                context: &context,
+                at: CGPoint(x: band.rect.midX, y: baseline),
+                anchor: .center,
+                color: palette.gridLabel,
+                font: font
+            )
+        }
     }
 }
 
@@ -990,6 +1095,32 @@ extension LivelineRenderer {
         var layer = context
         layer.clip(to: plotClip(layout))
 
+        // Groups are drawn first: a tinted backing plate with a hairline edge
+        // that reads as "these cells belong together" before any label does.
+        for group in geometry.groups {
+            var groupLayer = layer
+            groupLayer.opacity *= group.reveal
+            let radius = min(
+                style.resolvedCornerRadius + 2,
+                group.rect.width / 2,
+                group.rect.height / 2
+            )
+            let path = Path(roundedRect: group.rect, cornerRadius: max(radius, 0))
+            groupLayer.fill(path, with: .color(group.color.opacity(0.18 * style.resolvedFillOpacity)))
+            // The header carries a heavier tint than the plate, so the strip
+            // holding the parent's name reads as a title bar for the cells
+            // below rather than as spare room inside the group.
+            if let header = group.headerRect {
+                var headerLayer = groupLayer
+                headerLayer.clip(to: path)
+                headerLayer.fill(
+                    Path(header),
+                    with: .color(group.color.opacity(0.34 * style.resolvedFillOpacity))
+                )
+            }
+            groupLayer.stroke(path, with: .color(group.color.opacity(0.55)), lineWidth: 1)
+        }
+
         for cell in geometry.cells {
             var cellLayer = layer
             cellLayer.opacity *= cell.reveal
@@ -1025,15 +1156,49 @@ extension LivelineRenderer {
         clipped.clip(to: plotClip(layout))
         // Dynamic Type grows the glyphs but not the cell, so the threshold a
         // cell has to clear grows with it.
+        let inset = textScale.scaled(style.labelInset)
         let minimumWidth = textScale.scaled(style.resolvedMinimumLabelWidth)
         let minimumHeight = textScale.scaled(style.resolvedMinimumLabelHeight)
-        let lineHeight = textScale.scaled(12)
+        let lineHeight = textScale.scaled(13)
+
+        // Group headers first, so a child cell's own label always wins the
+        // pixels where the two could meet.
+        for group in geometry.groups where group.reveal > 0.65 {
+            guard style.showsLabels, let header = group.headerRect else { continue }
+            var headerLayer = clipped
+            headerLayer.opacity *= LivelineMath.easedReveal((group.reveal - 0.65) / 0.35)
+            let text = header.insetBy(dx: inset, dy: 0)
+            guard text.width > 0 else { continue }
+            headerLayer.clip(to: Path(text))
+            drawText(
+                group.node.label,
+                context: &headerLayer,
+                at: CGPoint(x: text.minX, y: header.midY),
+                anchor: .leading,
+                color: .white.opacity(0.95),
+                font: textScale.font(11, weight: .semibold)
+            )
+            guard style.showsValues, text.width >= minimumWidth else { continue }
+            drawText(
+                formatValue(group.value),
+                context: &headerLayer,
+                at: CGPoint(x: text.maxX, y: header.midY),
+                anchor: .trailing,
+                color: .white.opacity(0.7),
+                font: textScale.font(10, weight: .regular, design: .monospaced)
+            )
+        }
 
         for cell in geometry.cells where cell.reveal > 0.65 {
             guard cell.rect.width >= minimumWidth, cell.rect.height >= minimumHeight else { continue }
             var labelLayer = clipped
             labelLayer.opacity *= LivelineMath.easedReveal((cell.reveal - 0.65) / 0.35)
-            let origin = CGPoint(x: cell.rect.minX + 6, y: cell.rect.minY + textScale.scaled(9))
+            // Text is clipped to the cell's own padding box: a long label runs
+            // out of room rather than crossing the border into its neighbour.
+            let box = cell.rect.insetBy(dx: inset, dy: textScale.scaled(3))
+            guard box.width > 0, box.height > 0 else { continue }
+            labelLayer.clip(to: Path(box))
+            let origin = CGPoint(x: box.minX, y: cell.rect.minY + inset + textScale.scaled(1))
             if style.showsLabels {
                 drawText(
                     cell.node.label,

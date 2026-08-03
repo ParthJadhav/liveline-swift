@@ -155,20 +155,20 @@ final class LivelinePreparationTests: XCTestCase {
         let state = LivelineRenderState()
         let rect = CGRect(x: 0, y: 0, width: 200, height: 120)
 
-        let tiles = state.treemapTiles(nodes: nodes, style: style, in: rect)
+        let tiles = state.treemapLayout(nodes: nodes, style: style, in: rect).tiles
         XCTAssertEqual(tiles.count, 2)
         XCTAssertTrue(
-            state.treemapTiles(nodes: nodes, style: style, in: rect).livelineSharesStorage(with: tiles)
+            state.treemapLayout(nodes: nodes, style: style, in: rect).tiles.livelineSharesStorage(with: tiles)
         )
         // A resize is the one input a radial kind would not have; the treemap
         // must fall out of the memo when the plot changes shape.
         XCTAssertFalse(
-            state.treemapTiles(nodes: nodes, style: style, in: rect.insetBy(dx: 4, dy: 0))
-                .livelineSharesStorage(with: tiles)
+            state.treemapLayout(nodes: nodes, style: style, in: rect.insetBy(dx: 4, dy: 0))
+                .tiles.livelineSharesStorage(with: tiles)
         )
         XCTAssertFalse(
-            state.treemapTiles(nodes: nodes, style: LivelineTreemapStyle(padding: 8), in: rect)
-                .livelineSharesStorage(with: tiles)
+            state.treemapLayout(nodes: nodes, style: LivelineTreemapStyle(padding: 8), in: rect)
+                .tiles.livelineSharesStorage(with: tiles)
         )
 
         let content = LivelineChartContent.treemap(nodes: nodes, style: style)

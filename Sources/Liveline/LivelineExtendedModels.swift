@@ -571,12 +571,22 @@ public struct LivelineBulletStyle {
     public var axisRange: ClosedRange<Double>?
     public var label: String?
     public var barHeightRatio: CGFloat
+    /// Height of the measure bar, as a fraction of the plot height. It is
+    /// always read relative to `barHeightRatio`, so a capped track scales the
+    /// measure with it.
     public var measureHeightRatio: CGFloat
+    /// Ceiling on the qualitative track's height, in points. A bullet is a
+    /// compact KPI strip; without a cap a tall frame stretches it into a
+    /// slab.
+    public var maximumBarHeight: CGFloat
     public var measureColor: Color?
     public var targetColor: Color?
     public var bandOpacity: Double
     public var cornerRadius: CGFloat
     public var showsValue: Bool
+    /// Draws each band's label under the track, for bands wide enough to hold
+    /// the text.
+    public var showsBandLabels: Bool
 
     public init(
         measure: Double,
@@ -585,12 +595,14 @@ public struct LivelineBulletStyle {
         axisRange: ClosedRange<Double>? = nil,
         label: String? = nil,
         barHeightRatio: CGFloat = 0.42,
-        measureHeightRatio: CGFloat = 0.38,
+        measureHeightRatio: CGFloat = 0.18,
+        maximumBarHeight: CGFloat = 44,
         measureColor: Color? = nil,
         targetColor: Color? = nil,
-        bandOpacity: Double = 0.28,
+        bandOpacity: Double = 0.34,
         cornerRadius: CGFloat = 3,
-        showsValue: Bool = true
+        showsValue: Bool = true,
+        showsBandLabels: Bool = true
     ) {
         self.measure = measure.isFinite ? measure : 0
         self.target = target.flatMap { $0.isFinite ? $0 : nil }
@@ -599,20 +611,23 @@ public struct LivelineBulletStyle {
         self.label = label
         self.barHeightRatio = barHeightRatio
         self.measureHeightRatio = measureHeightRatio
+        self.maximumBarHeight = maximumBarHeight
         self.measureColor = measureColor
         self.targetColor = targetColor
         self.bandOpacity = bandOpacity
         self.cornerRadius = cornerRadius
         self.showsValue = showsValue
+        self.showsBandLabels = showsBandLabels
     }
 
     var resolvedMeasure: Double { LivelineScalar.value(measure) }
     var resolvedTarget: Double? { target.flatMap { $0.isFinite ? LivelineScalar.value($0) : nil } }
     var resolvedBarHeightRatio: CGFloat { barHeightRatio.livelineClamped(0.05, 1, fallback: 0.42) }
     var resolvedMeasureHeightRatio: CGFloat {
-        measureHeightRatio.livelineClamped(0.05, resolvedBarHeightRatio, fallback: min(0.38, resolvedBarHeightRatio))
+        measureHeightRatio.livelineClamped(0.05, resolvedBarHeightRatio, fallback: min(0.18, resolvedBarHeightRatio))
     }
-    var resolvedBandOpacity: Double { bandOpacity.livelineClamped(0, 1, fallback: 0.28) }
+    var resolvedMaximumBarHeight: CGFloat { maximumBarHeight.livelineClamped(6, 400, fallback: 44) }
+    var resolvedBandOpacity: Double { bandOpacity.livelineClamped(0, 1, fallback: 0.34) }
     var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 3) }
 
     /// Bands ordered worst to best, with non-finite and non-positive-width
@@ -691,6 +706,10 @@ public struct LivelineTreemapStyle {
     public var padding: CGFloat
     /// Extra gap left around a parent's group of children.
     public var groupPadding: CGFloat
+    /// Height of the strip reserved at the top of a parent's frame for the
+    /// parent's own label. Zero draws no header, leaving the group's inset as
+    /// its only cue.
+    public var groupHeaderHeight: CGFloat
     public var cornerRadius: CGFloat
     public var colors: [Color]
     public var fillOpacity: Double
@@ -705,16 +724,18 @@ public struct LivelineTreemapStyle {
     public init(
         padding: CGFloat = 2,
         groupPadding: CGFloat = 2,
+        groupHeaderHeight: CGFloat = 20,
         cornerRadius: CGFloat = 3,
         colors: [Color] = [],
         fillOpacity: Double = 0.9,
         showsLabels: Bool = true,
         showsValues: Bool = true,
-        minimumLabelWidth: CGFloat = 42,
-        minimumLabelHeight: CGFloat = 20
+        minimumLabelWidth: CGFloat = 54,
+        minimumLabelHeight: CGFloat = 22
     ) {
         self.padding = padding
         self.groupPadding = groupPadding
+        self.groupHeaderHeight = groupHeaderHeight
         self.cornerRadius = cornerRadius
         self.colors = colors
         self.fillOpacity = fillOpacity
@@ -726,10 +747,15 @@ public struct LivelineTreemapStyle {
 
     var resolvedPadding: CGFloat { padding.livelineClamped(0, 24, fallback: 2) }
     var resolvedGroupPadding: CGFloat { groupPadding.livelineClamped(0, 24, fallback: 2) }
+    var resolvedGroupHeaderHeight: CGFloat {
+        showsLabels ? groupHeaderHeight.livelineClamped(0, 60, fallback: 20) : 0
+    }
     var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 3) }
     var resolvedFillOpacity: Double { fillOpacity.livelineClamped(0, 1, fallback: 0.9) }
-    var resolvedMinimumLabelWidth: CGFloat { minimumLabelWidth.livelineClamped(0, 400, fallback: 42) }
-    var resolvedMinimumLabelHeight: CGFloat { minimumLabelHeight.livelineClamped(0, 400, fallback: 20) }
+    var resolvedMinimumLabelWidth: CGFloat { minimumLabelWidth.livelineClamped(0, 400, fallback: 54) }
+    var resolvedMinimumLabelHeight: CGFloat { minimumLabelHeight.livelineClamped(0, 400, fallback: 22) }
+    /// Inset from a cell's edge to its label, in points.
+    var labelInset: CGFloat { 10 }
 }
 
 /// One node of a sunburst.
