@@ -7,6 +7,8 @@
 - Restores Xcode 15.4 compatibility for histogram bin construction by avoiding
   a compiler type-check timeout without changing histogram behavior.
 - Fixes the remaining DocC warnings-as-errors failures for viewport APIs.
+- Stabilizes Storybook scroll-state detection and its cross-version UI
+  regression coverage.
 - Adds a fail-closed, read-only release readiness check that requires the exact
   remote `main` commit to have completed CI successfully before tagging.
 

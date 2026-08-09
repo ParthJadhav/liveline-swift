@@ -13,6 +13,9 @@ struct StorybookGalleryView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 ditherControls
+                if showsScrollDiagnostics {
+                    scrollDiagnostics
+                }
                 galleryScroll
             }
             .navigationTitle("Storybook")
@@ -29,23 +32,6 @@ struct StorybookGalleryView: View {
                 : nil
         )
         .animation(.easeInOut(duration: 0.2), value: showsDitherExamples)
-        .overlay(alignment: .topTrailing) {
-            if showsScrollDiagnostics {
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(String(scrollPauseCount))
-                        .accessibilityIdentifier("storybook-scroll-pause-count")
-                    Text(isScrolling ? "true" : "false")
-                        .accessibilityIdentifier("storybook-scroll-active")
-                    Text(showsDitherExamples && !isScrolling ? "true" : "false")
-                        .accessibilityIdentifier("storybook-dither-animated")
-                }
-                .font(.caption2.monospacedDigit())
-                .padding(8)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .padding(8)
-                .allowsHitTesting(false)
-            }
-        }
         .onDisappear {
             scrollIdleTask?.cancel()
             scrollIdleTask = nil
@@ -69,6 +55,22 @@ struct StorybookGalleryView: View {
         .padding(.horizontal, 16)
         .frame(height: 44)
         .background(.thinMaterial)
+    }
+
+    private var scrollDiagnostics: some View {
+        HStack(spacing: 8) {
+            Text(String(scrollPauseCount))
+                .accessibilityIdentifier("storybook-scroll-pause-count")
+            Text(isScrolling ? "true" : "false")
+                .accessibilityIdentifier("storybook-scroll-active")
+            Text(showsDitherExamples && !isScrolling ? "true" : "false")
+                .accessibilityIdentifier("storybook-dither-animated")
+        }
+        .font(.caption2.monospacedDigit())
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .padding(.horizontal, 8)
+        .background(.thinMaterial)
+        .allowsHitTesting(false)
     }
 
     @ViewBuilder
@@ -117,18 +119,22 @@ struct StorybookGalleryView: View {
     private var legacyScrollGesture: some Gesture {
         DragGesture(minimumDistance: 1)
             .onChanged { _ in
-                scrollIdleTask?.cancel()
-                scrollIdleTask = nil
                 setScrolling(true)
+                scheduleLegacyScrollIdle(afterNanoseconds: 1_000_000_000)
             }
             .onEnded { _ in
-                scrollIdleTask?.cancel()
-                scrollIdleTask = Task { @MainActor in
-                    try? await Task.sleep(nanoseconds: 500_000_000)
-                    guard !Task.isCancelled else { return }
-                    setScrolling(false)
-                }
+                scheduleLegacyScrollIdle(afterNanoseconds: 500_000_000)
             }
+    }
+
+    private func scheduleLegacyScrollIdle(afterNanoseconds delay: UInt64) {
+        scrollIdleTask?.cancel()
+        scrollIdleTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: delay)
+            guard !Task.isCancelled else { return }
+            scrollIdleTask = nil
+            setScrolling(false)
+        }
     }
 
     private func setScrolling(_ value: Bool) {
