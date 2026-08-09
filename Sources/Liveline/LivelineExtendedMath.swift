@@ -230,13 +230,26 @@ extension LivelineMath {
             let index = min(Int((sample - minimum) / width), binCount - 1)
             counts[max(index, 0)] += 1
         }
-        return (0..<binCount).map { index in
-            LivelineHistogramBin(
-                lowerBound: minimum + Double(index) * width,
-                upperBound: index == binCount - 1 ? maximum : minimum + Double(index + 1) * width,
+        // Keep this construction deliberately imperative. The Swift compiler
+        // bundled with Xcode 15.4 can time out while inferring the nested
+        // range/map/ternary expression, although newer compilers accept it.
+        var bins: [LivelineHistogramBin] = []
+        bins.reserveCapacity(binCount)
+        for index in 0..<binCount {
+            let lowerBound = minimum + Double(index) * width
+            let upperBound: Double
+            if index == binCount - 1 {
+                upperBound = maximum
+            } else {
+                upperBound = minimum + Double(index + 1) * width
+            }
+            bins.append(LivelineHistogramBin(
+                lowerBound: lowerBound,
+                upperBound: upperBound,
                 count: counts[index]
-            )
+            ))
         }
+        return bins
     }
 
     /// Number of bins the rule asks for, clamped to something a canvas can draw.

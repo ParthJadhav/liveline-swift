@@ -95,6 +95,8 @@ public struct LivelineViewportLimits: Equatable {
     ///     zoom-in floor when no explicit minimum is configured.
     ///   - minimumSpan: An explicit floor, overriding the derived one.
     ///   - maximumZoomOut: Multiplier applied to `window` for the ceiling.
+    ///   - followSnapFraction: Fraction of the visible span that counts as close
+    ///     enough to the live edge to resume following it.
     public static func resolve(
         window: TimeInterval,
         domain: ClosedRange<TimeInterval>,
@@ -145,8 +147,10 @@ extension LivelineViewport {
     ///     shows less time.
     ///   - anchorFraction: Where the centroid sits across the plot in *time*
     ///     order: `0` is the oldest visible moment, `1` the newest. Callers on
-    ///     a right-to-left layout convert through ``LivelineLayout`` first, so
+    ///     a right-to-left layout convert through `LivelineLayout` first, so
     ///     this is always reading-direction independent.
+    ///   - limits: The data domain and minimum/maximum spans that constrain the
+    ///     resulting viewport.
     ///
     /// A viewport that is following live keeps following: the pinch pivots on
     /// the live edge whatever the centroid says, so a zoom never silently

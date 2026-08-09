@@ -14,6 +14,19 @@ Confirm the current remote without mutating settings:
 gh repo view ParthJadhav/liveline-swift --json visibility,latestRelease,url
 ```
 
+Before creating a tag or GitHub release, require the local commit to be the
+remote `main` tip and require that exact commit's `CI` workflow to have
+completed successfully:
+
+```bash
+scripts/verify-release-ready.sh
+```
+
+The check ignores untracked files, but blocks a detached or non-`main` branch,
+tracked changes, a local commit that is not the remote `main` tip, missing or
+in-progress CI, and every non-successful CI conclusion. It is read-only: it
+queries GitHub without rerunning workflows or changing repository state.
+
 Confirm local build evidence:
 
 ```bash
@@ -44,6 +57,9 @@ xcodebuild -scheme Liveline -destination 'generic/platform=visionOS' build
 ## Tagging A Release
 
 SwiftPM can consume a branch, but app teams usually prefer version tags.
+
+Run `scripts/verify-release-ready.sh` immediately before tagging. Do not tag or
+publish from a commit that fails the check.
 
 ```bash
 VERSION=0.4.0

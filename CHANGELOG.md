@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.6.1 - 2026-08-09
+
+- Restores Xcode 15.4 compatibility for histogram bin construction by avoiding
+  a compiler type-check timeout without changing histogram behavior.
+- Fixes the remaining DocC warnings-as-errors failures for viewport APIs.
+- Adds a fail-closed, read-only release readiness check that requires the exact
+  remote `main` commit to have completed CI successfully before tagging.
+
 ## 0.6.0 - 2026-08-03
 
 - Performance: sorted-input fast-path normalization, min/max-per-column line
