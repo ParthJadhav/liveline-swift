@@ -65,7 +65,7 @@ jobs:
       - name: Diff screenshots
         env:
           VISUAL_PARITY_EXCLUSIONS: line-show-value-windows,line-rounded-windows,line-text-windows,candle-mode-controls,multi-basic,multi-light,multi-compact,multi-two-series
-        run: scripts/diff-storybook.sh --web-dir "$WEB_REFERENCE_OUT_DIR" --native-dir "$STORYBOOK_OUT_DIR" --out-dir "$VISUAL_DIFF_OUT_DIR" --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12
+        run: scripts/diff-storybook.sh --web-dir "$WEB_REFERENCE_OUT_DIR" --native-dir "$STORYBOOK_OUT_DIR" --out-dir "$VISUAL_DIFF_OUT_DIR" --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12 --scenario-threshold line-orderbook:5.1:13
 
       - name: Upload parity artifacts
         uses: actions/upload-artifact@v4

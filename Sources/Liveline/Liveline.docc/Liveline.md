@@ -4,7 +4,7 @@ Animated real-time SwiftUI charts for Apple apps.
 
 ## Overview
 
-Liveline renders twenty-one typed line, financial, statistical, time-series, matrix, radial, and categorical chart forms with SwiftUI `Canvas`.
+Liveline renders twenty-seven typed line, financial, statistical, time-series, matrix, radial, hierarchy, and categorical chart forms with SwiftUI `Canvas`.
 It is designed for live data streams such as prices, telemetry, scores, or metrics.
 
 Use ``LivelineChart`` as the main view:
@@ -36,6 +36,11 @@ LivelineChart(data: points, value: latest)
 - ``LivelineCategoryValue``
 - ``LivelineCandle``
 - ``LivelineSeries``
+- ``LivelineHistogramBin``
+- ``LivelineBulletRange``
+- ``LivelineTreemapNode``
+- ``LivelineSunburstNode``
+- ``LivelineSankeyLink``
 
 ### Configuration
 
@@ -69,6 +74,12 @@ LivelineChart(data: points, value: latest)
 - ``LivelineDonutStyle``
 - ``LivelineGaugeStyle``
 - ``LivelineFunnelStyle``
+- ``LivelineHistogramBinning``
+- ``LivelineHistogramStyle``
+- ``LivelineBulletStyle``
+- ``LivelineTreemapStyle``
+- ``LivelineSunburstStyle``
+- ``LivelineSankeyStyle``
 
 ### Legends
 

@@ -1,0 +1,27 @@
+{
+  "name": "liveline-platforms-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Remotion source for Liveline Swift release and cross-platform demo videos",
+  "scripts": {
+    "studio": "remotion studio",
+    "render": "remotion render LivelinePlatforms ../Media/liveline-platforms.mp4",
+    "render:060": "remotion render Liveline060 ../Media/liveline-0-6-0-demo.mp4",
+    "render:070": "remotion render Liveline070 ../Media/liveline-0-7-0-demo.mp4 --concurrency=4"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.507",
+    "@remotion/transitions": "4.0.507",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "remotion": "4.0.507"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "typescript": "5.6.3"
+  },
+  "overrides": {
+    "fast-uri": "3.1.5",
+    "nanoid": "3.3.17"
+  }
+}

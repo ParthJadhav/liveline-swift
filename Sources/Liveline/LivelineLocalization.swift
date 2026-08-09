@@ -3,11 +3,10 @@ import Foundation
 /// Every user-facing string Liveline can emit — VoiceOver phrasing, tooltip
 /// row labels, control chrome, and the default empty-state text.
 ///
-/// The package ships no string table of its own. Each entry pairs a stable key
-/// with the English default, and `String(localized:defaultValue:bundle:)`
-/// returns that default whenever the bundle has no translation for the key, so
-/// English output is unchanged. Shipping a `Localizable` table in the package
-/// bundle is all it takes to translate Liveline; no source change is needed.
+/// Each entry pairs a stable key with the English default. Liveline includes a
+/// Spanish string table and falls back to the English default for untranslated
+/// keys or unsupported languages, so adding another locale requires no source
+/// change.
 ///
 /// Entries are `static let` so the bundle lookup happens once per process
 /// rather than once per formatted datum — the accessibility model formats one
@@ -172,7 +171,7 @@ enum LivelineStrings {
     /// One Sankey flow. `%1$@` is the source node, `%2$@` the target node.
     static let labelFlowRouteFormat = localized("label.flowRoute.format", "%1$@ to %2$@", "Tooltip heading and VoiceOver label naming one Sankey flow from its source to its target")
 
-    /// `%1$@` is the measure, `%2$@` the band's upper bound.
+    /// `%1$@` is the band's upper bound.
     static let accessibilityBulletBandValueFormat = localized("accessibility.bullet.band.value.format", "Up to %1$@", "VoiceOver value for one qualitative band of a bullet chart; %1$@ is the band's upper bound")
 
     /// `%1$@` is the measure, `%2$@` the target.

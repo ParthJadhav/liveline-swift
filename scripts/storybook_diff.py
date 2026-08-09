@@ -22,7 +22,40 @@ def parse_args():
     )
     parser.add_argument("--fail-changed-pct", type=float, default=None, help="Fail when any scenario exceeds this changed-pixel percentage.")
     parser.add_argument("--fail-rms", type=float, default=None, help="Fail when any scenario exceeds this RGB RMS delta.")
+    parser.add_argument(
+        "--scenario-threshold",
+        action="append",
+        default=[],
+        metavar="ID:CHANGED_PCT:RMS",
+        help="Override both failure thresholds for one scenario. May be repeated.",
+    )
     return parser.parse_args()
+
+
+def parse_scenario_thresholds(values):
+    thresholds = {}
+    for value in values:
+        parts = value.split(":")
+        if len(parts) != 3 or not parts[0]:
+            raise SystemExit(
+                f"Invalid --scenario-threshold '{value}'; expected ID:CHANGED_PCT:RMS"
+            )
+        scenario, changed_text, rms_text = parts
+        try:
+            changed_pct = float(changed_text)
+            rms = float(rms_text)
+        except ValueError as error:
+            raise SystemExit(
+                f"Invalid --scenario-threshold '{value}'; thresholds must be numbers"
+            ) from error
+        if changed_pct < 0 or rms < 0:
+            raise SystemExit(
+                f"Invalid --scenario-threshold '{value}'; thresholds must be non-negative"
+            )
+        if scenario in thresholds:
+            raise SystemExit(f"Duplicate --scenario-threshold for '{scenario}'")
+        thresholds[scenario] = (changed_pct, rms)
+    return thresholds
 
 
 def changed_percent(diff, threshold):
@@ -77,6 +110,7 @@ def main():
         for scenario in args.exclude_scenarios.split(",")
         if scenario.strip()
     }
+    scenario_thresholds = parse_scenario_thresholds(args.scenario_threshold)
 
     if not web_dir.exists():
         raise SystemExit(f"Missing web reference directory: {web_dir}")
@@ -88,6 +122,12 @@ def main():
     reference_paths = sorted(web_dir.glob("*.png"))
     if not reference_paths:
         raise SystemExit(f"No web reference PNGs found in: {web_dir}")
+    reference_scenarios = {path.stem for path in reference_paths}
+    unknown_thresholds = sorted(set(scenario_thresholds) - reference_scenarios)
+    if unknown_thresholds:
+        raise SystemExit(
+            "Unknown scenario threshold override(s): " + ", ".join(unknown_thresholds)
+        )
 
     rows = []
     for reference_path in reference_paths:
@@ -184,9 +224,13 @@ def main():
         if row["status"] not in {"ok", "excluded-intentional-layout"}
     ]
     for row in sortable:
-        if args.fail_changed_pct is not None and row["changed_pct"] > args.fail_changed_pct:
+        changed_threshold, rms_threshold = scenario_thresholds.get(
+            row["scenario"],
+            (args.fail_changed_pct, args.fail_rms),
+        )
+        if changed_threshold is not None and row["changed_pct"] > changed_threshold:
             failed.append(row["scenario"])
-        if args.fail_rms is not None and row["rms"] > args.fail_rms:
+        if rms_threshold is not None and row["rms"] > rms_threshold:
             failed.append(row["scenario"])
 
     if failed:

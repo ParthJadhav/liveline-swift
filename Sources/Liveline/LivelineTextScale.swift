@@ -14,7 +14,7 @@ struct LivelineTextScale: Equatable, Hashable {
 
     /// Growth beyond this stops being legible inside a fixed-height chart: axis
     /// labels start colliding faster than the collision pass can thin them out.
-    static let maximumFactor: CGFloat = 1.6
+    static let maximumFactor: CGFloat = 1.8
 
     var factor: CGFloat
 
@@ -56,13 +56,13 @@ struct LivelineTextScale: Equatable, Hashable {
         case .xxxLarge:
             return LivelineTextScale(factor: 1.18)
         case .accessibility1:
-            return LivelineTextScale(factor: 1.3)
+            return LivelineTextScale(factor: 1.32)
         case .accessibility2:
-            return LivelineTextScale(factor: 1.4)
+            return LivelineTextScale(factor: 1.45)
         case .accessibility3:
-            return LivelineTextScale(factor: 1.5)
+            return LivelineTextScale(factor: 1.58)
         case .accessibility4:
-            return LivelineTextScale(factor: 1.55)
+            return LivelineTextScale(factor: 1.7)
         case .accessibility5:
             return LivelineTextScale(factor: LivelineTextScale.maximumFactor)
         @unknown default:

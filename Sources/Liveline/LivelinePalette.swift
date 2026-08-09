@@ -115,10 +115,10 @@ extension LivelinePalette {
             fillTop: accent.opacity(isDark ? 0.12 : 0.08),
             fillBottom: accent.opacity(0),
             gridLine: isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.06),
-            gridLabel: isDark ? Color.white.opacity(0.40) : Color.black.opacity(0.35),
+            gridLabel: isDark ? Color.white.opacity(0.50) : Color.black.opacity(0.62),
             gridLabelRGB: isDark
-                ? LivelineRGBA(red: 1, green: 1, blue: 1, alpha: 0.40)
-                : LivelineRGBA(red: 0, green: 0, blue: 0, alpha: 0.35),
+                ? LivelineRGBA(red: 1, green: 1, blue: 1, alpha: 0.50)
+                : LivelineRGBA(red: 0, green: 0, blue: 0, alpha: 0.62),
             emptyText: isDark ? Color.white.opacity(0.55) : Color.black.opacity(0.55),
             dotUp: Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255),
             dotDown: Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255),
@@ -132,8 +132,8 @@ extension LivelinePalette {
             badgeText: .white,
             dashLine: accent.opacity(0.40),
             referenceLine: isDark ? Color.white.opacity(0.15) : Color.black.opacity(0.12),
-            referenceLabel: isDark ? Color.white.opacity(0.45) : Color.black.opacity(0.40),
-            timeLabel: isDark ? Color.white.opacity(0.35) : Color.black.opacity(0.30),
+            referenceLabel: isDark ? Color.white.opacity(0.50) : Color.black.opacity(0.62),
+            timeLabel: isDark ? Color.white.opacity(0.50) : Color.black.opacity(0.62),
             crosshairLine: isDark ? Color.white.opacity(0.20) : Color.black.opacity(0.12),
             tooltipBackground: isDark ? Color(red: 30 / 255, green: 30 / 255, blue: 30 / 255).opacity(0.95) : Color.white.opacity(0.95),
             tooltipText: isDark ? Color(red: 229 / 255, green: 229 / 255, blue: 229 / 255) : Color(red: 26 / 255, green: 26 / 255, blue: 26 / 255),

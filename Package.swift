@@ -36,6 +36,7 @@ let package = Package(
             name: "Liveline",
             resources: [
                 .process("PrivacyInfo.xcprivacy"),
+                .process("Resources"),
             ]
         ),
         .testTarget(

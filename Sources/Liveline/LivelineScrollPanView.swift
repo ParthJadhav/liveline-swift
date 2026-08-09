@@ -37,9 +37,10 @@ struct LivelineScrollPanView: NSViewRepresentable {
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }
 
+    @MainActor
     final class Coordinator {
         private weak var view: NSView?
-        private var monitor: Any?
+        private var monitor: MonitorToken?
         private var isEnabled: Bool
         private var onPan: (CGFloat) -> Void
 
@@ -50,15 +51,18 @@ struct LivelineScrollPanView: NSViewRepresentable {
 
         deinit {
             if let monitor {
-                NSEvent.removeMonitor(monitor)
+                NSEvent.removeMonitor(monitor.value)
             }
         }
 
         func attach(to view: NSView) {
             self.view = view
             guard monitor == nil else { return }
-            monitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
-                self?.handle(event) ?? event
+            if let token = NSEvent.addLocalMonitorForEvents(
+                matching: .scrollWheel,
+                handler: { [weak self] event in self?.handle(event) ?? event }
+            ) {
+                monitor = MonitorToken(token)
             }
         }
 
@@ -69,7 +73,7 @@ struct LivelineScrollPanView: NSViewRepresentable {
 
         func stop() {
             if let monitor {
-                NSEvent.removeMonitor(monitor)
+                NSEvent.removeMonitor(monitor.value)
             }
             monitor = nil
             view = nil
@@ -95,6 +99,17 @@ struct LivelineScrollPanView: NSViewRepresentable {
             guard delta != 0 else { return event }
             onPan(delta)
             return nil
+        }
+
+        /// AppKit returns an opaque, non-Sendable event-monitor token. The
+        /// token is never inspected and NSEvent owns its synchronization; this
+        /// wrapper only permits deterministic cleanup from `deinit`.
+        private final class MonitorToken: @unchecked Sendable {
+            let value: Any
+
+            init(_ value: Any) {
+                self.value = value
+            }
         }
     }
 }

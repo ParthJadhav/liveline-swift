@@ -84,6 +84,23 @@ final class DemoRegressionUITests: XCTestCase {
         XCTAssertEqual(XCTWaiter.wait(for: [resumed], timeout: 3), .completed)
     }
 
+    func testStorybookSearchFindsOneNavigableScenario() {
+        launch(["--storybook-tab"])
+
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("sankey")
+
+        XCTAssertTrue(app.staticTexts["1 of 71 scenarios"].waitForExistence(timeout: 3))
+        let card = element("storybook-card-sankey-basic")
+        XCTAssertTrue(card.waitForExistence(timeout: 3))
+        XCTAssertFalse(element("storybook-card-line-basic").exists)
+
+        card.tap()
+        XCTAssertTrue(app.staticTexts["SwiftUI example"].waitForExistence(timeout: 3))
+    }
+
     func testDitherShowcaseRemainsReachableInLandscape() {
         XCUIDevice.shared.orientation = .landscapeLeft
         launch(["--dither-showcase"])

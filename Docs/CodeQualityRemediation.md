@@ -89,7 +89,7 @@ The canonical initializer accepts typed groups for appearance, effects, viewport
 
 ## Verification Record
 
-- [x] Unit and behavior tests: 53 tests pass, including all 21 chart kinds and extreme finite-value rendering.
+- [x] Unit and behavior tests: 252 tests pass, including every chart kind and extreme finite-value rendering.
 - [x] Renderer/state coverage materially increased from the 0.22% audit baseline: package line coverage is 83.50%, `LivelineRenderer.swift` is 74.13%, and `LivelineRenderState.swift` is 89.24%.
 - [x] Debug and release package builds.
 - [x] Complete strict-concurrency diagnostics with warnings treated as errors.
@@ -97,8 +97,9 @@ The canonical initializer accepts typed groups for appearance, effects, viewport
 - [x] iOS and macOS package builds.
 - [x] tvOS, watchOS, and visionOS build commands verified as unavailable locally because those three SDK components are not installed; CI retains all three declared-platform jobs.
 - [x] iOS demo generated with pinned XcodeGen and built successfully.
-- [x] Full visual parity threshold gate: 64 native captures, 27 pinned upstream references, 19 strict comparisons passing, and eight documented layout exclusions.
-- [x] No production, demo, or test Swift source file above 1,000 lines; the largest is 736 lines.
+- [x] All 12 iOS demo UI regressions pass serially, including stacked-chart gestures, accessibility sizing, both appearances, and Storybook search/navigation.
+- [x] Full visual parity threshold gate: 71 native captures, 27 pinned upstream references, 19 strict comparisons passing, and eight documented layout exclusions.
+- [x] No production or demo Swift source file above 1,000 lines; after the 0.7.0 runtime and renderer split, the largest is 994 lines.
 - [x] Manifest, shell syntax, generated metadata, npm audit, whitespace, and tracked-worktree scope checks.
 
 User-owned untracked launch-media files were preserved and excluded from the remediation changes.

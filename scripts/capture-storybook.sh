@@ -77,7 +77,7 @@ if [[ -n "${STORYBOOK_SCENARIO_WAIT_OVERRIDES+x}" ]]; then
 elif [[ -n "${STORYBOOK_CAPTURE_WAIT_SECONDS+x}" ]]; then
   SCENARIO_WAIT_OVERRIDES=""
 else
-  SCENARIO_WAIT_OVERRIDES="line-orderbook=3.40 line-loading=2.80 line-empty=2.80 candle-loading=2.80"
+  SCENARIO_WAIT_OVERRIDES="line-orderbook=3.10 line-loading=2.80 line-empty=2.80 candle-loading=2.80"
 fi
 
 wait_seconds_for() {
@@ -195,6 +195,18 @@ for scenario in "${SCENARIOS[@]}"; do
   fi
 
   sleep "$(awk -v wait="$capture_wait" 'BEGIN { printf "%.2f", wait + 0.60 }')"
+  capture_pid="$(
+    xcrun simctl spawn "$DEVICE_ID" launchctl list \
+      | awk '$3 ~ /com\.liveline\.demo/ { print $1; exit }'
+  )"
+  if [[ ! "$capture_pid" =~ ^[0-9]+$ ]]; then
+    echo "Storybook app exited before '$scenario' could be captured." >&2
+    exit 1
+  fi
+  # Existing captures can carry macOS provenance metadata that prevents
+  # `simctl io screenshot` from replacing them in place. Remove
+  # only the exact destination immediately before writing the fresh baseline.
+  rm -f "$MEDIA_DIR/$scenario.png"
   xcrun simctl io "$DEVICE_ID" screenshot "$MEDIA_DIR/$scenario.png" >/dev/null
   echo "Captured $scenario"
 done

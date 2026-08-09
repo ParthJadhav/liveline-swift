@@ -69,12 +69,9 @@ struct ChartShowcaseView: View {
             .offset(x: accessibilityReduceMotion ? 0 : (introVisible ? 0 : -28))
             .opacity(introVisible ? 1 : 0)
 
-            VStack(alignment: .leading, spacing: 10) {
-                showcasePillRow(["BAR", "RANGE", "SCATTER", "STEP"])
-                showcasePillRow(["LOLLIPOP", "BUBBLE", "BOX PLOT"])
-                showcasePillRow(["WATERFALL", "ERROR BAR", "DUMBBELL"])
-                showcasePillRow(["STACKS", "TIMELINE", "HEATMAP"])
-                showcasePillRow(["RADAR", "DONUT", "GAUGE", "FUNNEL"])
+            HStack(alignment: .top, spacing: 38) {
+                showcaseFamilyColumn(["Bar", "Range", "Scatter", "Step", "Lollipop", "Bubble", "Box plot", "Waterfall", "Error bar"])
+                showcaseFamilyColumn(["Dumbbell", "Stacks", "Timeline", "Heatmap", "Radar", "Donut", "Gauge", "Funnel"])
             }
             .scaleEffect(accessibilityReduceMotion ? 1 : (introVisible ? 1 : 0.9), anchor: .leading)
             .opacity(introVisible ? 1 : 0)
@@ -82,21 +79,17 @@ struct ChartShowcaseView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func showcasePillRow(_ labels: [String]) -> some View {
-        HStack(spacing: 8) {
+    private func showcaseFamilyColumn(_ labels: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(labels, id: \.self) { label in
-                Text(label)
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    .tracking(0.8)
-                    .foregroundStyle(.white.opacity(0.82))
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 9)
-                    .background(.white.opacity(0.07))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(.white.opacity(0.10), lineWidth: 1)
-                    }
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                HStack(spacing: 9) {
+                    Rectangle()
+                        .fill(.cyan.opacity(0.7))
+                        .frame(width: 12, height: 1)
+                    Text(label)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.76))
+                }
             }
         }
     }
@@ -138,10 +131,7 @@ struct ChartShowcaseView: View {
                         .font(.system(size: 10, weight: .bold, design: .monospaced))
                         .tracking(0.8)
                         .foregroundStyle(.white.opacity(0.72))
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 8)
-                        .background(scene.accent.opacity(0.14))
-                        .clipShape(Capsule())
+                    .padding(.vertical, 4)
 
                     HStack(spacing: 4) {
                         ForEach(scenes.indices, id: \.self) { index in
@@ -184,11 +174,10 @@ struct ChartShowcaseView: View {
                 .frame(maxWidth: .infinity, maxHeight: min(322, size.height - 48))
                 .background(Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255))
                 .overlay {
-                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(.white.opacity(0.11), lineWidth: 1)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-                .shadow(color: .black.opacity(0.34), radius: 24, y: 16)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
@@ -273,30 +262,10 @@ struct ChartShowcaseView: View {
 private struct ChartShowcaseBackdrop: View {
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 7 / 255, green: 11 / 255, blue: 20 / 255),
-                    Color(red: 10 / 255, green: 18 / 255, blue: 31 / 255),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            Canvas { context, size in
-                var grid = Path()
-                for x in stride(from: 0.0, through: size.width, by: 44) {
-                    grid.move(to: CGPoint(x: x, y: 0))
-                    grid.addLine(to: CGPoint(x: x, y: size.height))
-                }
-                for y in stride(from: 0.0, through: size.height, by: 44) {
-                    grid.move(to: CGPoint(x: 0, y: y))
-                    grid.addLine(to: CGPoint(x: size.width, y: y))
-                }
-                context.stroke(grid, with: .color(.white.opacity(0.025)), lineWidth: 0.5)
-            }
+            Color(red: 7 / 255, green: 11 / 255, blue: 20 / 255)
 
             RadialGradient(
-                colors: [.blue.opacity(0.14), .clear],
+                colors: [.blue.opacity(0.09), .clear],
                 center: .topTrailing,
                 startRadius: 0,
                 endRadius: 430

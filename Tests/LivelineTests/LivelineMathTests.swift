@@ -752,6 +752,18 @@ final class LivelineMathTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(light.emptyText.livelineRGBA()?.alpha ?? 0, 0.55)
     }
 
+    func testSmallChartLabelsMeetReadablePaletteOpacity() {
+        let dark = LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2)
+        let light = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
+
+        XCTAssertGreaterThanOrEqual(dark.gridLabel.livelineRGBA()?.alpha ?? 0, 0.50)
+        XCTAssertGreaterThanOrEqual(dark.referenceLabel.livelineRGBA()?.alpha ?? 0, 0.50)
+        XCTAssertGreaterThanOrEqual(dark.timeLabel.livelineRGBA()?.alpha ?? 0, 0.50)
+        XCTAssertGreaterThanOrEqual(light.gridLabel.livelineRGBA()?.alpha ?? 0, 0.62)
+        XCTAssertGreaterThanOrEqual(light.referenceLabel.livelineRGBA()?.alpha ?? 0, 0.62)
+        XCTAssertGreaterThanOrEqual(light.timeLabel.livelineRGBA()?.alpha ?? 0, 0.62)
+    }
+
     func testStepStylesClampAndGenerateEachTransitionPosition() {
         let style = LivelineStepStyle(lineWidth: -2, fillOpacity: 4)
         XCTAssertEqual(style.resolvedLineWidth, 0)

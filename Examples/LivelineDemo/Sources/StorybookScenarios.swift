@@ -40,6 +40,17 @@ struct StorybookLaunch {
         ProcessInfo.processInfo.arguments.contains("--storybook-chart-only")
     }
 
+    static func storybookQueryFromArguments() -> String? {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "--storybook-query"),
+              arguments.indices.contains(index + 1),
+              !arguments[index + 1].hasPrefix("--")
+        else {
+            return nil
+        }
+        return arguments[index + 1]
+    }
+
     static func orderbookSeedFromArguments() -> UInt32? {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: "--storybook-orderbook-seed"),
@@ -138,6 +149,89 @@ struct StorybookScenario: Identifiable {
     let background: Color
     let height: CGFloat
     let makeView: () -> AnyView
+
+    var interactionSummary: String {
+        if id.contains("zoom") {
+            return "Drag to inspect, then pinch or pan the plot to explore the viewport."
+        }
+        if id.contains("controls") || id.contains("windows") || id.contains("line-mode") {
+            return "Use the controls above the plot, then drag across the chart to inspect values."
+        }
+        return "Drag across the chart to inspect its nearest value or category."
+    }
+
+    var codeSample: String {
+        StorybookCodeSamples.sample(for: self)
+    }
+}
+
+private enum StorybookCodeSamples {
+    static func sample(for scenario: StorybookScenario) -> String {
+        let initializer: String
+        var includesAccent = true
+        switch scenario.group {
+        case "Line":
+            initializer = "data: points, value: points.last?.value ?? 0"
+            includesAccent = true
+        case "Candles":
+            initializer = """
+            data: closingPrices,
+                value: closingPrices.last?.value ?? 0,
+                candles: candles,
+                candleWidth: 30,
+                liveCandle: currentCandle
+            """
+            includesAccent = true
+        case "Multi-series":
+            initializer = "series: series"
+            includesAccent = false
+        case "Bars": initializer = "bars: bars"
+        case "Range bands": initializer = "range: ranges"
+        case "Scatter": initializer = "scatter: points"
+        case "Step": initializer = "steps: points"
+        case "Lollipop": initializer = "lollipops: events"
+        case "Bubble": initializer = "bubbles: bubbles"
+        case "Box plot": initializer = "boxPlots: distributions"
+        case "Waterfall": initializer = "waterfall: changes"
+        case "Error bar": initializer = "errorBars: measurements"
+        case "Dumbbell": initializer = "dumbbells: comparisons"
+        case "Stacked bar": initializer = "stackedBars: categories"
+        case "Stacked area": initializer = "stackedAreas: series"
+        case "Timeline": initializer = "timeline: intervals"
+        case "Heatmap": initializer = "heatmap: cells"
+        case "Radar": initializer = "radar: metrics"
+        case "Donut": initializer = "donut: categories"
+        case "Gauge": initializer = "gauge: progress"
+        case "Funnel": initializer = "funnel: stages"
+        case "Histogram": initializer = "histogram: samples"
+        case "Bullet": initializer = "bullet: bulletStyle"
+        case "Treemap": initializer = "treemap: hierarchy"
+        case "Sunburst": initializer = "sunburst: hierarchy"
+        case "Sankey": initializer = "sankey: flows"
+        default:
+            initializer = "data: points, value: points.last?.value ?? 0"
+        }
+
+        return renderedSample(initializer: initializer, includesAccent: includesAccent, height: scenario.height)
+    }
+
+    private static func renderedSample(
+        initializer: String,
+        includesAccent: Bool = true,
+        height: CGFloat
+    ) -> String {
+        let accent = includesAccent ? "    color: .blue,\n" : ""
+        return """
+        LivelineChart(
+            \(initializer),
+        \(accent)    configuration: LivelineChartConfiguration(
+                theme: .automatic,
+                scrub: true
+            )
+        )
+        .frame(height: \(Int(height)))
+        """
+    }
 }
 
 enum StorybookCatalog {

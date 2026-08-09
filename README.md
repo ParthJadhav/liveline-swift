@@ -44,6 +44,16 @@ Each cell is captured from the included deterministic iOS Storybook.
     <td width="33.333%" align="center" valign="top"><strong>Gauge</strong><br><br><img src="Media/readme/charts/gauge-basic.png" alt="Gauge chart" /></td>
     <td width="33.333%" align="center" valign="top"><strong>Funnel</strong><br><br><img src="Media/readme/charts/funnel-basic.png" alt="Funnel chart" /></td>
   </tr>
+  <tr>
+    <td width="33.333%" align="center" valign="top"><strong>Streamgraph</strong><br><br><img src="Media/readme/charts/stacked-area-stream.png" alt="Streamgraph" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Histogram</strong><br><br><img src="Media/readme/charts/histogram-basic.png" alt="Histogram" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Bullet</strong><br><br><img src="Media/readme/charts/bullet-basic.png" alt="Bullet chart" /></td>
+  </tr>
+  <tr>
+    <td width="33.333%" align="center" valign="top"><strong>Treemap</strong><br><br><img src="Media/readme/charts/treemap-basic.png" alt="Treemap" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Sunburst</strong><br><br><img src="Media/readme/charts/sunburst-basic.png" alt="Sunburst chart" /></td>
+    <td width="33.333%" align="center" valign="top"><strong>Sankey</strong><br><br><img src="Media/readme/charts/sankey-basic.png" alt="Sankey diagram" /></td>
+  </tr>
 </table>
 
 ## Requirements
@@ -78,7 +88,7 @@ In `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.4.0")
+    .package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.7.0")
 ],
 targets: [
     .target(
@@ -334,7 +344,18 @@ xcodegen generate
 open LivelineDemo.xcodeproj
 ```
 
-The generated project uses the local package path (`../..`). CI builds this demo target as an iOS simulator app.
+The generated project uses the local package path (`../..`). Its Live dashboard
+adapts from iPhone to a two-column iPad layout and follows the system color
+scheme. Storybook includes 71 deterministic scenarios with search, chart-family
+filters, static gallery previews, interaction guidance, and copyable SwiftUI
+recipes. CI builds the demo target as an iOS simulator app.
+
+Liveline's own chart, control, VoiceOver, and Audio Graph terminology ships in
+English and Spanish. Other app-localized value and time formatters remain under
+the host app's control through `formatValue` and `formatTime`.
+
+[Watch the 0.7.0 improvement demo](Media/liveline-0-7-0-demo.mp4), or open the
+reproducible Remotion source in `remotion/`.
 
 ## Documentation
 

@@ -13,10 +13,10 @@ struct DitherShowcaseView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("DITHER / LIVELINE")
-                            .font(.system(size: 22, weight: .bold, design: .monospaced))
+                            .font(.title2.weight(.bold).monospaced())
                             .foregroundStyle(.white)
                         Text("One animated style · every native chart")
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .font(.caption.weight(.medium).monospaced())
                             .foregroundStyle(.white.opacity(0.52))
                     }
 
@@ -103,8 +103,8 @@ struct DitherShowcaseView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(title)
-                .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.54))
+                .font(.caption2.weight(.semibold).monospaced())
+                .foregroundStyle(.white.opacity(0.72))
                 .accessibilityIdentifier("dither-panel-title-\(id)")
             content()
                 .frame(height: verticalSizeClass == .compact ? 140 : 196)

@@ -2,6 +2,12 @@ import Liveline
 import SwiftUI
 
 struct ContentView: View {
+    private enum DemoTab: Hashable {
+        case live
+        case storybook
+    }
+
+    @State private var selectedTab: DemoTab
     private let stackedGestureTests = CommandLine.arguments.contains("-stacked-gesture-tests")
     private let liveMarketTimerTests = CommandLine.arguments.contains("-live-market-timer-tests")
     private let storybookScrollTests = CommandLine.arguments.contains("-storybook-scroll-tests")
@@ -9,6 +15,12 @@ struct ContentView: View {
     private let chartShowcase = StorybookLaunch.chartShowcaseFromArguments()
     private let scenarioLaunch = StorybookLaunch.scenarioLaunchFromArguments()
     private let chartOnly = StorybookLaunch.chartOnlyFromArguments()
+
+    init() {
+        _selectedTab = State(
+            initialValue: CommandLine.arguments.contains("--storybook-tab") ? .storybook : .live
+        )
+    }
 
     var body: some View {
         if stackedGestureTests {
@@ -24,13 +36,15 @@ struct ContentView: View {
         } else {
             switch scenarioLaunch {
             case .none:
-                TabView {
+                TabView(selection: $selectedTab) {
                     LiveDemoView()
+                        .tag(DemoTab.live)
                         .tabItem {
                             Label("Live", systemImage: "chart.xyaxis.line")
                         }
 
                     StorybookGalleryView()
+                        .tag(DemoTab.storybook)
                         .tabItem {
                             Label("Storybook", systemImage: "square.grid.2x2")
                         }
@@ -46,7 +60,9 @@ struct ContentView: View {
 
 struct LiveDemoView: View {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("liveline.hasDismissedInteractionHint") private var hasDismissedInteractionHint = false
     @StateObject private var market = DemoMarket()
     @State private var lineWindow: TimeInterval = 60
     @State private var candleLineMode = false
@@ -57,16 +73,20 @@ struct LiveDemoView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header
-                    liveLine
-                    candles
-                    multiSeries
+                    if !hasDismissedInteractionHint {
+                        interactionHint
+                    }
+                    charts
                 }
-                .padding(16)
+                .frame(maxWidth: 1_180, alignment: .leading)
+                .padding(.horizontal, horizontalSizeClass == .regular ? 28 : 16)
+                .padding(.vertical, 16)
+                .frame(maxWidth: .infinity)
             }
             .accessibilityIdentifier("live-demo-scroll")
             .background(Color(uiColor: .systemBackground))
             .navigationTitle("Liveline")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
         }
         .onAppear {
             isVisible = true
@@ -91,7 +111,7 @@ struct LiveDemoView: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("$\(market.latest, specifier: "%.2f")")
-                    .font(.system(size: 28, weight: .semibold, design: .monospaced))
+                    .font(.title.weight(.semibold).monospacedDigit())
                     .accessibilityIdentifier("live-market-price")
                     .accessibilityValue(Text("Update \(market.updateCount)"))
                 Text("BTC-USD")
@@ -100,9 +120,61 @@ struct LiveDemoView: View {
             }
             Spacer()
             Text(Date(), style: .time)
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .font(.subheadline.weight(.medium).monospacedDigit())
                 .foregroundStyle(.secondary)
         }
+    }
+
+    @ViewBuilder
+    private var charts: some View {
+        if horizontalSizeClass == .regular {
+            Grid(alignment: .top, horizontalSpacing: 18, verticalSpacing: 18) {
+                GridRow {
+                    liveLine
+                    candles
+                }
+                GridRow {
+                    multiSeries
+                        .gridCellColumns(2)
+                }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 18) {
+                liveLine
+                candles
+                multiSeries
+            }
+        }
+    }
+
+    private var interactionHint: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "hand.draw")
+                .font(.title3)
+                .foregroundStyle(.blue)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Explore the live data")
+                    .font(.subheadline.weight(.semibold))
+                Text("Drag across a chart to inspect values. Use the range controls to change the visible window.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 4)
+            Button {
+                hasDismissedInteractionHint = true
+            } label: {
+                Image(systemName: "xmark")
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Dismiss chart interaction tip")
+        }
+        .padding(.leading, 14)
+        .padding(.trailing, 4)
+        .padding(.vertical, 6)
+        .background(Color.blue.opacity(colorScheme == .dark ? 0.16 : 0.09))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var liveLine: some View {
@@ -112,14 +184,14 @@ struct LiveDemoView: View {
                 value: market.latest,
                 color: .blue,
                 configuration: LivelineChartConfiguration(
-                    theme: .dark,
+                    theme: .automatic,
                     window: lineWindow,
                     windows: [
                         LivelineWindowOption(label: "30s", seconds: 30),
                         LivelineWindowOption(label: "1m", seconds: 60),
                         LivelineWindowOption(label: "3m", seconds: 180),
                     ],
-                    showValue: true,
+                    showValue: false,
                     valueMomentumColor: true,
                     degen: LivelineDegenOptions(scale: 0.8, downMomentum: true),
                     orderbook: market.orderbook,
@@ -131,8 +203,8 @@ struct LiveDemoView: View {
             .frame(height: 260)
             .padding(.horizontal, 4)
             .padding(.bottom, 8)
-            .background(Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(chartBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
     }
 
@@ -148,14 +220,14 @@ struct LiveDemoView: View {
                 lineValue: market.latest,
                 color: Color(red: 247 / 255, green: 147 / 255, blue: 26 / 255),
                 configuration: LivelineChartConfiguration(
-                    theme: .dark,
+                    theme: .automatic,
                     window: 240,
                     windows: [
                         LivelineWindowOption(label: "2m", seconds: 120),
                         LivelineWindowOption(label: "4m", seconds: 240),
                         LivelineWindowOption(label: "8m", seconds: 480),
                     ],
-                    showValue: true,
+                    showValue: false,
                     formatValue: money,
                     lineMode: candleLineMode,
                     onModeChange: { candleLineMode = $0 == .line }
@@ -164,8 +236,8 @@ struct LiveDemoView: View {
             .frame(height: 280)
             .padding(.horizontal, 4)
             .padding(.bottom, 8)
-            .background(Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(chartBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
     }
 
@@ -174,7 +246,7 @@ struct LiveDemoView: View {
             LivelineChart(
                 series: market.spread,
                 configuration: LivelineChartConfiguration(
-                    theme: colorScheme == .dark ? .dark : .light,
+                    theme: .automatic,
                     window: 180,
                     windows: [
                         LivelineWindowOption(label: "1m", seconds: 60),
@@ -188,8 +260,8 @@ struct LiveDemoView: View {
             .frame(height: 260)
             .padding(.horizontal, 4)
             .padding(.bottom, 8)
-            .background(Color(uiColor: .secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(chartBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .accessibilityIdentifier("live-spread-chart")
             .accessibilityValue(Text(colorScheme == .dark ? "Dark theme" : "Light theme"))
         }
@@ -211,5 +283,11 @@ struct LiveDemoView: View {
 
     private func money(_ value: Double) -> String {
         "$" + value.formatted(.number.precision(.fractionLength(2)))
+    }
+
+    private var chartBackground: Color {
+        colorScheme == .dark
+            ? Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255)
+            : .white
     }
 }

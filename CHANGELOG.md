@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+## 0.7.0 - 2026-08-09
+
+- Improves chart legibility with higher-contrast grid, reference, and time-axis
+  labels in both color schemes, plus canvas text that scales to 1.8× at the
+  largest accessibility sizes.
+- Bundles Spanish translations for chart names, values, controls, empty states,
+  VoiceOver summaries, and Audio Graph terminology.
+- Reworks the demo into an adaptive native dashboard: automatic system theming,
+  an iPad multi-column layout, semantic Dynamic Type, one-time interaction
+  guidance, and a quieter chart showcase.
+- Turns Storybook into a practical chart workbench with search, family filters,
+  responsive cards, static navigation previews, contextual gesture help, and
+  selectable SwiftUI examples with copy and share actions.
+- Adds a custom Liveline demo app icon and stronger UI regression coverage for
+  Storybook discovery and navigation.
+- Splits the largest chart and extended-renderer implementations by runtime,
+  statistical, and hierarchy responsibilities while preserving the public API.
+- Keeps the macOS scroll-wheel monitor clean under complete Swift concurrency
+  checking with Xcode 26 while retaining deterministic monitor cleanup.
+- Adds a reproducible Remotion 4.0.507 project and a 26-second 1080p release
+  film built from authentic native chart frames and final app screenshots.
+- Expands the README gallery to all 27 chart families, refreshes all 71 native
+  visual baselines, and hardens baseline replacement against macOS provenance
+  metadata while retaining strict scenario-scoped parity thresholds.
+
 ## 0.6.1 - 2026-08-09
 
 - Restores Xcode 15.4 compatibility for histogram bin construction by avoiding

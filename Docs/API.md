@@ -462,6 +462,19 @@ as one non-wrapping row instead.
 `items(funnel:style:accent:)`, and `items(stacked:colors:accent:)` derive rows
 that match the colors those renderers resolve.
 
+## Accessibility and localization
+
+Canvas-drawn labels respond to Dynamic Type independently of surrounding
+SwiftUI text and scale up to 1.8× at the largest accessibility sizes. Every
+chart family also exposes a VoiceOver-adjustable data model and an Audio Graph
+descriptor where the platform supports one.
+
+Liveline bundles English defaults and Spanish translations for its chart
+names, common values, control states, empty state, tooltip rows, VoiceOver
+phrasing, and Audio Graph axes. Caller-provided titles, series labels, dates,
+and values remain the host app's responsibility; use `formatValue` and
+`formatTime` when those need domain-specific localization.
+
 ## Right-to-left layouts
 
 The chart reads `\.layoutDirection` from the environment and mirrors the plot

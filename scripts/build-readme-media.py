@@ -40,6 +40,12 @@ CHARTS = [
     ("donut-basic", "Donut"),
     ("gauge-basic", "Gauge"),
     ("funnel-basic", "Funnel"),
+    ("stacked-area-stream", "Streamgraph"),
+    ("histogram-basic", "Histogram"),
+    ("bullet-basic", "Bullet"),
+    ("treemap-basic", "Treemap"),
+    ("sunburst-basic", "Sunburst"),
+    ("sankey-basic", "Sankey"),
 ]
 
 

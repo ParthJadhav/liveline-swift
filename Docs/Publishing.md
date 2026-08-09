@@ -41,7 +41,10 @@ xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
 xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
 scripts/capture-storybook.sh --chart-only
 VISUAL_PARITY_EXCLUSIONS=line-show-value-windows,line-rounded-windows,line-text-windows,candle-mode-controls,multi-basic,multi-light,multi-compact,multi-two-series
-scripts/diff-storybook.sh --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12
+scripts/diff-storybook.sh --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12 --scenario-threshold line-orderbook:5.1:13
+(cd remotion/tools/shotgen && SHOTGEN_MODE=frames SHOTGEN_CLIPS_ONLY=line-live,dynamic-type swift run ShotGen)
+(cd remotion && bun install --frozen-lockfile && bunx tsc --noEmit && bun audit && bun run render:070)
+ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_name,width,height,r_frame_rate -of json Media/liveline-0-7-0-demo.mp4
 ```
 
 The excluded upstream scenarios place controls inside the plot's layout. Liveline Swift deliberately gives controls their own space so chart geometry and placeholders remain centered in the remaining canvas; the strict parity thresholds still cover every upstream scenario without that structural difference.
@@ -62,7 +65,7 @@ Run `scripts/verify-release-ready.sh` immediately before tagging. Do not tag or
 publish from a commit that fails the check.
 
 ```bash
-VERSION=0.4.0
+VERSION=0.7.0
 git tag "$VERSION"
 git push origin "$VERSION"
 ```
@@ -76,7 +79,7 @@ git show --stat --oneline "$VERSION"
 Then depend on:
 
 ```swift
-.package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.4.0")
+.package(url: "https://github.com/ParthJadhav/liveline-swift.git", from: "0.7.0")
 ```
 
 ## GitHub Release
