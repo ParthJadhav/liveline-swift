@@ -208,6 +208,27 @@ private enum StorybookCodeSamples {
         case "Treemap": initializer = "treemap: hierarchy"
         case "Sunburst": initializer = "sunburst: hierarchy"
         case "Sankey": initializer = "sankey: flows"
+        case "Violin": initializer = "violin: distributions"
+        case "Ridgeline": initializer = "ridgeline: distributions"
+        case "Calendar heatmap": initializer = "calendarHeatmap: dailyValues"
+        case "Gantt": initializer = "gantt: tasks"
+        case "Chord": initializer = "chord: links"
+        case "Parallel coordinates": initializer = "parallelCoordinates: records"
+        case "Hexbin": initializer = "hexbin: observations"
+        case "Bump": initializer = "bump: rankSeries"
+        case "Horizon": initializer = "horizon: points"
+        case "Marimekko": initializer = "marimekko: columns"
+        case "Polar area": initializer = "polarArea: categories"
+        case "Network": initializer = "networkNodes: nodes, edges: edges"
+        case "Contour": initializer = "contour: samples"
+        case "Ternary": initializer = "ternary: compositions"
+        case "Waffle": initializer = "waffle: categories"
+        case "Volume profile": initializer = "volumeProfile: priceLevels"
+        case "Renko": initializer = "renko: prices, style: .init(brickSize: 1)"
+        case "Heikin-Ashi": initializer = "heikinAshi: candles"
+        case "Market depth": initializer = "marketDepth: orderBook"
+        case "OHLC + volume": initializer = "ohlcVolume: candlesWithVolume"
+        case "Point-and-figure": initializer = "pointAndFigure: prices, style: .init(boxSize: 1)"
         default:
             initializer = "data: points, value: points.last?.value ?? 0"
         }
@@ -307,6 +328,27 @@ enum StorybookCatalog {
         treemapBasic,
         sunburstBasic,
         sankeyBasic,
+        violinBasic,
+        ridgelineBasic,
+        calendarHeatmapBasic,
+        ganttBasic,
+        chordBasic,
+        parallelBasic,
+        hexbinBasic,
+        bumpBasic,
+        horizonBasic,
+        marimekkoBasic,
+        polarAreaBasic,
+        networkBasic,
+        contourBasic,
+        ternaryBasic,
+        waffleBasic,
+        volumeProfileBasic,
+        renkoBasic,
+        heikinAshiBasic,
+        marketDepthBasic,
+        ohlcVolumeBasic,
+        pointFigureBasic,
     ]
 
     static let all = definitions

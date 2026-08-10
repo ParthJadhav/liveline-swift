@@ -35,10 +35,11 @@ jobs:
           echo "WEB_REFERENCE_OUT_DIR=$RUNNER_TEMP/liveline-parity/web" >> "$GITHUB_ENV"
           echo "STORYBOOK_OUT_DIR=$RUNNER_TEMP/liveline-parity/native" >> "$GITHUB_ENV"
           echo "VISUAL_DIFF_OUT_DIR=$RUNNER_TEMP/liveline-parity/diff" >> "$GITHUB_ENV"
-          smoke="line-basic-dark line-basic-light line-no-grid-no-fill line-minimal-badge line-reference line-loading candle-basic candle-line-mode"
+          web_smoke="line-basic-dark line-basic-light line-no-grid-no-fill line-minimal-badge line-reference line-loading candle-basic candle-line-mode"
+          native_smoke="$web_smoke multi-basic multi-light multi-compact multi-two-series range-basic range-center-line stackedarea-basic stackedarea-normalized stacked-area-stream violin-basic ridgeline-basic bump-basic horizon-basic marimekko-basic contour-basic"
           if [[ "${{ github.event_name }}" == "pull_request" || "${{ inputs.scope }}" == "smoke" ]]; then
-            echo "STORYBOOK_SCENARIOS=$smoke" >> "$GITHUB_ENV"
-            echo "WEB_REFERENCE_SCENARIOS=$smoke" >> "$GITHUB_ENV"
+            echo "STORYBOOK_SCENARIOS=$native_smoke" >> "$GITHUB_ENV"
+            echo "WEB_REFERENCE_SCENARIOS=$web_smoke" >> "$GITHUB_ENV"
           fi
 
       - name: Validate scenario manifest
@@ -61,6 +62,16 @@ jobs:
 
       - name: Capture native chart screenshots
         run: scripts/capture-storybook.sh --chart-only
+
+      - name: Validate captured chart screenshots
+        shell: bash
+        run: |
+          args=(--directory "$STORYBOOK_OUT_DIR")
+          if [[ -n "${STORYBOOK_SCENARIOS:-}" ]]; then
+            read -r -a scenarios <<< "$STORYBOOK_SCENARIOS"
+            args+=(--scenarios "${scenarios[@]}")
+          fi
+          python3 scripts/chart_visual_quality.py "${args[@]}"
 
       - name: Diff screenshots
         env:

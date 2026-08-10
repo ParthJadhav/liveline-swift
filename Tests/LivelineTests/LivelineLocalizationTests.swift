@@ -96,9 +96,8 @@ final class LivelineLocalizationTests: XCTestCase {
 
     // MARK: - Localized strings
 
-    /// Liveline ships no translations, so every key must fall through to its
-    /// English default. This is the guard that keeps the existing VoiceOver
-    /// and tooltip expectations honest.
+    /// The test process uses English, so these keys resolve to their English
+    /// defaults even though the package also ships a Spanish string table.
     func testEnglishStringsFallBackToTheirDefaults() {
         XCTAssertEqual(LivelineStrings.chartKindLine, "Line chart")
         XCTAssertEqual(LivelineStrings.chartKindSeries, "Multi-series chart")

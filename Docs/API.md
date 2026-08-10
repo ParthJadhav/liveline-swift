@@ -55,7 +55,30 @@ LivelineChart(bullet:color:configuration:)
 LivelineChart(treemap:color:style:configuration:)
 LivelineChart(sunburst:color:style:configuration:)
 LivelineChart(sankey:color:style:configuration:)
+LivelineChart(violin:color:style:configuration:)
+LivelineChart(ridgeline:color:style:configuration:)
+LivelineChart(calendarHeatmap:color:style:configuration:)
+LivelineChart(gantt:color:style:configuration:)
+LivelineChart(chord:color:style:configuration:)
+LivelineChart(parallelCoordinates:color:style:configuration:)
+LivelineChart(hexbin:color:style:configuration:)
+LivelineChart(bump:color:style:configuration:)
+LivelineChart(horizon:color:style:configuration:)
+LivelineChart(marimekko:color:style:configuration:)
+LivelineChart(polarArea:color:style:configuration:)
+LivelineChart(networkNodes:edges:color:style:configuration:)
+LivelineChart(contour:color:style:configuration:)
+LivelineChart(ternary:color:style:configuration:)
+LivelineChart(waffle:color:style:configuration:)
+LivelineChart(volumeProfile:color:style:configuration:)
+LivelineChart(renko:color:style:configuration:)
+LivelineChart(heikinAshi:color:style:configuration:)
+LivelineChart(marketDepth:color:style:configuration:)
+LivelineChart(ohlcVolume:color:style:configuration:)
+LivelineChart(pointAndFigure:color:style:configuration:)
 ```
+
+The [advanced chart catalog](AdvancedCharts.md) documents chart selection, data and style types, semantics, and examples for the 21 advanced families.
 
 ## Data Types
 
@@ -121,6 +144,13 @@ LivelineCategoryValue(id: "pro", label: "Pro", value: 42)
 LivelineTreemapNode(label: "Storage", children: [LivelineTreemapNode(label: "Hot", value: 180)])
 LivelineSunburstNode(label: "Search", children: [LivelineSunburstNode(label: "Paid", value: 90)])
 LivelineSankeyLink(source: "Visits", target: "Signups", value: 420)
+LivelineDistributionSeries(id: "web", label: "Web", values: latencySamples)
+LivelineGanttTask(id: "build", label: "Build", start: start, end: end, lane: 0)
+LivelineXYPoint(id: "request", x: latency, y: payloadSize, weight: count)
+LivelineTernaryPoint(id: "plan", label: "Plan", a: 40, b: 35, c: 25)
+LivelinePriceVolume(price: 101.5, volume: 18_400)
+LivelineOrderBookLevel(price: 101.5, bidSize: 9_200, askSize: 0)
+LivelineCandleVolume(time: openTime, open: 100, high: 104, low: 98, close: 102, volume: 42_000)
 ```
 
 Error bounds, reversed timeline intervals, negative lanes, non-finite stacked values, heatmap rows, and negative categorical values are normalized at initialization.

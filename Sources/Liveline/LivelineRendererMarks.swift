@@ -117,22 +117,28 @@ extension LivelineRenderer {
         let visibleLower = LivelineMath.revealedPoints(lowerPoints, reveal: progress)
 
         var band = Path()
-        if let first = visibleUpper.first {
-            band.move(to: first)
-            for point in visibleUpper.dropFirst() { band.addLine(to: point) }
-            for point in visibleLower.reversed() { band.addLine(to: point) }
+        if !visibleUpper.isEmpty {
+            LivelineMath.appendMonotoneSpline(
+                points: visibleUpper,
+                to: &band
+            )
+            LivelineMath.appendMonotoneSpline(
+                points: Array(visibleLower.reversed()),
+                to: &band,
+                connectToFirst: true
+            )
             band.closeSubpath()
             layer.fill(band, with: .color(palette.line.opacity(style.resolvedFillOpacity)))
         }
 
         if style.resolvedBoundaryLineWidth > 0 {
             layer.stroke(
-                linePath(points: visibleUpper),
+                LivelineMath.monotoneSplinePath(points: visibleUpper),
                 with: .color(palette.line),
                 style: StrokeStyle(lineWidth: style.resolvedBoundaryLineWidth, lineCap: .round, lineJoin: .round)
             )
             layer.stroke(
-                linePath(points: visibleLower),
+                LivelineMath.monotoneSplinePath(points: visibleLower),
                 with: .color(palette.line.opacity(0.72)),
                 style: StrokeStyle(lineWidth: style.resolvedBoundaryLineWidth, lineCap: .round, lineJoin: .round)
             )

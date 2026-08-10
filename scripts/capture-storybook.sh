@@ -27,6 +27,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 MEDIA_DIR="${STORYBOOK_OUT_DIR:-$DEFAULT_MEDIA_DIR}"
+if [[ "$MEDIA_DIR" != /* ]]; then
+  MEDIA_DIR="$ROOT_DIR/$MEDIA_DIR"
+fi
 
 if ! command -v python3 >/dev/null 2>&1; then
   echo "python3 is required to read the Storybook manifest." >&2
@@ -144,6 +147,17 @@ if ! xcrun simctl list devices booted | grep -Fq "$DEVICE_ID"; then
 fi
 xcrun simctl bootstatus "$DEVICE_ID" -b
 
+# Freeze status-bar state so visual diffs describe the chart rather than the
+# wall clock, battery, or host network. Individual values remain overridable
+# for downstream capture environments that deliberately test another state.
+xcrun simctl status_bar "$DEVICE_ID" override \
+  --time "${STORYBOOK_STATUS_BAR_TIME:-9:41}" \
+  --dataNetwork "${STORYBOOK_STATUS_BAR_NETWORK:-wifi}" \
+  --wifiMode active \
+  --wifiBars "${STORYBOOK_STATUS_BAR_WIFI_BARS:-3}" \
+  --batteryState "${STORYBOOK_STATUS_BAR_BATTERY_STATE:-charged}" \
+  --batteryLevel "${STORYBOOK_STATUS_BAR_BATTERY_LEVEL:-100}"
+
 APP_PATH="$(find "$DERIVED_DATA/Build/Products/Debug-iphonesimulator" -name 'LivelineDemo.app' -print -quit)"
 if [[ -z "${APP_PATH:-}" ]]; then
   echo "Could not locate LivelineDemo.app in derived data." >&2
@@ -195,9 +209,14 @@ for scenario in "${SCENARIOS[@]}"; do
   fi
 
   sleep "$(awk -v wait="$capture_wait" 'BEGIN { printf "%.2f", wait + 0.60 }')"
+  # Another simulator-driven workflow can bring its app forward while this
+  # scenario settles. Re-activate the already-running Storybook app immediately
+  # before capture so the PNG cannot silently contain an unrelated screen.
+  xcrun simctl launch "$DEVICE_ID" com.liveline.demo "${launch_args[@]}" >/dev/null
+  sleep 0.15
   capture_pid="$(
     xcrun simctl spawn "$DEVICE_ID" launchctl list \
-      | awk '$3 ~ /com\.liveline\.demo/ { print $1; exit }'
+      | awk '$3 ~ /com\.liveline\.demo/ && !found { pid = $1; found = 1 } END { if (found) print pid }'
   )"
   if [[ ! "$capture_pid" =~ ^[0-9]+$ ]]; then
     echo "Storybook app exited before '$scenario' could be captured." >&2

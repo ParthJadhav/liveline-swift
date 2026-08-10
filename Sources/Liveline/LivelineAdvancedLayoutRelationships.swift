@@ -1,0 +1,621 @@
+import SwiftUI
+
+// MARK: - Chord
+
+struct LivelineChordArc {
+    var index: Int
+    var label: String
+    var value: Double
+    var start: Double
+    var sweep: Double
+
+    var end: Double { start + sweep }
+    var middle: Double { start + sweep / 2 }
+}
+
+struct LivelineChordLayout {
+    var arcs: [LivelineChordArc]
+    var center: CGPoint
+    var innerRadius: CGFloat
+    var outerRadius: CGFloat
+}
+
+extension LivelineAdvancedLayout {
+    static func chord(
+        links: [LivelineChordLink],
+        style: LivelineChordStyle,
+        layout: LivelineLayout,
+        textScale: LivelineTextScale
+    ) -> LivelineChordLayout {
+        let positive = links.filter { $0.value > 0 }
+        var labels: [String] = []
+        var totals: [String: Double] = [:]
+        for link in positive {
+            if totals[link.source] == nil { labels.append(link.source) }
+            if totals[link.target] == nil { labels.append(link.target) }
+            totals[link.source, default: 0] += link.value
+            totals[link.target, default: 0] += link.value
+        }
+        let total = max(totals.values.reduce(0, +), 0.000_001)
+        let plot = LivelineRenderer.advancedPlotRect(layout)
+            .insetBy(dx: textScale.scaled(18), dy: textScale.scaled(18))
+        let outerRadius = min(plot.width, plot.height) / 2
+        let gap = style.resolvedGapDegrees * Double.pi / 180
+        let available = max(2 * Double.pi - gap * Double(labels.count), 0.1)
+
+        var angle = -Double.pi / 2
+        var arcs: [LivelineChordArc] = []
+        arcs.reserveCapacity(labels.count)
+        for (index, label) in labels.enumerated() {
+            let value = totals[label, default: 0]
+            let sweep = available * (value / total)
+            arcs.append(
+                LivelineChordArc(index: index, label: label, value: value, start: angle, sweep: sweep)
+            )
+            angle += sweep + gap
+        }
+        return LivelineChordLayout(
+            arcs: arcs,
+            center: CGPoint(x: plot.midX, y: plot.midY),
+            innerRadius: outerRadius * style.resolvedInnerRadiusRatio,
+            outerRadius: outerRadius
+        )
+    }
+}
+
+// MARK: - Parallel coordinates
+
+struct LivelineParallelLayout {
+    var plot: CGRect
+    var body: CGRect
+    var axisCount: Int
+    var ranges: [ClosedRange<Double>]
+    var recordLabelWidth: CGFloat
+
+    func x(axis: Int) -> CGFloat {
+        body.minX + CGFloat(axis) / CGFloat(max(axisCount - 1, 1)) * body.width
+    }
+
+    func y(_ value: Double, axis: Int) -> CGFloat {
+        let index = min(max(axis, 0), max(ranges.count - 1, 0))
+        guard ranges.indices.contains(index) else { return body.midY }
+        return LivelineRenderer.mapped(value, from: ranges[index], to: (body.maxY, body.minY))
+    }
+}
+
+extension LivelineAdvancedLayout {
+    static func parallelCoordinates(
+        records: [LivelineParallelRecord],
+        layout: LivelineLayout,
+        textScale: LivelineTextScale
+    ) -> LivelineParallelLayout? {
+        let axisCount = records.map(\.values.count).max() ?? 0
+        guard axisCount >= 2 else { return nil }
+        let labelHeight = textScale.scaled(22)
+        let recordLabelWidth =
+            records.count <= 8 ? min(textScale.scaled(52), layout.chartWidth * 0.18) : 0
+        let plot = LivelineRenderer.advancedPlotRect(layout)
+            .insetBy(dx: textScale.scaled(8), dy: textScale.scaled(8))
+        let ranges = (0..<axisCount).map { axis -> ClosedRange<Double> in
+            let values = records.compactMap { $0.values.indices.contains(axis) ? $0.values[axis] : nil }
+            let lower = values.min() ?? 0
+            let upper = values.max() ?? 1
+            return lower == upper ? (lower - 0.5)...(upper + 0.5) : lower...upper
+        }
+        return LivelineParallelLayout(
+            plot: plot,
+            body: CGRect(
+                x: plot.minX,
+                y: plot.minY + labelHeight,
+                width: max(plot.width - recordLabelWidth, 1),
+                height: max(plot.height - labelHeight, 1)
+            ),
+            axisCount: axisCount,
+            ranges: ranges,
+            recordLabelWidth: recordLabelWidth
+        )
+    }
+
+    static func axisLabel(_ labels: [String], at index: Int) -> String {
+        labels.indices.contains(index)
+            ? labels[index] : String(format: LivelineStrings.labelAxisFormat, index + 1)
+    }
+
+    /// The three ternary axis names, filling in any the caller omitted.
+    ///
+    /// Drawing, hit testing, VoiceOver, and the audio graph all name the same
+    /// three axes, so the fallback belongs in one place rather than repeated at
+    /// each reader.
+    static func ternaryAxisLabels(_ labels: [String]) -> [String] {
+        (0..<3).map { labels.indices.contains($0) ? labels[$0] : ["A", "B", "C"][$0] }
+    }
+}
+
+// MARK: - Hexbin
+
+struct LivelineHexbinCell {
+    var column: Int
+    var row: Int
+    var center: CGPoint
+    var count: Int
+    var weight: Double
+    /// A representative source point, so a tooltip can name a single-point bin.
+    var label: String?
+}
+
+struct LivelineHexbinLayout {
+    var plot: CGRect
+    var radius: CGFloat
+    /// Sorted by grid position: hex fills overlap slightly, so a stable order
+    /// keeps repeated renders of identical input byte-for-byte identical.
+    var cells: [LivelineHexbinCell]
+    var maximumWeight: Double
+}
+
+extension LivelineAdvancedLayout {
+    static func hexbin(
+        points: [LivelineXYPoint],
+        style: LivelineHexbinStyle,
+        layout: LivelineLayout,
+        textScale: LivelineTextScale
+    ) -> LivelineHexbinLayout? {
+        guard !points.isEmpty else { return nil }
+        let plot = LivelineRenderer.advancedPlotRect(layout)
+            .insetBy(dx: textScale.scaled(5), dy: textScale.scaled(5))
+        let xMin = points.map(\.x).min() ?? 0
+        let xMax = points.map(\.x).max() ?? 1
+        let yMin = points.map(\.y).min() ?? 0
+        let yMax = points.map(\.y).max() ?? 1
+        let radius = max(plot.width / CGFloat(style.resolvedBinsAcross) / 1.5, 2)
+        let rowHeight = radius * sqrt(3)
+
+        struct Aggregate {
+            var center: CGPoint
+            var count: Int
+            var weight: Double
+            var label: String?
+        }
+        var bins: [LivelineHexbinCellKey: Aggregate] = [:]
+        for point in points {
+            let px = LivelineRenderer.mapped(
+                point.x, from: xMin...(xMin == xMax ? xMax + 1 : xMax), to: plot.minX...plot.maxX)
+            let py = LivelineRenderer.mapped(
+                point.y, from: yMin...(yMin == yMax ? yMax + 1 : yMax), to: (plot.maxY, plot.minY))
+            let column = Int(((px - plot.minX) / (radius * 1.5)).rounded())
+            let rowOffset = column.isMultiple(of: 2) ? 0 : rowHeight / 2
+            let row = Int(((py - plot.minY - rowOffset) / rowHeight).rounded())
+            let center = CGPoint(
+                x: plot.minX + CGFloat(column) * radius * 1.5,
+                y: plot.minY + CGFloat(row) * rowHeight + rowOffset)
+            let key = LivelineHexbinCellKey(column: column, row: row)
+            let current = bins[key]
+            bins[key] = Aggregate(
+                center: center,
+                count: (current?.count ?? 0) + 1,
+                weight: (current?.weight ?? 0) + point.weight,
+                label: current?.label ?? point.label
+            )
+        }
+
+        let cells = bins
+            .map {
+                LivelineHexbinCell(
+                    column: $0.key.column,
+                    row: $0.key.row,
+                    center: $0.value.center,
+                    count: $0.value.count,
+                    weight: $0.value.weight,
+                    label: $0.value.label
+                )
+            }
+            .sorted { ($0.column, $0.row) < ($1.column, $1.row) }
+        return LivelineHexbinLayout(
+            plot: plot,
+            radius: radius,
+            cells: cells,
+            maximumWeight: max(cells.map(\.weight).max() ?? 0, 0.000_001)
+        )
+    }
+}
+
+struct LivelineHexbinCellKey: Hashable {
+    var column: Int
+    var row: Int
+}
+
+// MARK: - Marimekko
+
+struct LivelineMarimekkoLayout {
+    var columns: [LivelineMarimekkoColumn]
+    var plot: CGRect
+    var body: CGRect
+    var geometry: [LivelineMarimekkoColumnGeometry]
+    /// Segment identifiers share a colour across columns, numbered in the order
+    /// they are first encountered while walking `geometry`.
+    var colorIndexBySegmentID: [String: Int]
+}
+
+extension LivelineAdvancedLayout {
+    static func marimekko(
+        columns: [LivelineMarimekkoColumn],
+        style: LivelineMarimekkoStyle,
+        layout: LivelineLayout,
+        textScale: LivelineTextScale,
+        displayScale: CGFloat? = nil
+    ) -> LivelineMarimekkoLayout {
+        let valid = columns.filter { $0.width > 0 && $0.segments.contains { $0.value > 0 } }
+        let labelHeight = style.showsLabels ? textScale.scaled(22) : 0
+        let plot = LivelineRenderer.advancedPlotRect(layout)
+            .insetBy(dx: textScale.scaled(4), dy: textScale.scaled(4))
+        let body = CGRect(
+            x: plot.minX,
+            y: plot.minY,
+            width: plot.width,
+            height: max(plot.height - labelHeight, 1)
+        )
+        let rawGeometry = LivelineVisualGeometry.marimekko(
+            columns: valid,
+            in: body,
+            columnSpacing: style.resolvedColumnSpacing,
+            segmentSpacing: style.resolvedSegmentSpacing
+        )
+        let geometry = displayScale.map {
+            LivelineVisualGeometry.pixelAligned(rawGeometry, displayScale: $0)
+        } ?? rawGeometry
+        var colorIndexBySegmentID: [String: Int] = [:]
+        for columnGeometry in geometry {
+            let column = valid[columnGeometry.columnIndex]
+            for segmentGeometry in columnGeometry.segments {
+                let id = column.segments[segmentGeometry.segmentIndex].id
+                if colorIndexBySegmentID[id] == nil {
+                    colorIndexBySegmentID[id] = colorIndexBySegmentID.count
+                }
+            }
+        }
+        return LivelineMarimekkoLayout(
+            columns: valid,
+            plot: plot,
+            body: body,
+            geometry: geometry,
+            colorIndexBySegmentID: colorIndexBySegmentID
+        )
+    }
+}
+
+// MARK: - Polar area
+
+struct LivelinePolarWedge {
+    var index: Int
+    var value: LivelineCategoryValue
+    var start: Double
+    var sweep: Double
+    var radius: CGFloat
+
+    var end: Double { start + sweep }
+    var middle: Double { start + sweep / 2 }
+}
+
+struct LivelinePolarAreaLayout {
+    var wedges: [LivelinePolarWedge]
+    var center: CGPoint
+    var innerRadius: CGFloat
+    var outerRadius: CGFloat
+}
+
+extension LivelineAdvancedLayout {
+    static func polarArea(
+        values: [LivelineCategoryValue],
+        style: LivelinePolarAreaStyle,
+        layout: LivelineLayout,
+        textScale: LivelineTextScale
+    ) -> LivelinePolarAreaLayout {
+        let valid = values.filter { $0.value > 0 }
+        let plot = LivelineRenderer.advancedPlotRect(layout)
+            .insetBy(dx: textScale.scaled(20), dy: textScale.scaled(20))
+        let outer = min(plot.width, plot.height) / 2
+        let inner = outer * style.resolvedInnerRadiusRatio
+        let maximum = max(valid.map(\.value).max() ?? 0, 0.000_001)
+        let slice = valid.isEmpty ? 0 : 2 * Double.pi / Double(valid.count)
+        let gap = style.resolvedGapDegrees * Double.pi / 180
+        let wedges = valid.enumerated().map { index, value in
+            LivelinePolarWedge(
+                index: index,
+                value: value,
+                start: -Double.pi / 2 + Double(index) * slice + gap / 2,
+                sweep: slice - gap,
+                radius: inner + (outer - inner) * CGFloat(sqrt(value.value / maximum))
+            )
+        }
+        return LivelinePolarAreaLayout(
+            wedges: wedges,
+            center: CGPoint(x: plot.midX, y: plot.midY),
+            innerRadius: inner,
+            outerRadius: outer
+        )
+    }
+}
+
+// MARK: - Network
+
+struct LivelineNetworkPlacement {
+    var node: LivelineNetworkNode
+    var center: CGPoint
+    var size: CGFloat
+    var colorIndex: Int
+    var connections: Int
+}
+
+struct LivelineNetworkGeometry {
+    var plot: CGRect
+    var placements: [LivelineNetworkPlacement]
+    /// Only the first node for a repeated identifier can be addressed by edges.
+    var positionsByID: [String: CGPoint]
+}
+
+extension LivelineAdvancedLayout {
+    static func network(
+        nodes: [LivelineNetworkNode],
+        edges: [LivelineNetworkEdge],
+        style: LivelineNetworkStyle,
+        layout: LivelineLayout,
+        textScale: LivelineTextScale
+    ) -> LivelineNetworkGeometry? {
+        guard !nodes.isEmpty else { return nil }
+        let plot = LivelineRenderer.advancedPlotRect(layout)
+            .insetBy(dx: textScale.scaled(28), dy: textScale.scaled(24))
+        let center = CGPoint(x: plot.midX, y: plot.midY)
+        let radius = min(plot.width, plot.height) * 0.42
+        let columns = max(Int(ceil(sqrt(Double(nodes.count)))), 1)
+        let rows = max(Int(ceil(Double(nodes.count) / Double(columns))), 1)
+        let maxWeight = max(nodes.map(\.weight).max() ?? 0, 0.000_001)
+
+        var connectionCounts: [String: Int] = [:]
+        for edge in edges {
+            connectionCounts[edge.source, default: 0] += 1
+            connectionCounts[edge.target, default: 0] += 1
+        }
+
+        var groupIndices: [String: Int] = [:]
+        var positionsByID: [String: CGPoint] = [:]
+        var placements: [LivelineNetworkPlacement] = []
+        placements.reserveCapacity(nodes.count)
+
+        for (index, node) in nodes.enumerated() {
+            let point: CGPoint
+            switch style.layout {
+            case .radial:
+                point = LivelineMath.polarPoint(
+                    center: center,
+                    radius: radius,
+                    angle: -Double.pi / 2 + 2 * Double.pi * Double(index) / Double(nodes.count)
+                )
+            case .grid:
+                point = CGPoint(
+                    x: plot.minX + (CGFloat(index % columns) + 0.5) / CGFloat(columns) * plot.width,
+                    y: plot.minY + (CGFloat(index / columns) + 0.5) / CGFloat(rows) * plot.height
+                )
+            }
+            // Repeated identifiers are legal input; the first placement owns the
+            // identifier so edges resolve to exactly one endpoint.
+            if positionsByID[node.id] == nil { positionsByID[node.id] = point }
+            let group = node.group ?? "__\(index)"
+            let colorIndex = groupIndices[group] ?? groupIndices.count
+            groupIndices[group] = colorIndex
+            placements.append(
+                LivelineNetworkPlacement(
+                    node: node,
+                    center: point,
+                    size: style.resolvedMinimumNodeSize
+                        + (style.resolvedMaximumNodeSize - style.resolvedMinimumNodeSize)
+                        * CGFloat(sqrt(node.weight / maxWeight)),
+                    colorIndex: colorIndex,
+                    connections: connectionCounts[node.id] ?? 0
+                )
+            )
+        }
+        return LivelineNetworkGeometry(
+            plot: plot,
+            placements: placements,
+            positionsByID: positionsByID
+        )
+    }
+}
+
+// MARK: - Contour
+
+struct LivelineContourLayout {
+    var plot: CGRect
+    var xDomain: ClosedRange<Double>
+    var yDomain: ClosedRange<Double>
+    var valueRange: ClosedRange<Double>
+    var subdivisions: Int
+
+    func point(x: Double, y: Double) -> CGPoint {
+        CGPoint(
+            x: LivelineRenderer.mapped(x, from: xDomain, to: plot.minX...plot.maxX),
+            y: LivelineRenderer.mapped(y, from: yDomain, to: (plot.maxY, plot.minY))
+        )
+    }
+}
+
+extension LivelineAdvancedLayout {
+    static func contour(
+        samples: [LivelineContourSample],
+        layout: LivelineLayout,
+        textScale: LivelineTextScale
+    ) -> LivelineContourLayout? {
+        let xs = Array(Set(samples.map(\.x))).sorted()
+        let ys = Array(Set(samples.map(\.y))).sorted()
+        guard xs.count >= 2, ys.count >= 2 else { return nil }
+        let plot = LivelineRenderer.advancedPlotRect(layout)
+            .insetBy(dx: textScale.scaled(5), dy: textScale.scaled(5))
+        let minimum = samples.map(\.value).min() ?? 0
+        let maximum = samples.map(\.value).max() ?? 1
+        let coarseCellWidth = plot.width / CGFloat(xs.count - 1)
+        let coarseCellHeight = plot.height / CGFloat(ys.count - 1)
+        return LivelineContourLayout(
+            plot: plot,
+            xDomain: xs[0]...xs[xs.count - 1],
+            yDomain: ys[0]...ys[ys.count - 1],
+            valueRange: minimum...max(maximum, minimum),
+            subdivisions: min(max(Int(ceil(max(coarseCellWidth, coarseCellHeight) / 4)), 4), 16)
+        )
+    }
+}
+
+// MARK: - Ternary
+
+struct LivelineTernaryLayout {
+    var a: CGPoint
+    var b: CGPoint
+    var c: CGPoint
+    var labels: [String]
+
+    func point(_ value: LivelineTernaryPoint) -> CGPoint {
+        let total = CGFloat(value.total)
+        return CGPoint(
+            x: (a.x * CGFloat(value.a) + b.x * CGFloat(value.b) + c.x * CGFloat(value.c)) / total,
+            y: (a.y * CGFloat(value.a) + b.y * CGFloat(value.b) + c.y * CGFloat(value.c)) / total
+        )
+    }
+}
+
+extension LivelineAdvancedLayout {
+    /// The label-aware triangle used by both drawing and hit testing.
+    ///
+    /// `GraphicsContext` text measurement is unavailable to the interaction
+    /// builder, so this deliberately uses a stable typographic estimate. Keeping
+    /// one geometry source is more important than a sub-point reserve difference:
+    /// the visible mark and its interactive region must occupy the same point.
+    static func ternary(
+        style: LivelineTernaryStyle,
+        layout: LivelineLayout,
+        textScale: LivelineTextScale
+    ) -> LivelineTernaryLayout {
+        let labels = ternaryAxisLabels(style.axisLabels)
+        let plotBounds = LivelineRenderer.advancedPlotRect(layout)
+            .insetBy(dx: textScale.scaled(8), dy: textScale.scaled(22))
+        let maximumReserve = plotBounds.width * 0.28
+        let leftReserve = min(
+            estimatedLabelWidth(labels[1], textScale: textScale) + textScale.scaled(9),
+            maximumReserve
+        )
+        let rightReserve = min(
+            estimatedLabelWidth(labels[2], textScale: textScale) + textScale.scaled(9),
+            maximumReserve
+        )
+        let plot = CGRect(
+            x: plotBounds.minX + leftReserve,
+            y: plotBounds.minY,
+            width: max(plotBounds.width - leftReserve - rightReserve, 1),
+            height: plotBounds.height
+        )
+        let side = min(plot.width, plot.height * 2 / sqrt(3))
+        let height = side * sqrt(3) / 2
+        return LivelineTernaryLayout(
+            a: CGPoint(x: plot.midX, y: plot.midY - height / 2),
+            b: CGPoint(x: plot.midX - side / 2, y: plot.midY + height / 2),
+            c: CGPoint(x: plot.midX + side / 2, y: plot.midY + height / 2),
+            labels: labels
+        )
+    }
+
+    /// A stable typographic width estimate for callers that cannot measure.
+    ///
+    /// `GraphicsContext` text measurement is unavailable to the interaction
+    /// builder and to label-flow passes that must stay pure, so this approximates
+    /// by character class rather than by count.
+    static func estimatedLabelWidth(_ label: String, textScale: LivelineTextScale) -> CGFloat {
+        let units = label.reduce(into: CGFloat.zero) { width, character in
+            if character.isWhitespace {
+                width += 2.8
+            } else if character.unicodeScalars.contains(where: { $0.value >= 0x2E80 }) {
+                width += 9
+            } else if "ilI1|.,'".contains(character) {
+                width += 3.2
+            } else if "MW@%".contains(character) {
+                width += 7.8
+            } else {
+                width += 5.4
+            }
+        }
+        return textScale.scaled(units)
+    }
+}
+
+// MARK: - Waffle
+
+struct LivelineWaffleLayout {
+    var values: [LivelineCategoryValue]
+    var allocations: [Int]
+    var plot: CGRect
+    var body: CGRect
+    var origin: CGPoint
+    var cell: CGFloat
+    var spacing: CGFloat
+    var columns: Int
+    var rows: Int
+
+    var cellCount: Int { columns * rows }
+
+    /// Cells fill bottom-up, left-to-right.
+    func rect(cellIndex: Int) -> CGRect {
+        let column = cellIndex % columns
+        let row = rows - 1 - cellIndex / columns
+        return CGRect(
+            x: origin.x + CGFloat(column) * (cell + spacing),
+            y: origin.y + CGFloat(row) * (cell + spacing),
+            width: cell,
+            height: cell
+        )
+    }
+
+    /// The first cell belonging to each category, in category order.
+    var categoryStartIndices: [Int] {
+        var start = 0
+        return allocations.map { allocation in
+            defer { start += allocation }
+            return start
+        }
+    }
+}
+
+extension LivelineAdvancedLayout {
+    static func waffle(
+        values: [LivelineCategoryValue],
+        style: LivelineWaffleStyle,
+        layout: LivelineLayout,
+        textScale: LivelineTextScale
+    ) -> LivelineWaffleLayout {
+        let valid = values.filter { $0.value > 0 }
+        let legendHeight = style.showsLegend ? textScale.scaled(24) : 0
+        let plot = LivelineRenderer.advancedPlotRect(layout)
+            .insetBy(dx: textScale.scaled(6), dy: textScale.scaled(6))
+        let body = CGRect(
+            x: plot.minX,
+            y: plot.minY,
+            width: plot.width,
+            height: max(plot.height - legendHeight, 1)
+        )
+        let columns = style.resolvedColumns
+        let rows = style.resolvedRows
+        let spacing = style.resolvedSpacing
+        let cell = min(
+            (body.width - spacing * CGFloat(columns - 1)) / CGFloat(columns),
+            (body.height - spacing * CGFloat(rows - 1)) / CGFloat(rows)
+        )
+        let gridWidth = cell * CGFloat(columns) + spacing * CGFloat(columns - 1)
+        let gridHeight = cell * CGFloat(rows) + spacing * CGFloat(rows - 1)
+        return LivelineWaffleLayout(
+            values: valid,
+            allocations: LivelineRenderer.waffleAllocations(values: valid, cellCount: columns * rows),
+            plot: plot,
+            body: body,
+            origin: CGPoint(x: body.midX - gridWidth / 2, y: body.midY - gridHeight / 2),
+            cell: cell,
+            spacing: spacing,
+            columns: columns,
+            rows: rows
+        )
+    }
+}

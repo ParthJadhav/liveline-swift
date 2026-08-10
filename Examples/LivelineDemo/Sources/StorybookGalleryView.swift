@@ -278,6 +278,8 @@ struct StorybookScenarioScreen: View {
                     .background(Color(uiColor: .systemBackground))
             }
         }
+        .statusBarHidden(chartOnly)
+        .persistentSystemOverlays(chartOnly ? .hidden : .automatic)
         .onAppear {
             StorybookLaunch.recordScenarioReady(scenario.id)
         }

@@ -842,7 +842,9 @@ extension LivelineChart {
             configuration: configuration,
             hiddenSeries: hiddenSeries,
             behavior: current.behavior,
-            targetLocation: targetLocation
+            targetLocation: targetLocation,
+            textScale: textScale,
+            displayScale: displayScale
         )
     }
 

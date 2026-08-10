@@ -267,7 +267,9 @@ enum LivelineRenderer {
             // datum. Keep the idle snapshot lightweight and only pay that cost
             // while a pointer or touch is actively inspecting the chart.
             includeTargets: input.hoverLocation != nil,
-            targetLocation: input.hoverLocation
+            targetLocation: input.hoverLocation,
+            textScale: textScale,
+            displayScale: context.environment.displayScale
         )
         state.interactionSnapshot = interactionSnapshot
         let tooltipSelection = LivelineHoverResolver.resolveSelection(
@@ -328,7 +330,8 @@ enum LivelineRenderer {
                     timestamp: animationTimestamp
                 )
             }
-            drawContentText(context: &layer, input: compositorInput, overlay: contentOverlay)
+            drawContentText(
+                context: &layer, state: state, input: compositorInput, overlay: contentOverlay)
         }
 
         if capabilities.usesTimeAxis {

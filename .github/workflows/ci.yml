@@ -24,6 +24,9 @@ jobs:
       - name: Validate generated project metadata
         run: python3 scripts/storybook_manifest.py validate
 
+      - name: Validate chart visual baselines
+        run: scripts/verify-chart-visuals.sh
+
       - name: Validate Storybook capture scenario overrides
         run: |
           STORYBOOK_SCENARIOS="line-basic-dark" scripts/capture-storybook.sh --validate-only

@@ -39,6 +39,7 @@ enum LivelineContentOverlay {
     case treemap(LivelineTreemapGeometry, LivelineTreemapStyle)
     case sunburst(LivelineSunburstGeometry, LivelineSunburstStyle)
     case sankey(LivelineSankeyGeometry, LivelineSankeyStyle)
+    case advanced(LivelineAdvancedChartContent)
     case standard
 }
 
@@ -400,6 +401,20 @@ extension LivelineRenderer {
             )
             return .sankey(geometry, style)
 
+        case let .advanced(content):
+            drawAdvancedContent(
+                context: &context,
+                state: state,
+                content: content,
+                layout: layout,
+                palette: palette,
+                configuration: config,
+                reveal: reveal,
+                textScale: input.textScale,
+                drawLabels: drawText
+            )
+            return .advanced(content)
+
         case let .candle(_, _, candles, candleWidth, liveCandle, lineData, lineValue):
             return .candle(
                 drawCandleMode(
@@ -442,6 +457,7 @@ extension LivelineRenderer {
             )
             drawSeriesEndpoints(
                 context: &context,
+                layout: layout,
                 endpoints: endpoints,
                 alpha: reveal,
                 showPulse: config.pulse && reveal > 0.6 && state.pauseProgress < 0.5,
@@ -456,6 +472,7 @@ extension LivelineRenderer {
 
     static func drawContentText(
         context: inout GraphicsContext,
+        state: LivelineRenderState,
         input: LivelineCompositorInput,
         overlay: LivelineContentOverlay
     ) {
@@ -550,9 +567,21 @@ extension LivelineRenderer {
                 formatValue: config.formatValue,
                 textScale: input.textScale
             )
+        case let .advanced(content):
+            drawAdvancedLabels(
+                context: &context,
+                state: state,
+                content: content,
+                layout: layout,
+                palette: palette,
+                configuration: config,
+                reveal: reveal,
+                textScale: input.textScale
+            )
         case let .series(_, endpoints):
             drawSeriesEndpoints(
                 context: &context,
+                layout: layout,
                 endpoints: endpoints,
                 alpha: reveal,
                 showPulse: false,
@@ -639,13 +668,13 @@ extension LivelineRenderer {
             )
 
         case .timeline, .heatmap, .radar, .donut, .gauge, .funnel, .histogram, .bullet,
-             .treemap, .sunburst, .sankey:
+             .treemap, .sunburst, .sankey, .advanced:
             break
         }
 
         switch overlay {
         case .timeline, .heatmap, .radar, .donut, .gauge, .funnel, .histogram, .bullet,
-             .treemap, .sunburst, .sankey:
+             .treemap, .sunburst, .sankey, .advanced:
             break
         default:
             drawActivePoint(

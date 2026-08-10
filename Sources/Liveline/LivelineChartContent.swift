@@ -25,6 +25,7 @@ enum LivelineChartContent {
     case treemap(nodes: [LivelineTreemapNode], style: LivelineTreemapStyle)
     case sunburst(nodes: [LivelineSunburstNode], style: LivelineSunburstStyle)
     case sankey(links: [LivelineSankeyLink], style: LivelineSankeyStyle)
+    case advanced(LivelineAdvancedChartContent)
     case candle(
         data: [LivelinePoint],
         value: Double,
@@ -62,6 +63,27 @@ enum LivelineChartKind: Hashable, CaseIterable {
     case treemap
     case sunburst
     case sankey
+    case violin
+    case ridgeline
+    case calendarHeatmap
+    case gantt
+    case chord
+    case parallelCoordinates
+    case hexbin
+    case bump
+    case horizon
+    case marimekko
+    case polarArea
+    case network
+    case contour
+    case ternary
+    case waffle
+    case volumeProfile
+    case renko
+    case heikinAshi
+    case marketDepth
+    case ohlcVolume
+    case pointAndFigure
     case candle
     case series
 }
@@ -217,6 +239,9 @@ extension LivelineChartContent {
             // the layout passes already drop non-positive weights, so there is
             // nothing an ordering pass could normalize here.
             return self
+
+        case let .advanced(content):
+            return .advanced(content.normalized())
 
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
             let points = LivelineInputNormalizer.points(data)
@@ -417,6 +442,9 @@ extension LivelineChartContent {
                 latestTime: nil
             )
 
+        case let .advanced(content):
+            return content.semantics()
+
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
             let points = lineData.isEmpty ? data : lineData
             let latestTick = [data.last?.time, lineData.last?.time, liveCandle?.time].compactMap { $0 }.max()
@@ -604,72 +632,6 @@ private extension LivelineChartCapabilities {
         reservesBadgePadding: true,
         isRealtime: true
     )
-}
-
-protocol LivelineTimedDatum {
-    var time: TimeInterval { get }
-}
-
-extension LivelinePoint: LivelineTimedDatum {}
-extension LivelineRangePoint: LivelineTimedDatum {}
-extension LivelineBubblePoint: LivelineTimedDatum {}
-extension LivelineBoxPlotPoint: LivelineTimedDatum {}
-extension LivelineCandle: LivelineTimedDatum {}
-extension LivelineErrorBarPoint: LivelineTimedDatum {}
-extension LivelineDumbbellPoint: LivelineTimedDatum {}
-extension LivelineStackedPoint: LivelineTimedDatum {}
-extension LivelineHeatmapCell: LivelineTimedDatum {}
-
-extension Array where Element: LivelineTimedDatum {
-    func livelineVisible(in range: ClosedRange<TimeInterval>) -> [Element] {
-        guard !isEmpty else { return [] }
-        let lower = lowerBound(for: range.lowerBound)
-        let upper = upperBound(for: range.upperBound)
-        guard lower < upper else { return [] }
-        return Array(self[lower..<upper])
-    }
-
-    private func lowerBound(for time: TimeInterval) -> Int {
-        var lower = 0
-        var upper = count
-        while lower < upper {
-            let middle = (lower + upper) / 2
-            if self[middle].time < time {
-                lower = middle + 1
-            } else {
-                upper = middle
-            }
-        }
-        return lower
-    }
-
-    private func upperBound(for time: TimeInterval) -> Int {
-        var lower = 0
-        var upper = count
-        while lower < upper {
-            let middle = (lower + upper) / 2
-            if self[middle].time <= time {
-                lower = middle + 1
-            } else {
-                upper = middle
-            }
-        }
-        return lower
-    }
-}
-
-extension Array {
-    func livelineSuffix(_ maximumLength: Int) -> [Element] {
-        Array(suffix(Swift.max(maximumLength, 0)))
-    }
-}
-
-extension Array where Element == LivelineCandle {
-    func livelineVisible(in range: ClosedRange<TimeInterval>, candleWidth: TimeInterval) -> [LivelineCandle] {
-        let width = LivelineInputNormalizer.positive(candleWidth, fallback: 1)
-        return livelineVisible(in: (range.lowerBound - width)...range.upperBound)
-            .filter { $0.time + width >= range.lowerBound }
-    }
 }
 
 enum LivelineInputNormalizer {
@@ -974,20 +936,5 @@ enum LivelineInputNormalizer {
             previousTime = element.time
         }
         return true
-    }
-}
-
-extension Array {
-    /// Opaque address of the backing buffer. Only ever compared, never
-    /// dereferenced, so it is a cheap way to prove two arrays are the same
-    /// samples without walking them.
-    var livelineStorageIdentity: UInt {
-        withUnsafeBufferPointer { buffer in
-            buffer.baseAddress.map { UInt(bitPattern: UnsafeRawPointer($0)) } ?? 0
-        }
-    }
-
-    func livelineSharesStorage(with other: [Element]) -> Bool {
-        count == other.count && livelineStorageIdentity == other.livelineStorageIdentity
     }
 }

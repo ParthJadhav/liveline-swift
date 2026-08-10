@@ -4,11 +4,11 @@ This document tracks the native renderer against the upstream React/canvas Livel
 
 ## Current Coverage
 
-- `Docs/ScenarioMatrix.md` defines 71 deterministic Storybook scenarios covering all 27 chart forms plus loading, empty, control, and customization variants.
+- `Docs/ScenarioMatrix.md` defines 92 deterministic Storybook scenarios covering all 48 chart forms plus loading, empty, control, and customization variants.
 - `scripts/capture-storybook.sh` captures full Storybook screenshots into `Media/storybook`.
-- `scripts/capture-storybook.sh --chart-only` captures the same 71 scenario IDs into `Media/storybook-chart-only`.
+- `scripts/capture-storybook.sh --chart-only` captures the same 92 scenario IDs into `Media/storybook-chart-only`.
 - `scripts/capture-web-references.sh` renders the 27 scenarios supported by the upstream React/canvas package into `Media/web-reference`.
-- `scripts/diff-storybook.sh` strictly compares 19 structurally equivalent upstream/native scenarios and reports eight intentional control-layout exclusions. The remaining 44 native-only scenarios are reviewed through their deterministic captures.
+- `scripts/diff-storybook.sh` strictly compares 19 structurally equivalent upstream/native scenarios and reports eight intentional control-layout exclusions. The remaining 65 native-only scenarios are reviewed through their deterministic captures.
 - Diff panels are written to `Media/storybook-diff` as reference/native/heatmap triptychs, with numeric results in `Media/storybook-diff/summary.csv`.
 - The renderer now ports upstream primitives for loading waveform shape, loading breath alpha, elapsed animation timing, reveal/pause snap thresholds, reveal-time line color blending, empty-state center gap, curved badge tail geometry, badge sizing constants, badge text weight/baseline, semantic momentum badge colors, live dot outer/core structure, icon mode controls, multi-series endpoint pulse behavior, multi-series label reserve/right-padding split, labeled series-chip baseline nudging, live value letter spacing, outlined orderbook labels without per-frame platform bitmaps, orderbook phase calibration, centered reference-line labels, baseline-adjusted and x-aligned axis text, window control baseline nudging, segmented candle wicks, live candle glow, candle close-price opacity, candle line-mode morph/density transitions, OHLC collapse/expand reveal behavior, adaptive range settling, deterministic snapshot timing, time-axis interval thresholds, overlap suppression, grid/time-axis label state, and coarse/fine grid interval selection.
 

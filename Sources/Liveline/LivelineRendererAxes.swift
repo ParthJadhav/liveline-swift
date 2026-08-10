@@ -167,9 +167,7 @@ extension LivelineRenderer {
                     formatValue(value),
                     context: &rowLayer,
                     at: CGPoint(
-                        x: layout.isRTL
-                            ? layout.plotLeftX - axisLabelOffsetX
-                            : layout.rightX + axisLabelOffsetX,
+                        x: layout.valueAxisLabelX(offset: axisLabelOffsetX),
                         y: y
                     ),
                     anchor: layout.isRTL ? .trailing : .leading,
@@ -287,6 +285,19 @@ extension LivelineRenderer {
             var tickLayer = layer
             tickLayer.opacity *= label.alpha
 
+            // Keep the complete label inside the plot. The tick may sit at an
+            // edge while its centered text is wider than the small scroll-off
+            // allowance used above, particularly with monospaced timestamps or
+            // larger Dynamic Type sizes. A label wider than the plot cannot be
+            // satisfied at both edges, so centre it rather than letting the
+            // clamp bounds cross and push it off the leading edge.
+            let halfWidth = label.width / 2
+            let lowerBound = layout.plotLeftX + halfWidth
+            let upperBound = layout.rightX - halfWidth
+            let labelX = lowerBound > upperBound
+                ? (layout.plotLeftX + layout.rightX) / 2
+                : min(max(label.x, lowerBound), upperBound)
+
             var tick = Path()
             tick.move(to: CGPoint(x: label.x, y: layout.bottomY))
             tick.addLine(to: CGPoint(x: label.x, y: layout.bottomY + 5))
@@ -295,7 +306,7 @@ extension LivelineRenderer {
             drawText(
                 label.text,
                 context: &tickLayer,
-                at: CGPoint(x: label.x, y: layout.bottomY + 15),
+                at: CGPoint(x: labelX, y: layout.bottomY + 15),
                 anchor: .center,
                 color: palette.timeLabel,
                 font: textScale.font(11, weight: .regular, design: .monospaced)

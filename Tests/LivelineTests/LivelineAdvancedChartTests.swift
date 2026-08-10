@@ -1,0 +1,810 @@
+import Foundation
+import SwiftUI
+import XCTest
+
+@testable import Liveline
+
+final class LivelineAdvancedChartTests: XCTestCase {
+    /// The finance renderers used to round `reveal` itself rather than the mark
+    /// count, which snapped every in-flight frame to the full series and made the
+    /// reveal animation a no-op. Pin the monotonic ramp so that cannot return.
+    func testRevealedCountRampsWithProgressRatherThanSnappingToTheFullSeries() {
+        XCTAssertEqual(LivelineRenderer.revealedCount(10, reveal: 0), 0)
+        XCTAssertEqual(LivelineRenderer.revealedCount(10, reveal: 0.05), 1)
+        XCTAssertEqual(LivelineRenderer.revealedCount(10, reveal: 0.5), 5)
+        XCTAssertEqual(LivelineRenderer.revealedCount(10, reveal: 0.91), 10)
+        XCTAssertEqual(LivelineRenderer.revealedCount(10, reveal: 1), 10)
+
+        XCTAssertEqual(LivelineRenderer.revealedCount(0, reveal: 1), 0)
+        XCTAssertEqual(
+            LivelineRenderer.revealedCount(10, reveal: 1.4), 10,
+            "An overshooting spring must never index past the series.")
+        XCTAssertEqual(LivelineRenderer.revealedCount(10, reveal: -0.2), 0)
+
+        let counts = stride(from: 0.0, through: 1.0, by: 0.05).map {
+            LivelineRenderer.revealedCount(24, reveal: $0)
+        }
+        XCTAssertEqual(counts, counts.sorted(), "Marks may only ever be added as the reveal advances.")
+        XCTAssertGreaterThan(
+            Set(counts).count, 2, "A reveal that only ever reports 0 or the total is not animating.")
+    }
+
+    func testDistributionStatisticsAreFiniteDeterministicAndRobust() throws {
+        XCTAssertEqual(LivelineAdvancedMath.quantile([1, 2, 3, 4], probability: 0.25), 1.75)
+        XCTAssertEqual(LivelineAdvancedMath.quantile([.nan, 8, .infinity], probability: 2), 8)
+        XCTAssertEqual(LivelineAdvancedMath.quantile([], probability: 0.5), 0)
+
+        let profile = try XCTUnwrap(
+            LivelineAdvancedMath.densityProfile(
+                values: [1, 2, 2, 3, .nan, .infinity],
+                bandwidth: nil,
+                sampleCount: 8
+            )
+        )
+        XCTAssertEqual(profile.samples.count, 24, "Density sampling keeps a useful visual floor.")
+        XCTAssertEqual(profile.minimum, 1)
+        XCTAssertEqual(profile.median, 2)
+        XCTAssertEqual(profile.maximum, 3)
+        XCTAssertGreaterThan(profile.peakDensity, 0)
+        XCTAssertTrue(
+            profile.samples.allSatisfy { $0.value.isFinite && $0.density.isFinite && $0.density >= 0 })
+        XCTAssertEqual(
+            profile,
+            LivelineAdvancedMath.densityProfile(values: [1, 2, 2, 3], bandwidth: nil, sampleCount: 8)
+        )
+    }
+
+    func testFinanceTransformsFollowTheirPublishedRecurrences() {
+        let points = [
+            LivelinePoint(time: 0, value: 100),
+            LivelinePoint(time: 1, value: 103),
+            LivelinePoint(time: 2, value: 101),
+        ]
+        let bricks = LivelineAdvancedMath.renkoBricks(points: points, brickSize: 1)
+        XCTAssertEqual(bricks.map(\.close), [101, 102, 103, 102, 101])
+        XCTAssertEqual(bricks.map(\.isRising), [true, true, true, false, false])
+        XCTAssertEqual(bricks, LivelineAdvancedMath.renkoBricks(points: points, brickSize: 1))
+
+        let transformed = LivelineAdvancedMath.heikinAshiCandles([
+            LivelineCandle(time: 0, open: 10, high: 14, low: 8, close: 12),
+            LivelineCandle(time: 1, open: 12, high: 16, low: 10, close: 14),
+        ])
+        XCTAssertEqual(transformed.count, 2)
+        XCTAssertEqual(transformed[0].open, 11)
+        XCTAssertEqual(transformed[0].close, 11)
+        XCTAssertEqual(transformed[0].high, 14)
+        XCTAssertEqual(transformed[0].low, 8)
+        XCTAssertEqual(transformed[1].open, 11)
+        XCTAssertEqual(transformed[1].close, 13)
+        XCTAssertEqual(transformed[1].high, 16)
+        XCTAssertEqual(transformed[1].low, 10)
+
+        let columns = LivelineAdvancedMath.pointFigureColumns(
+            points: [100, 103, 99, 104].enumerated().map {
+                LivelinePoint(time: Double($0.offset), value: $0.element)
+            },
+            boxSize: 1,
+            reversalBoxes: 3
+        )
+        XCTAssertEqual(columns.count, 3)
+        XCTAssertEqual(columns.map(\.isRising), [true, false, true])
+        XCTAssertEqual(columns.map(\.low), [101, 99, 100])
+        XCTAssertEqual(columns.map(\.high), [103, 102, 104])
+        XCTAssertEqual(columns.map(\.boxCount), [3, 4, 5])
+    }
+
+    func testMarketDepthSortsAndAccumulatesEachSideFromTheInsideOut() {
+        let curve = LivelineAdvancedMath.marketDepthCurve([
+            LivelineOrderBookLevel(price: 99, bidSize: 2),
+            LivelineOrderBookLevel(price: 102, askSize: 2),
+            LivelineOrderBookLevel(price: 100, bidSize: 1),
+            LivelineOrderBookLevel(price: 101, askSize: 1.5),
+        ])
+
+        XCTAssertEqual(curve.bestBid, 100)
+        XCTAssertEqual(curve.bestAsk, 101)
+        XCTAssertEqual(curve.bids.map(\.time), [99, 100])
+        XCTAssertEqual(curve.bids.map(\.value), [3, 1])
+        XCTAssertEqual(curve.asks.map(\.time), [101, 102])
+        XCTAssertEqual(curve.asks.map(\.value), [1.5, 3.5])
+
+        let content = LivelineAdvancedChartContent.marketDepth(
+            [
+                LivelineOrderBookLevel(price: 100, bidSize: 1),
+                LivelineOrderBookLevel(price: 102, askSize: 1),
+            ], .init())
+        XCTAssertEqual(
+            content.prepared(leftEdge: 0, rightEdge: 1, configuration: .init()).primaryValue,
+            101
+        )
+    }
+
+    func testPublicModelsNormalizeUnsafeInputAndStylesStayWithinRenderableBounds() {
+        XCTAssertEqual(
+            LivelineDistributionSeries(id: "d", label: "D", values: [1, .nan, 2]).values, [1, 2])
+        XCTAssertEqual(LivelineXYPoint(id: "p", x: .nan, y: .infinity, weight: -4).x, 0)
+        XCTAssertEqual(LivelineXYPoint(id: "p", x: .nan, y: .infinity, weight: -4).y, 0)
+        XCTAssertEqual(LivelineXYPoint(id: "p", x: .nan, y: .infinity, weight: -4).weight, 0)
+        XCTAssertEqual(LivelineTernaryPoint(id: "t", label: "T", a: -1, b: .nan, c: 2).total, 2)
+        XCTAssertEqual(LivelineOrderBookLevel(price: .nan, bidSize: -1, askSize: .infinity).price, 0)
+        let task = LivelineGanttTask(
+            id: "g", label: "G", start: .nan, end: 4, lane: -2, progress: .infinity)
+        XCTAssertEqual(task.start, 0)
+        XCTAssertEqual(task.end, 4)
+        XCTAssertEqual(task.lane, 0)
+        XCTAssertEqual(task.progress, 0)
+        XCTAssertEqual(
+            LivelineRankPoint(time: .infinity, rank: .nan), LivelineRankPoint(time: 0, rank: 0))
+
+        let interval = LivelineCandleVolume(
+            time: .nan,
+            open: .nan,
+            high: .infinity,
+            low: -2,
+            close: 3,
+            volume: -.infinity
+        )
+        XCTAssertEqual(interval.time, 0)
+        XCTAssertEqual(interval.open, 0)
+        XCTAssertEqual(interval.high, 3)
+        XCTAssertEqual(interval.low, -2)
+        XCTAssertEqual(interval.close, 3)
+        XCTAssertEqual(interval.volume, 0)
+
+        XCTAssertEqual(LivelineHorizonStyle(bandCount: 100).resolvedBandCount, 6)
+        XCTAssertEqual(LivelineHexbinStyle(binsAcross: 1).resolvedBinsAcross, 4)
+        XCTAssertEqual(LivelineContourStyle(levelCount: 100).resolvedLevelCount, 16)
+        XCTAssertEqual(LivelineWaffleStyle(columns: 0, rows: 100).resolvedColumns, 1)
+        XCTAssertEqual(LivelineWaffleStyle(columns: 0, rows: 100).resolvedRows, 40)
+        XCTAssertEqual(
+            LivelinePointAndFigureStyle(boxSize: .nan, reversalBoxes: 100).resolvedBoxSize, 1)
+        XCTAssertEqual(
+            LivelinePointAndFigureStyle(boxSize: .nan, reversalBoxes: 100).resolvedReversalBoxes, 10)
+
+        XCTAssertTrue(
+            LivelineAdvancedChartContent.horizon([LivelinePoint(time: 0, value: 1)], .init()).isEmpty)
+        XCTAssertTrue(
+            LivelineAdvancedChartContent.contour(
+                [
+                    .init(id: "0", x: 0, y: 0, value: 0),
+                    .init(id: "1", x: 0, y: 1, value: 1),
+                    .init(id: "2", x: 0, y: 2, value: 2),
+                    .init(id: "3", x: 0, y: 3, value: 3),
+                ], .init()
+            ).isEmpty)
+    }
+
+    /// Renko bricks, Heikin-Ashi candles, and point-and-figure columns are derived
+    /// once, in the series type, and read by range preparation, drawing, hit
+    /// testing, VoiceOver, and the audio graph. Pin that they all describe the
+    /// same shapes — a reader that re-derives with its own parameters would drift
+    /// silently, which is exactly what owning the derivation is meant to prevent.
+    func testDerivedFinanceSeriesAreComputedOnceAndAgreeAcrossEveryReader() throws {
+        let prices = [100.0, 103, 99, 104, 101].enumerated().map {
+            LivelinePoint(time: Double($0.offset), value: $0.element)
+        }
+        let renkoStyle = LivelineRenkoStyle(brickSize: 1)
+        let figureStyle = LivelinePointAndFigureStyle(boxSize: 1, reversalBoxes: 3)
+        let candles = [
+            LivelineCandle(time: 0, open: 10, high: 14, low: 8, close: 12),
+            LivelineCandle(time: 1, open: 12, high: 16, low: 10, close: 14),
+        ]
+
+        let renko = LivelineRenkoSeries(points: prices, style: renkoStyle)
+        let heikin = LivelineHeikinAshiSeries(source: candles)
+        let figure = LivelinePointFigureSeries(points: prices, style: figureStyle)
+
+        // The stored derivation matches the published transform exactly.
+        XCTAssertEqual(
+            renko.bricks,
+            LivelineAdvancedMath.renkoBricks(
+                points: prices, brickSize: renkoStyle.resolvedBrickSize))
+        XCTAssertEqual(heikin.candles, LivelineAdvancedMath.heikinAshiCandles(candles))
+        XCTAssertEqual(
+            figure.columns,
+            LivelineAdvancedMath.pointFigureColumns(
+                points: prices,
+                boxSize: figureStyle.resolvedBoxSize,
+                reversalBoxes: figureStyle.resolvedReversalBoxes))
+        XCTAssertFalse(renko.bricks.isEmpty)
+        XCTAssertFalse(figure.columns.isEmpty)
+
+        let cases: [(String, LivelineAdvancedChartContent, Int)] = [
+            ("Renko", .renko(renko, renkoStyle), renko.bricks.count),
+            ("Heikin-Ashi", .heikinAshi(heikin, LivelineHeikinAshiStyle()), heikin.candles.count),
+            ("Point and figure", .pointAndFigure(figure, figureStyle), figure.columns.count),
+        ]
+        let configuration = LivelineChartConfiguration()
+        for (name, content, derivedCount) in cases {
+            XCTAssertEqual(
+                content.accessibilityEntryCount, derivedCount,
+                "\(name) VoiceOver count disagrees with the derived shapes")
+            XCTAssertEqual(
+                content.accessibilityEntries(
+                    formatValue: configuration.formatValue, formatTime: configuration.formatTime
+                ).count,
+                derivedCount,
+                "\(name) VoiceOver entries disagree with the derived shapes")
+
+            let targets = LivelineAdvancedInteractionBuilder.targets(
+                content: content,
+                layout: LivelineLayout(
+                    size: CGSize(width: 360, height: 240),
+                    padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+                    minValue: 90,
+                    maxValue: 110,
+                    leftEdge: 0,
+                    rightEdge: 5
+                ),
+                palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
+                configuration: configuration,
+                targetLocation: nil,
+                textScale: .standard
+            )
+            XCTAssertEqual(
+                targets.count, derivedCount,
+                "\(name) has a hover target per derived shape")
+
+            // Normalization is a fixed point: the series already derived on init.
+            guard case .advanced(let renormalized) = LivelineChartContent.advanced(content).normalized()
+            else { return XCTFail("\(name) lost its advanced content through normalization") }
+            XCTAssertEqual(
+                renormalized.accessibilityEntryCount, derivedCount,
+                "\(name) re-derived something different when normalized again")
+        }
+    }
+
+    func testEveryAdvancedChartProvidesInspectableAccessibilityAndAudioGraphData() {
+        let configuration = LivelineChartConfiguration(
+            formatValue: { String(format: "%.1f", $0) },
+            formatTime: { "T\(Int($0))" }
+        )
+
+        for fixture in Self.fixtures {
+            let content = LivelineChartContent.advanced(fixture.content)
+            let model = LivelineChartAccessibilityModel.make(
+                content: content,
+                semantics: content.semantics(),
+                configuration: configuration,
+                hiddenSeries: []
+            )
+            XCTAssertGreaterThan(
+                model.entryCount, 0, "\(fixture.name) has no inspectable accessibility entries")
+            XCTAssertFalse(model.label.isEmpty, "\(fixture.name) has no accessibility chart label")
+            XCTAssertFalse(model.value(at: 0).isEmpty, "\(fixture.name) has no first accessibility value")
+
+            let audio = LivelineAdvancedAudioGraph.make(content: fixture.content, visibleRange: nil)
+            XCTAssertFalse(audio.series.isEmpty, "\(fixture.name) has no Audio Graph series")
+            XCTAssertTrue(
+                audio.series.contains { !$0.points.isEmpty },
+                "\(fixture.name) has no sonifiable Audio Graph samples"
+            )
+        }
+    }
+
+    func testDerivedOrdinalFinanceChartsDoNotMisrepresentColumnsAsTime() {
+        let renko = LivelineChartContent.advanced(Self.fixture(named: "Renko"))
+        let pointAndFigure = LivelineChartContent.advanced(Self.fixture(named: "Point and figure"))
+        let horizon = LivelineChartContent.advanced(Self.fixture(named: "Horizon"))
+        XCTAssertFalse(renko.semantics().capabilities.usesTimeAxis)
+        XCTAssertFalse(pointAndFigure.semantics().capabilities.usesTimeAxis)
+        XCTAssertTrue(renko.semantics().capabilities.usesValueAxis)
+        XCTAssertTrue(pointAndFigure.semantics().capabilities.usesValueAxis)
+        XCTAssertTrue(horizon.semantics().capabilities.usesTimeAxis)
+        XCTAssertFalse(horizon.semantics().capabilities.usesValueAxis)
+    }
+
+    func testAdvancedInteractionTargetsShareAccessibilityScaleGeometryWithRendering() throws {
+        let layout = LivelineLayout(
+            size: CGSize(width: 360, height: 240),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 20,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2)
+        let scale = LivelineTextScale(factor: LivelineTextScale.maximumFactor)
+        let style = LivelineTernaryStyle(axisLabels: ["Compute", "Storage", "Network"])
+        let point = LivelineTernaryPoint(id: "balanced", label: "Balanced", a: 2, b: 3, c: 5)
+        let geometry = LivelineAdvancedLayout.ternary(style: style, layout: layout, textScale: scale)
+        let expected = geometry.point(point)
+        let target = try XCTUnwrap(
+            LivelineAdvancedInteractionBuilder.targets(
+                content: .ternary([point], style),
+                layout: layout,
+                palette: palette,
+                configuration: .init(),
+                targetLocation: nil,
+                textScale: scale
+            ).first)
+
+        XCTAssertEqual(target.selection.anchor.x, expected.x, accuracy: 0.001)
+        XCTAssertEqual(target.selection.anchor.y, expected.y, accuracy: 0.001)
+
+        let ohlcStyle = LivelineOHLCVolumeStyle(volumeHeightRatio: 0.3, paneSpacing: 8)
+        let ohlc = [
+            LivelineCandleVolume(time: 2, open: 8, high: 14, low: 4, close: 10, volume: 40),
+            LivelineCandleVolume(time: 7, open: 10, high: 18, low: 6, close: 16, volume: 70),
+        ]
+        let ohlcTarget = try XCTUnwrap(
+            LivelineAdvancedInteractionBuilder.targets(
+                content: .ohlcVolume(ohlc, ohlcStyle),
+                layout: layout,
+                palette: palette,
+                configuration: .init(),
+                targetLocation: nil,
+                textScale: scale
+            ).last)
+        let plot = LivelineRenderer.advancedPlotRect(layout)
+        let priceHeight =
+            plot.height - plot.height * ohlcStyle.resolvedVolumeHeightRatio
+            - ohlcStyle.resolvedPaneSpacing
+        let expectedY = LivelineRenderer.mapped(
+            16, from: 4...18, to: (plot.minY + priceHeight, plot.minY))
+        XCTAssertEqual(ohlcTarget.selection.anchor.y, expectedY, accuracy: 0.001)
+    }
+
+    /// A `Dictionary(uniqueKeysWithValues:)` over user-supplied identifiers traps
+    /// on a repeat. Every advanced chart that keys data by an identifier the
+    /// caller controls has to survive duplicates instead.
+    func testAdvancedLayoutsToleratesDuplicateCallerSuppliedIdentifiers() throws {
+        let layout = LivelineLayout(
+            size: CGSize(width: 360, height: 240),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 20,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let scale = LivelineTextScale.standard
+
+        let day = Date(timeIntervalSince1970: 1_700_000_000)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let sameDay = [
+            LivelineCalendarValue(date: day, value: 3),
+            LivelineCalendarValue(date: day.addingTimeInterval(3600), value: 9),
+        ]
+        let byDay = LivelineAdvancedLayout.calendarValuesByDay(sameDay, calendar: calendar)
+        XCTAssertEqual(byDay.count, 1, "Two readings on one civil day share a single cell.")
+        XCTAssertEqual(byDay[calendar.startOfDay(for: day)]?.value, 9, "The later reading wins.")
+
+        let repeatedTasks = [
+            LivelineGanttTask(id: "build", label: "Build", start: 0, end: 4, lane: 0),
+            LivelineGanttTask(id: "build", label: "Rebuild", start: 5, end: 9, lane: 1),
+        ]
+        let tasksByID = LivelineAdvancedLayout.ganttTasksByID(repeatedTasks)
+        XCTAssertEqual(tasksByID.count, 1)
+        XCTAssertEqual(tasksByID["build"]?.label, "Build")
+
+        let repeatedNodes = [
+            LivelineNetworkNode(id: "core", label: "Core", weight: 4),
+            LivelineNetworkNode(id: "core", label: "Core copy", weight: 2),
+            LivelineNetworkNode(id: "edge", label: "Edge", weight: 1),
+        ]
+        let network = try XCTUnwrap(
+            LivelineAdvancedLayout.network(
+                nodes: repeatedNodes,
+                edges: [LivelineNetworkEdge(source: "core", target: "edge", value: 1)],
+                style: LivelineNetworkStyle(),
+                layout: layout,
+                textScale: scale
+            ))
+        XCTAssertEqual(network.placements.count, 3, "Every node is still drawn and hoverable.")
+        XCTAssertEqual(network.positionsByID.count, 2, "An edge resolves to one endpoint per id.")
+        XCTAssertEqual(network.placements[0].connections, 1)
+        XCTAssertEqual(network.placements[2].connections, 1)
+    }
+
+    /// The chart draws one hexagon per bin, so the hover targets have to describe
+    /// bins as well — one target per raw point would leave hit regions scattered
+    /// away from the marks and report a single sample instead of the bin total.
+    func testHexbinTargetsDescribeDrawnBinsRatherThanRawPoints() throws {
+        let layout = LivelineLayout(
+            size: CGSize(width: 360, height: 240),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 20,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let style = LivelineHexbinStyle(binsAcross: 4)
+        let points = (0..<24).map {
+            LivelineXYPoint(id: "p\($0)", x: Double($0 % 3), y: Double($0 % 2), weight: 2)
+        }
+        let geometry = try XCTUnwrap(
+            LivelineAdvancedLayout.hexbin(
+                points: points, style: style, layout: layout, textScale: .standard))
+        XCTAssertLessThan(geometry.cells.count, points.count, "Points aggregate into bins.")
+        XCTAssertEqual(geometry.cells.map(\.count).reduce(0, +), points.count)
+        XCTAssertEqual(
+            geometry.cells.map { ($0.column, $0.row) }.map { [$0.0, $0.1] },
+            geometry.cells.map { ($0.column, $0.row) }.sorted { $0 < $1 }.map { [$0.0, $0.1] },
+            "Bin order is stable so identical input renders identically."
+        )
+
+        let targets = LivelineAdvancedInteractionBuilder.targets(
+            content: .hexbin(points, style),
+            layout: layout,
+            palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
+            configuration: .init(),
+            targetLocation: nil,
+            textScale: .standard
+        )
+        XCTAssertEqual(targets.count, geometry.cells.count)
+        for (target, cell) in zip(targets, geometry.cells) {
+            XCTAssertEqual(target.selection.anchor.x, cell.center.x, accuracy: 0.001)
+            XCTAssertEqual(target.selection.anchor.y, cell.center.y, accuracy: 0.001)
+        }
+    }
+
+    /// A series with no finite observations produces no density profile and so is
+    /// never drawn. Hit testing has to index the drawn profiles, not the caller's
+    /// array, or every remaining violin's region slides one slot out of place.
+    func testViolinTargetsFollowDrawnProfilesWhenASeriesHasNoFiniteValues() throws {
+        let layout = LivelineLayout(
+            size: CGSize(width: 360, height: 240),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 20,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let style = LivelineViolinStyle()
+        let series = [
+            LivelineDistributionSeries(id: "empty", label: "Empty", values: []),
+            LivelineDistributionSeries(id: "real", label: "Real", values: [1, 2, 3, 4]),
+        ]
+        let geometry = LivelineAdvancedLayout.violin(
+            series: series, style: style, layout: layout, textScale: .standard)
+        XCTAssertEqual(geometry.profiles.count, 1)
+        XCTAssertEqual(geometry.profiles[0].series.id, "real")
+
+        let targets = LivelineAdvancedInteractionBuilder.targets(
+            content: .violin(series, style),
+            layout: layout,
+            palette: LivelinePalette.resolve(accent: .blue, mode: .dark, lineWidth: 2),
+            configuration: .init(),
+            targetLocation: nil,
+            textScale: .standard
+        )
+        let target = try XCTUnwrap(targets.first)
+        XCTAssertEqual(targets.count, 1)
+        XCTAssertEqual(
+            target.selection.anchor.x, geometry.centerX(at: 0), accuracy: 0.001,
+            "The region sits on the violin that is actually painted."
+        )
+        XCTAssertEqual(target.selection.heading, "Real")
+    }
+
+    func testMarimekkoDefaultGuttersAreUniformAndPixelAligned() {
+        let style = LivelineMarimekkoStyle()
+        XCTAssertEqual(style.resolvedColumnSpacing, 1)
+        XCTAssertEqual(style.resolvedSegmentSpacing, 1)
+
+        let columns = [
+            LivelineMarimekkoColumn(
+                id: "a", label: "A", width: 3,
+                segments: [
+                    .init(id: "one", label: "One", value: 2),
+                    .init(id: "two", label: "Two", value: 1),
+                ]),
+            LivelineMarimekkoColumn(
+                id: "b", label: "B", width: 2,
+                segments: [
+                    .init(id: "one", label: "One", value: 1),
+                    .init(id: "two", label: "Two", value: 1),
+                ]),
+        ]
+        let raw = LivelineVisualGeometry.marimekko(
+            columns: columns,
+            in: CGRect(x: 0.1, y: 0.2, width: 101, height: 103),
+            columnSpacing: style.resolvedColumnSpacing,
+            segmentSpacing: style.resolvedSegmentSpacing
+        )
+        let geometry = LivelineVisualGeometry.pixelAligned(raw, displayScale: 3)
+
+        let columnGap = geometry[1].rect.minX - geometry[0].rect.maxX
+        let segmentGap = geometry[0].segments[0].rect.minY - geometry[0].segments[1].rect.maxY
+        XCTAssertEqual(columnGap, 1, accuracy: 0.000_1)
+        XCTAssertEqual(segmentGap, columnGap, accuracy: 0.000_1)
+
+        for rect in geometry.flatMap({ column in
+            [column.rect] + column.segments.map(\.rect)
+        }) {
+            for edge in [rect.minX, rect.minY, rect.maxX, rect.maxY] {
+                XCTAssertEqual(edge * 3, (edge * 3).rounded(), accuracy: 0.000_1)
+            }
+        }
+    }
+
+    func testMarimekkoGeometryBudgetsOnlyInternalGapsAndPreservesProportions() throws {
+        let columns = [
+            LivelineMarimekkoColumn(
+                id: "a", label: "A", width: 46,
+                segments: [
+                    .init(id: "one", label: "One", value: 62),
+                    .init(id: "two", label: "Two", value: 28),
+                    .init(id: "three", label: "Three", value: 10),
+                ]),
+            LivelineMarimekkoColumn(
+                id: "b", label: "B", width: 32,
+                segments: [
+                    .init(id: "one", label: "One", value: 45),
+                    .init(id: "two", label: "Two", value: 55),
+                ]),
+            LivelineMarimekkoColumn(
+                id: "c", label: "C", width: 22,
+                segments: [.init(id: "one", label: "One", value: 100)]),
+        ]
+        let body = CGRect(x: 10, y: 20, width: 500, height: 240)
+        let geometry = LivelineVisualGeometry.marimekko(
+            columns: columns,
+            in: body,
+            columnSpacing: 3,
+            segmentSpacing: 2
+        )
+
+        XCTAssertEqual(geometry.count, 3)
+        XCTAssertEqual(geometry[0].rect.minX, body.minX, accuracy: 0.000_1)
+        XCTAssertEqual(geometry[2].rect.maxX, body.maxX, accuracy: 0.000_1)
+        XCTAssertEqual(geometry[1].rect.minX - geometry[0].rect.maxX, 3, accuracy: 0.000_1)
+        XCTAssertEqual(geometry[2].rect.minX - geometry[1].rect.maxX, 3, accuracy: 0.000_1)
+        XCTAssertEqual(
+            geometry[0].rect.width / geometry[1].rect.width,
+            CGFloat(46) / 32,
+            accuracy: 0.000_1)
+        XCTAssertEqual(
+            geometry[1].rect.width / geometry[2].rect.width,
+            CGFloat(32) / 22,
+            accuracy: 0.000_1)
+
+        let firstSegments = geometry[0].segments
+        XCTAssertEqual(firstSegments[0].rect.maxY, body.maxY, accuracy: 0.000_1)
+        XCTAssertEqual(firstSegments[2].rect.minY, body.minY, accuracy: 0.000_1)
+        XCTAssertEqual(firstSegments[0].rect.minY - firstSegments[1].rect.maxY, 2, accuracy: 0.000_1)
+        XCTAssertEqual(firstSegments[1].rect.minY - firstSegments[2].rect.maxY, 2, accuracy: 0.000_1)
+
+        let layout = LivelineLayout(
+            size: CGSize(width: 540, height: 280),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 100,
+            leftEdge: 0,
+            rightEdge: 1
+        )
+        let style = LivelineMarimekkoStyle(columnSpacing: 3, segmentSpacing: 2)
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
+        let targets = LivelineAdvancedInteractionBuilder.targets(
+            content: .marimekko(columns, style),
+            layout: layout,
+            palette: palette,
+            configuration: .init(),
+            targetLocation: nil,
+            textScale: .init(factor: 1)
+        )
+        XCTAssertEqual(targets.count, 6)
+        XCTAssertEqual(targets[0].selection.anchor.x, targets[1].selection.anchor.x, accuracy: 0.000_1)
+        XCTAssertEqual(targets[3].selection.anchor.x, targets[4].selection.anchor.x, accuracy: 0.000_1)
+        XCTAssertLessThan(targets[0].selection.anchor.x, targets[3].selection.anchor.x)
+        XCTAssertLessThan(targets[3].selection.anchor.x, targets[5].selection.anchor.x)
+    }
+
+    func testContourGeometryIsDenseStitchedAndSafeForDuplicateCoordinates() {
+        var samples = (0..<9).flatMap { y in
+            (0..<9).map { x in
+                let dx = Double(x) - 4
+                let dy = Double(y) - 4
+                return LivelineContourSample(
+                    id: "\(x)-\(y)",
+                    x: Double(x),
+                    y: Double(y),
+                    value: exp(-(dx * dx + dy * dy) / 5) * 100
+                )
+            }
+        }
+        samples.append(.init(id: "duplicate", x: 4, y: 4, value: 98))
+        let geometry = LivelineVisualGeometry.contour(
+            samples: samples,
+            levelCount: 6,
+            plot: CGRect(x: 10, y: 20, width: 320, height: 240),
+            subdivisions: 8
+        )
+
+        XCTAssertEqual(geometry.fillCells.count, 64 * 64)
+        XCTAssertTrue(geometry.fillCells.allSatisfy { $0.rect.width > 0 && $0.rect.height > 0 })
+        XCTAssertEqual(Set(geometry.lines.map(\.level)), Set(1..<6))
+        XCTAssertTrue(geometry.lines.allSatisfy { $0.points.count > 8 })
+        XCTAssertTrue(geometry.lines.allSatisfy(\.isClosed))
+        XCTAssertTrue(
+            geometry.lines.flatMap(\.points).allSatisfy {
+                $0.x.isFinite && $0.y.isFinite
+                    && $0.x >= 10 && $0.x <= 330
+                    && $0.y >= 20 && $0.y <= 260
+            })
+    }
+
+    func testContourGeometryCacheTracksDataStyleAndPlotChanges() {
+        let samples = (0..<3).flatMap { y in
+            (0..<3).map { x in
+                LivelineContourSample(
+                    id: "\(x)-\(y)",
+                    x: Double(x),
+                    y: Double(y),
+                    value: Double(x * x + y)
+                )
+            }
+        }
+        let state = LivelineRenderState()
+        let plot = CGRect(x: 10, y: 20, width: 240, height: 160)
+
+        _ = state.contourGeometry(
+            samples: samples, levelCount: 6, plot: plot, subdivisions: 8)
+        _ = state.contourGeometry(
+            samples: samples, levelCount: 6, plot: plot, subdivisions: 8)
+        XCTAssertEqual(state.contourGeometryBuildCount, 1)
+
+        var changed = samples
+        changed[4].value += 0.25
+        _ = state.contourGeometry(
+            samples: changed, levelCount: 6, plot: plot, subdivisions: 8)
+        XCTAssertEqual(state.contourGeometryBuildCount, 2)
+
+        _ = state.contourGeometry(
+            samples: changed,
+            levelCount: 7,
+            plot: plot.insetBy(dx: 1, dy: 1),
+            subdivisions: 8
+        )
+        XCTAssertEqual(state.contourGeometryBuildCount, 3)
+    }
+
+    func testDirectLabelDistributionPreservesSpacingAndValueAxisSkipsLegendGutter() {
+        let positions = LivelineVisualGeometry.distributedLabelPositions(
+            [95, 95, 95],
+            minimum: 0,
+            maximum: 100,
+            spacing: 20
+        )
+        XCTAssertEqual(positions, [60, 80, 100])
+
+        let mixed = LivelineVisualGeometry.distributedLabelPositions(
+            [90, 10, 12],
+            minimum: 0,
+            maximum: 100,
+            spacing: 20
+        )
+        XCTAssertEqual(mixed[0], 90, accuracy: 0.000_1)
+        XCTAssertEqual(mixed[1], 10, accuracy: 0.000_1)
+        XCTAssertEqual(mixed[2], 30, accuracy: 0.000_1)
+
+        let ltr = LivelineLayout(
+            size: CGSize(width: 300, height: 200),
+            padding: .init(top: 10, right: 50, bottom: 20, left: 10),
+            minValue: 0,
+            maxValue: 1,
+            leftEdge: 0,
+            rightEdge: 1,
+            dataRightReserve: 32
+        )
+        XCTAssertEqual(ltr.valueAxisLabelX(offset: 6), 256, accuracy: 0.000_1)
+
+        let rtl = LivelineLayout(
+            size: CGSize(width: 300, height: 200),
+            padding: .init(top: 10, right: 10, bottom: 20, left: 50),
+            minValue: 0,
+            maxValue: 1,
+            leftEdge: 0,
+            rightEdge: 1,
+            dataLeftReserve: 32,
+            isRTL: true
+        )
+        XCTAssertEqual(rtl.valueAxisLabelX(offset: 6), 44, accuracy: 0.000_1)
+    }
+
+    private static func fixture(named name: String) -> LivelineAdvancedChartContent {
+        fixtures.first { $0.name == name }!.content
+    }
+
+    private static let fixtures: [(name: String, content: LivelineAdvancedChartContent)] = {
+        let points = [
+            LivelinePoint(time: 0, value: 100),
+            LivelinePoint(time: 1, value: 103),
+            LivelinePoint(time: 2, value: 99),
+            LivelinePoint(time: 3, value: 104),
+        ]
+        let candles = [
+            LivelineCandle(time: 0, open: 100, high: 104, low: 98, close: 102),
+            LivelineCandle(time: 1, open: 102, high: 105, low: 99, close: 101),
+        ]
+        let categories = [
+            LivelineCategoryValue(id: "a", label: "A", value: 60),
+            LivelineCategoryValue(id: "b", label: "B", value: 40),
+        ]
+        return [
+            ("Violin", .violin([.init(id: "d", label: "Desktop", values: [1, 2, 3])], .init())),
+            ("Ridgeline", .ridgeline([.init(id: "d", label: "Desktop", values: [1, 2, 3])], .init())),
+            (
+                "Calendar heatmap",
+                .calendarHeatmap(
+                    [.init(date: Date(timeIntervalSince1970: 1), value: 2, label: "Day")], .init())
+            ),
+            (
+                "Gantt",
+                .gantt([.init(id: "g", label: "Build", start: 0, end: 2, lane: 0, progress: 0.5)], .init())
+            ),
+            ("Chord", .chord([.init(source: "A", target: "B", value: 2)], .init())),
+            (
+                "Parallel coordinates",
+                .parallelCoordinates(
+                    [.init(id: "p", label: "Plan", values: [1, 2, 3])],
+                    .init(axisLabels: ["Speed", "Cost", "Safety"]))
+            ),
+            ("Hexbin", .hexbin([.init(id: "h", x: 1, y: 2, weight: 3, label: "Request")], .init())),
+            (
+                "Bump",
+                .bump(
+                    [
+                        .init(
+                            id: "r", label: "Rank", points: [.init(time: 0, rank: 2), .init(time: 1, rank: 1)])
+                    ], .init())
+            ),
+            ("Horizon", .horizon(points, .init())),
+            (
+                "Marimekko",
+                .marimekko([.init(id: "m", label: "Region", width: 2, segments: categories)], .init())
+            ),
+            ("Polar area", .polarArea(categories, .init())),
+            (
+                "Network",
+                .network(
+                    [.init(id: "a", label: "A"), .init(id: "b", label: "B")],
+                    [.init(source: "a", target: "b")], .init())
+            ),
+            (
+                "Contour",
+                .contour(
+                    [
+                        .init(id: "0", x: 0, y: 0, value: 0), .init(id: "1", x: 1, y: 0, value: 1),
+                        .init(id: "2", x: 0, y: 1, value: 1), .init(id: "3", x: 1, y: 1, value: 2),
+                    ], .init())
+            ),
+            (
+                "Ternary",
+                .ternary(
+                    [.init(id: "t", label: "T", a: 2, b: 3, c: 5)],
+                    .init(axisLabels: ["Compute", "Storage", "Network"]))
+            ),
+            ("Waffle", .waffle(categories, .init())),
+            ("Volume profile", .volumeProfile([.init(price: 100, volume: 5)], .init())),
+            (
+                "Renko",
+                .renko(
+                    LivelineRenkoSeries(points: points, style: .init(brickSize: 1)),
+                    .init(brickSize: 1))
+            ),
+            ("Heikin-Ashi", .heikinAshi(LivelineHeikinAshiSeries(source: candles), .init())),
+            (
+                "Market depth",
+                .marketDepth([.init(price: 99, bidSize: 2), .init(price: 101, askSize: 3)], .init())
+            ),
+            (
+                "OHLC and volume",
+                .ohlcVolume(
+                    candles.enumerated().map { index, candle in
+                        .init(
+                            time: candle.time, open: candle.open, high: candle.high, low: candle.low,
+                            close: candle.close, volume: Double(index + 1) * 10)
+                    }, .init())
+            ),
+            (
+                "Point and figure",
+                .pointAndFigure(
+                    LivelinePointFigureSeries(
+                        points: points, style: .init(boxSize: 1, reversalBoxes: 2)),
+                    .init(boxSize: 1, reversalBoxes: 2))
+            ),
+        ]
+    }()
+}

@@ -110,8 +110,29 @@ The machine-readable manifest at `Examples/LivelineDemo/Resources/storybook-scen
 | `treemap-basic` | Treemap | Squarified spend hierarchy with one nested group. |
 | `sunburst-basic` | Sunburst | Two-ring acquisition breakdown with labelled arcs. |
 | `sankey-basic` | Sankey | Three-column funnel flow with proportional ribbons. |
+| `violin-basic` | Violin | Mirrored kernel densities with quartiles, medians, and labels. |
+| `ridgeline-basic` | Ridgeline | Overlapping density profiles for three distributions. |
+| `calendar-heatmap-basic` | Calendar heatmap | Fourteen week civil-day activity grid with month and weekday labels. |
+| `gantt-basic` | Gantt | Progress-bearing tasks with dependency connectors. |
+| `chord-basic` | Chord | Weighted relationships between proportional team arcs. |
+| `parallel-basic` | Parallel coordinates | Four records compared across five independently scaled axes. |
+| `hexbin-basic` | Hexbin | Weighted two-dimensional observations aggregated into hexagonal bins. |
+| `bump-basic` | Bump | Five crossing rank series with point markers and end labels. |
+| `horizon-basic` | Horizon | Three folded positive and negative deviation bands. |
+| `marimekko-basic` | Marimekko | Region width and plan share encoded across two proportional dimensions. |
+| `polar-area-basic` | Polar area | Equal-angle radial sectors with area-scaled category values. |
+| `network-basic` | Network | Deterministic weighted service topology with direct labels. |
+| `contour-basic` | Contour | Seven filled scalar-field levels with boundary lines. |
+| `ternary-basic` | Ternary | Three-part compositions in a labelled triangular domain. |
+| `waffle-basic` | Waffle | One hundred cells and a categorical legend. |
+| `volume-profile-basic` | Volume profile | Horizontal price-level volume with point-of-control emphasis. |
+| `renko-basic` | Renko | Fixed-size directional price bricks. |
+| `heikin-ashi-basic` | Heikin-Ashi | Smoothed derived candles with distinct rising and falling bodies. |
+| `market-depth-basic` | Market depth | Cumulative bid and ask liquidity with spread and midpoint. |
+| `ohlc-volume-basic` | OHLC + volume | Synchronized candle and volume panes on a shared time axis. |
+| `point-figure-basic` | Point-and-figure | Three-box reversal columns rendered with X and O symbols. |
 <!-- END GENERATED SCENARIO TABLE -->
 
 ## Parity Notes
 
-The gallery is the audit surface for visual work. Nineteen structurally equivalent upstream/native scenarios must pass the web-reference diff before marking parity complete. Eight scenarios with controls inside the upstream plot layout are reported as intentional exclusions because Liveline Swift gives those controls dedicated space; the 44 native-only scenarios and those eight exclusions are reviewed through deterministic captures. Static parity scenarios suppress the live pulse unless pulse behavior is the thing being inspected. The current native renderer ports the web loading waveform, empty-state center gap, curved badge path, momentum badge colors, live dot structure, icon mode controls, centered reference labels, baseline-adjusted axis text, segmented candle wicks, live candle glow, deterministic snapshot timing, time-axis intervals, grid/time-axis label state, and coarse/fine grid interval selection.
+The gallery is the audit surface for visual work. Nineteen structurally equivalent upstream/native scenarios must pass the web-reference diff before marking parity complete. Eight scenarios with controls inside the upstream plot layout are reported as intentional exclusions because Liveline Swift gives those controls dedicated space; the 65 native-only scenarios and those eight exclusions are reviewed through deterministic captures. Static parity scenarios suppress the live pulse unless pulse behavior is the thing being inspected. The current native renderer ports the web loading waveform, empty-state center gap, curved badge path, momentum badge colors, live dot structure, icon mode controls, centered reference labels, baseline-adjusted axis text, segmented candle wicks, live candle glow, deterministic snapshot timing, time-axis intervals, grid/time-axis label state, and coarse/fine grid interval selection.

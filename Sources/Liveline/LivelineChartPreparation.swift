@@ -442,6 +442,13 @@ enum LivelineChartPreparer {
                 primaryValue: graph.total
             )
 
+        case let .advanced(content):
+            return content.prepared(
+                leftEdge: leftEdge,
+                rightEdge: rightEdge,
+                configuration: config
+            )
+
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
             let visibleRange = (leftEdge - 2)...rightEdge
             let lineSource = lineData.isEmpty ? data : lineData
@@ -639,7 +646,7 @@ enum LivelineChartPreparer {
             ]
             identifiers = [links.first?.source ?? "", links.last?.target ?? "", "\(style.resolvedNodeWidth)"]
 
-        case .radar, .donut, .gauge, .funnel, .bullet, .treemap, .sunburst, .candle:
+        case .radar, .donut, .gauge, .funnel, .bullet, .treemap, .sunburst, .candle, .advanced:
             // Aggregates over unordered data or a live candle: not worth a key
             // that would have to restate the whole payload.
             return nil

@@ -6,7 +6,9 @@ charts:
 
 - warm animated sparkle path generation;
 - cold dither geometry construction;
-- idle and active interaction snapshot construction; and
+- idle and active interaction snapshot construction;
+- advanced density, Renko, point-and-figure, and market-depth transforms;
+- cold and cached warm-frame contour geometry; and
 - end-to-end warm dither frame rendering through SwiftUI `ImageRenderer`.
 
 Run it from the repository root:
@@ -22,6 +24,11 @@ closed and Low Power Mode unchanged.
 
 Normal `swift test` runs skip this suite so performance sampling does not add
 noise or latency to correctness checks.
+
+Advanced transform fixtures use 1,000 distribution samples, 5,000 price
+samples, and 2,000 order-book levels. These cases guard the bounded KDE sample
+count and the linear or sort-dominated financial transforms without pretending
+that one Mac's absolute timings are a device-wide promise.
 
 For an optimization change:
 

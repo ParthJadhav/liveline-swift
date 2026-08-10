@@ -288,13 +288,22 @@ enum LivelineMath {
 
     static func monotoneSplinePath(points: [CGPoint]) -> Path {
         var path = Path()
-        guard let first = points.first else { return path }
-        path.move(to: first)
+        appendMonotoneSpline(points: points, to: &path)
+        return path
+    }
 
-        guard points.count > 1 else { return path }
+    static func appendMonotoneSpline(
+        points: [CGPoint],
+        to path: inout Path,
+        connectToFirst: Bool = false
+    ) {
+        guard let first = points.first else { return }
+        connectToFirst ? path.addLine(to: first) : path.move(to: first)
+
+        guard points.count > 1 else { return }
         if points.count == 2 {
             path.addLine(to: points[1])
-            return path
+            return
         }
 
         let count = points.count
@@ -340,8 +349,6 @@ enum LivelineMath {
                 control2: CGPoint(x: points[index + 1].x - width / 3, y: points[index + 1].y - tangents[index + 1] * width / 3)
             )
         }
-
-        return path
     }
 
     static func loadingY(progress: CGFloat, centerY: CGFloat, amplitude: CGFloat, phase: Double) -> CGFloat {
@@ -457,6 +464,12 @@ struct LivelineLayout {
     var chartHeight: CGFloat { max(1, size.height - padding.top - padding.bottom) }
     var bottomY: CGFloat { size.height - padding.bottom }
     var rightX: CGFloat { size.width - padding.right - dataRightReserve }
+
+    func valueAxisLabelX(offset: CGFloat) -> CGFloat {
+        isRTL
+            ? plotLeftX - dataLeftReserve - offset
+            : rightX + dataRightReserve + offset
+    }
 
     /// Reflects a horizontal coordinate across the plot when the layout reads
     /// right-to-left. The identity in a left-to-right layout, so call sites can

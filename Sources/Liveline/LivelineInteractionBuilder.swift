@@ -11,7 +11,9 @@ enum LivelineInteractionBuilder {
         hiddenSeries: Set<String>,
         behavior: LivelineHoverBehavior,
         includeTargets: Bool = true,
-        targetLocation: CGPoint? = nil
+        targetLocation: CGPoint? = nil,
+        textScale: LivelineTextScale = .standard,
+        displayScale: CGFloat? = nil
     ) -> LivelineInteractionSnapshot {
         LivelineInteractionSnapshot(
             layout: layout,
@@ -25,7 +27,9 @@ enum LivelineInteractionBuilder {
                 palette: palette,
                 configuration: configuration,
                 hiddenSeries: hiddenSeries,
-                targetLocation: targetLocation
+                targetLocation: targetLocation,
+                textScale: textScale,
+                displayScale: displayScale
             ) : []
         )
     }
@@ -37,7 +41,9 @@ enum LivelineInteractionBuilder {
         palette: LivelinePalette,
         configuration: LivelineChartConfiguration,
         hiddenSeries: Set<String>,
-        targetLocation: CGPoint?
+        targetLocation: CGPoint?,
+        textScale: LivelineTextScale,
+        displayScale: CGFloat?
     ) -> [LivelineInteractionTarget] {
         let value = configuration.formatValue
         let time = configuration.formatTime
@@ -488,6 +494,17 @@ enum LivelineInteractionBuilder {
                 )
             }
             return linkTargets + nodeTargets
+
+        case let .advanced(content):
+            return LivelineAdvancedInteractionBuilder.targets(
+                content: content,
+                layout: layout,
+                palette: palette,
+                configuration: configuration,
+                targetLocation: targetLocation,
+                textScale: textScale,
+                displayScale: displayScale
+            )
 
         case let .candle(_, _, candles, candleWidth, liveCandle, lineData, _):
             // Once candles have morphed into line mode, the visible geometry is

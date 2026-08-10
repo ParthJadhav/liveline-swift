@@ -344,6 +344,7 @@ final class LivelineViewportTests: XCTestCase {
     /// The render state is created *inside* the drawing closure: `ImageRenderer`
     /// is free to evaluate the canvas more than once, and a fresh state makes
     /// every pass replay the same sequence instead of continuing the last one.
+    @available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
     @MainActor
     private func drawnSpans(
         windows: [TimeInterval],
@@ -400,6 +401,7 @@ final class LivelineViewportTests: XCTestCase {
         return recorder.spans
     }
 
+    @available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
     @MainActor
     func testAWindowChangeEasesTheDrawnSpanInsteadOfSnappingIt() throws {
         // Growing the window with the data — 30s then 32s — used to remap every
@@ -417,6 +419,7 @@ final class LivelineViewportTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(spans.last), 32, accuracy: 0.000001)
     }
 
+    @available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
     @MainActor
     func testASettledChartAdoptsANewWindowOnTheVeryFirstFrame() throws {
         // Reduce Motion and single-frame exports cut to the new span: there are
@@ -427,6 +430,7 @@ final class LivelineViewportTests: XCTestCase {
         XCTAssertEqual(spans[1], 32, accuracy: 0.000001)
     }
 
+    @available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
     @MainActor
     func testAPausedChartHoldsItsDrawnSpanUntilFramesResume() throws {
         // A paused chart reports a zero delta, so the eased span parks rather
@@ -439,6 +443,7 @@ final class LivelineViewportTests: XCTestCase {
         XCTAssertEqual(Set(spans.map { ($0 * 1_000).rounded() }), [30_000])
     }
 
+    @available(iOS 16.0, macOS 13.0, tvOS 16.0, watchOS 9.0, *)
     @MainActor
     func testAStaticWindowNeverDriftsFromTheRequestedSpan() throws {
         // The regression guard: smoothing must be invisible when the window is

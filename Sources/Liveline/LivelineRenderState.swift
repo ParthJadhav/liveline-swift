@@ -60,6 +60,7 @@ final class LivelineRenderState: ObservableObject {
     var paletteBuildCount = 0
     var legendGutterMeasureCount = 0
     var accessibilityModelBuildCount = 0
+    var contourGeometryBuildCount = 0
     /// Every cached text measurement was taken at this scale; a Dynamic Type
     /// change invalidates them all.
     private(set) var textScale: LivelineTextScale = .standard
@@ -73,6 +74,8 @@ final class LivelineRenderState: ObservableObject {
     private var treemapCache: LivelineTreemapLayout = .empty
     private var sankeyKey: LivelineSankeyKey?
     private var sankeyCache: LivelineSankeyGraph?
+    private var contourKey: LivelineContourKey?
+    private var contourCache: LivelineContourGeometry?
     private var paletteCache: [LivelinePaletteKey: LivelinePalette] = [:]
     private var legendGutterCache: [LivelineLegendGutterKey: CGFloat] = [:]
     private var accessibilityModelKey: LivelineAccessibilityModelKey?
@@ -229,6 +232,42 @@ final class LivelineRenderState: ObservableObject {
         return graph
     }
 
+    /// Bicubic sampling and isoline stitching are substantially more expensive
+    /// than painting the resulting paths. Cache the settled geometry across
+    /// reveal frames and Dither's separate mark/text passes.
+    func contourGeometry(
+        samples: [LivelineContourSample],
+        levelCount: Int,
+        plot: CGRect,
+        subdivisions: Int
+    ) -> LivelineContourGeometry {
+        var fingerprint: UInt64 = 0xcbf2_9ce4_8422_2325
+        for sample in samples {
+            for component in [sample.x, sample.y, sample.value] {
+                fingerprint ^= component.bitPattern
+                fingerprint &*= 0x0000_0100_0000_01b3
+            }
+        }
+        let key = LivelineContourKey(
+            fingerprint: fingerprint,
+            count: samples.count,
+            levelCount: levelCount,
+            plot: plot,
+            subdivisions: subdivisions
+        )
+        if contourKey == key, let cached = contourCache { return cached }
+        let geometry = LivelineVisualGeometry.contour(
+            samples: samples,
+            levelCount: levelCount,
+            plot: plot,
+            subdivisions: subdivisions
+        )
+        contourGeometryBuildCount += 1
+        contourKey = key
+        contourCache = geometry
+        return geometry
+    }
+
     func frame(for timestamp: TimeInterval, isPaused: Bool) -> LivelineAnimationFrame {
         defer { lastTimestamp = timestamp }
         let deltaMilliseconds: TimeInterval
@@ -349,6 +388,8 @@ final class LivelineRenderState: ObservableObject {
         treemapCache = .empty
         sankeyKey = nil
         sankeyCache = nil
+        contourKey = nil
+        contourCache = nil
         paletteCache.removeAll(keepingCapacity: true)
         legendGutterCache.removeAll(keepingCapacity: true)
         accessibilityModelKey = nil
@@ -452,6 +493,14 @@ struct LivelineSankeyKey: Equatable {
     var count: Int
     var firstValue: Double
     var lastValue: Double
+}
+
+struct LivelineContourKey: Equatable {
+    var fingerprint: UInt64
+    var count: Int
+    var levelCount: Int
+    var plot: CGRect
+    var subdivisions: Int
 }
 
 struct LivelineLegendGutterKey: Hashable {
