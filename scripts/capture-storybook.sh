@@ -177,6 +177,12 @@ for scenario in "${SCENARIOS[@]}"; do
   if [[ "$CHART_ONLY" == true ]]; then
     launch_args+=(--storybook-chart-only)
   fi
+  if [[ "${STORYBOOK_DEMO_LIGHT:-false}" == true ]]; then
+    launch_args+=(--advanced-demo-light)
+  fi
+  if [[ "${STORYBOOK_DEMO_DITHER:-false}" == true ]]; then
+    launch_args+=(--advanced-demo-dither)
+  fi
   launch_args+=(--storybook-snapshot-elapsed "$capture_wait")
   launch_args+=(--storybook-capture-token "$capture_token")
   if [[ -n "${STORYBOOK_ORDERBOOK_RANDOM_SEED:-}" ]]; then

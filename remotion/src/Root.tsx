@@ -10,12 +10,6 @@ import {QualityScene} from './improvements/QualityScene';
 import {StorybookScene} from './improvements/StorybookScene';
 import {WorkbenchScene} from './improvements/WorkbenchScene';
 import {AdvancedPRVideo, TOTAL_DURATION_ADVANCED_PR} from './advanced-pr/AdvancedPRVideo';
-import {AdvancedCatalogScene} from './advanced-pr/CatalogScene';
-import {AdvancedDitherScene} from './advanced-pr/DitherScene';
-import {AdvancedFinanceScene} from './advanced-pr/FinanceScene';
-import {AdvancedHeroScene} from './advanced-pr/HeroScene';
-import {AdvancedQualityScene} from './advanced-pr/QualityScene';
-import {AdvancedRelationshipScene} from './advanced-pr/RelationshipScene';
 
 export const Root: React.FC = () => {
   return (
@@ -44,14 +38,6 @@ export const Root: React.FC = () => {
         width={1920}
         height={1080}
       />
-      <Folder name="Advanced-PR-Scenes">
-        <Composition id="AdvancedPR-Hero" component={AdvancedHeroScene} durationInFrames={105} fps={30} width={1920} height={1080} />
-        <Composition id="AdvancedPR-Catalog" component={AdvancedCatalogScene} durationInFrames={150} fps={30} width={1920} height={1080} />
-        <Composition id="AdvancedPR-Relationships" component={AdvancedRelationshipScene} durationInFrames={150} fps={30} width={1920} height={1080} />
-        <Composition id="AdvancedPR-Finance" component={AdvancedFinanceScene} durationInFrames={150} fps={30} width={1920} height={1080} />
-        <Composition id="AdvancedPR-Dither" component={AdvancedDitherScene} durationInFrames={135} fps={30} width={1920} height={1080} />
-        <Composition id="AdvancedPR-Quality" component={AdvancedQualityScene} durationInFrames={120} fps={30} width={1920} height={1080} />
-      </Folder>
       <Composition
         id="LivelineAdvancedPR"
         component={AdvancedPRVideo}

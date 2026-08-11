@@ -1,61 +1,111 @@
 import React from 'react';
-import {
-  AbsoluteFill,
-  Easing,
-  Interactive,
-  interpolate,
-  useCurrentFrame,
-  useVideoConfig,
-} from 'remotion';
-import {ChartCard, SceneShell, fontMono, prColors} from './shared';
+import {Easing, Interactive, interpolate, useCurrentFrame} from 'remotion';
+import {LightSceneShell, fontMono, prColors} from './shared';
 
 export const AdvancedHeroScene: React.FC = () => {
   const frame = useCurrentFrame();
-  const {durationInFrames} = useVideoConfig();
-
   return (
-    <SceneShell accent={prColors.violet}>
-      <AbsoluteFill style={{opacity: 0.58}}>
-        <ChartCard src="contour-basic.png" label="CONTOUR" width={520} height={404} left={-80} top={-90} rotate={-6} driftX={22} />
-        <ChartCard src="violin-basic.png" label="VIOLIN" width={500} height={389} left={1410} top={-60} rotate={7} delay={4} driftX={-18} />
-        <ChartCard src="chord-basic.png" label="CHORD" width={540} height={420} left={-130} top={760} rotate={5} delay={8} driftX={18} driftY={-18} />
-        <ChartCard src="market-depth-basic.png" label="MARKET DEPTH" width={560} height={435} left={1450} top={748} rotate={-6} delay={12} driftX={-24} driftY={-18} />
-      </AbsoluteFill>
-      <AbsoluteFill
+    <LightSceneShell accent={prColors.blue}>
+      <Interactive.Div
+        name="Pull request label"
         style={{
-          background:
-            'radial-gradient(760px 500px at 50% 50%, rgba(5,7,12,0.62), rgba(5,7,12,0.96) 78%)',
+          position: 'absolute',
+          left: 100,
+          top: 94,
+          padding: '12px 18px',
+          borderRadius: 999,
+          backgroundColor: `${prColors.blue}10`,
+          border: `1px solid ${prColors.blue}32`,
+          color: prColors.blue,
+          fontFamily: fontMono,
+          fontSize: 20,
+          fontWeight: 750,
+          letterSpacing: '0.08em',
+          opacity: interpolate(frame, [0, 14], [0, 1], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+            easing: Easing.bezier(0.16, 1, 0.3, 1),
+          }),
         }}
-      />
-      <AbsoluteFill style={{alignItems: 'center', justifyContent: 'center'}}>
-        <Interactive.Div
-          name="PR title"
-          style={{
-            textAlign: 'center',
-            opacity: interpolate(frame, [0, 15, durationInFrames - 10, durationInFrames], [0, 1, 1, 0], {
-              extrapolateLeft: 'clamp',
-              extrapolateRight: 'clamp',
-              easing: Easing.bezier(0.16, 1, 0.3, 1),
-            }),
-            scale: interpolate(frame, [0, 24], [0.94, 1], {
-              extrapolateLeft: 'clamp',
-              extrapolateRight: 'clamp',
-              easing: Easing.spring({damping: 200}),
-              output: 'perceptual-scale',
-            }),
-          }}
-        >
-          <div style={{fontFamily: fontMono, fontSize: 25, fontWeight: 700, letterSpacing: '0.12em', color: prColors.cyan}}>
-            LIVELINE SWIFT · PR #6
-          </div>
-          <div style={{fontSize: 136, lineHeight: 0.9, fontWeight: 780, letterSpacing: '-0.065em', color: prColors.text, marginTop: 24}}>
-            21 new<br />chart families
-          </div>
-          <div style={{fontSize: 38, color: prColors.secondary, fontWeight: 520, marginTop: 30}}>
-            Native. Animated. Accessible. Dither-ready.
-          </div>
-        </Interactive.Div>
-      </AbsoluteFill>
-    </SceneShell>
+      >
+        LIVELINE SWIFT · PULL REQUEST #6
+      </Interactive.Div>
+      <Interactive.Div
+        name="Hero headline"
+        style={{
+          position: 'absolute',
+          left: 96,
+          top: 230,
+          width: 1250,
+          color: prColors.ink,
+          fontSize: 142,
+          fontWeight: 810,
+          letterSpacing: '-0.065em',
+          lineHeight: 0.91,
+          opacity: interpolate(frame, [5, 24], [0, 1], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+            easing: Easing.bezier(0.16, 1, 0.3, 1),
+          }),
+          translate: interpolate(frame, [5, 28], ['0px 32px', '0px 0px'], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+            easing: Easing.bezier(0.16, 1, 0.3, 1),
+          }),
+        }}
+      >
+        21 new charts.
+        <br />
+        Every one gets the frame.
+      </Interactive.Div>
+      <Interactive.Div
+        name="Hero summary"
+        style={{
+          position: 'absolute',
+          left: 104,
+          bottom: 112,
+          width: 980,
+          color: prColors.muted,
+          fontSize: 38,
+          fontWeight: 520,
+          lineHeight: 1.28,
+          opacity: interpolate(frame, [22, 40], [0, 1], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+            easing: Easing.bezier(0.16, 1, 0.3, 1),
+          }),
+        }}
+      >
+        Native SwiftUI rendering across distribution, planning, relationships, composition, and financial market structure.
+      </Interactive.Div>
+      <Interactive.Div
+        name="Total family metric"
+        style={{
+          position: 'absolute',
+          right: 112,
+          bottom: 100,
+          width: 430,
+          padding: '38px 40px',
+          borderRadius: 30,
+          border: `1px solid ${prColors.border}`,
+          backgroundColor: 'rgba(255,255,255,0.88)',
+          boxShadow: '0 24px 70px rgba(42,65,98,0.13)',
+          opacity: interpolate(frame, [28, 48], [0, 1], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+            easing: Easing.bezier(0.16, 1, 0.3, 1),
+          }),
+          scale: interpolate(frame, [28, 52], [0.92, 1], {
+            extrapolateLeft: 'clamp',
+            extrapolateRight: 'clamp',
+            easing: Easing.spring({damping: 200}),
+            output: 'perceptual-scale',
+          }),
+        }}
+      >
+        <div style={{fontSize: 96, fontWeight: 810, letterSpacing: '-0.06em', color: prColors.blue}}>48</div>
+        <div style={{fontSize: 25, fontWeight: 650, color: prColors.muted}}>native chart families total</div>
+      </Interactive.Div>
+    </LightSceneShell>
   );
 };

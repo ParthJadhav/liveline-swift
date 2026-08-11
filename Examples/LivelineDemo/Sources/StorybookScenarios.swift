@@ -18,6 +18,30 @@ struct StorybookLaunch {
         ProcessInfo.processInfo.arguments.contains("--chart-showcase")
     }
 
+    static func advancedDemoLightFromArguments() -> Bool {
+        ProcessInfo.processInfo.arguments.contains("--advanced-demo-light")
+    }
+
+    static func advancedDemoDitherFromArguments() -> Bool {
+        ProcessInfo.processInfo.arguments.contains("--advanced-demo-dither")
+    }
+
+    static func advancedDemoDitherVariantFromArguments() -> LivelineDitherVariant {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "--advanced-demo-dither-variant"),
+              arguments.indices.contains(index + 1)
+        else {
+            return .gradient
+        }
+
+        switch arguments[index + 1] {
+        case "dotted": return .dotted
+        case "hatched": return .hatched
+        case "solid": return .solid
+        default: return .gradient
+        }
+    }
+
     static func scenarioLaunchFromArguments() -> StorybookScenarioLaunch {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: "--storybook-scenario") else {
@@ -381,7 +405,7 @@ extension StorybookCatalog {
             group: group,
             title: title,
             detail: detail,
-            background: background,
+            background: StorybookLaunch.advancedDemoLightFromArguments() ? .white : background,
             height: height,
             makeView: { AnyView(makeView()) }
         )

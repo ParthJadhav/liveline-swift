@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "preferences": {
+    "style_preset.pr-to-video": {
+      "value": "liveline_light_one-chart-per-scene",
+      "confirmed_in": [
+        "liveline-swift"
+      ],
+      "updated_at": "2026-08-11T16:56:17.293Z"
+    }
+  },
+  "sightings": {}
+}

@@ -406,8 +406,8 @@ enum StorybookData {
         suffix: String,
         padding: LivelinePadding = LivelinePadding()
     ) -> LivelineChartConfiguration {
-        LivelineChartConfiguration(
-            theme: theme,
+        var configuration = LivelineChartConfiguration(
+            theme: StorybookLaunch.advancedDemoLightFromArguments() ? .light : theme,
             window: window,
             badge: false,
             fill: false,
@@ -419,6 +419,21 @@ enum StorybookData {
             },
             padding: padding
         )
+        if StorybookLaunch.advancedDemoDitherFromArguments() {
+            configuration.style = .dither(
+                LivelineDitherStyle(
+                    variant: StorybookLaunch.advancedDemoDitherVariantFromArguments(),
+                    bloom: .low,
+                    cellSize: 2,
+                    sparkleDensity: 0.028,
+                    animationSpeed: 1.35,
+                    maximumFramesPerSecond: 30,
+                    animated: true
+                )
+            )
+            configuration.fadeEffects = true
+        }
+        return configuration
     }
 
     static func normalizedSnapshotConfig(
