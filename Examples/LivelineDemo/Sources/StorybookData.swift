@@ -413,7 +413,8 @@ enum StorybookData {
             fill: false,
             pulse: false,
             endpointDecorations: false,
-            fadeEffects: StorybookLaunch.chartShowcaseFromArguments(),
+            fadeEffects: StorybookLaunch.chartShowcaseFromArguments()
+                || StorybookLaunch.advancedDemoLiveFromArguments(),
             formatValue: { value in
                 value.formatted(.number.precision(.fractionLength(0))) + suffix
             },

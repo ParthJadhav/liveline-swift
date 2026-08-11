@@ -2,11 +2,11 @@
   "version": 1,
   "preferences": {
     "style_preset.pr-to-video": {
-      "value": "liveline_light_one-chart-per-scene",
+      "value": "liveline_public_reel_minimal_copy_light_native_live_charts",
       "confirmed_in": [
         "liveline-swift"
       ],
-      "updated_at": "2026-08-11T16:56:17.293Z"
+      "updated_at": "2026-08-11T17:51:15Z"
     }
   },
   "sightings": {}

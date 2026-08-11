@@ -25,6 +25,7 @@
 		B07782CE83159BF661FA5D07 /* StorybookScenarioIDs.generated.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB25256E69DFEBC719FAC487 /* StorybookScenarioIDs.generated.swift */; };
 		BB882DD4DCA03EADAEC24883 /* DitherShowcaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C521DD5BF06518FF39FCCBED /* DitherShowcaseView.swift */; };
 		C6E1FB567495E1643DA85F47 /* StorybookAdvancedScenarios.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34BBE66DC9B5E7F4117C5FB4 /* StorybookAdvancedScenarios.swift */; };
+		CDC9F401650BEF2A4D829B3A /* StorybookAdvancedLiveChart.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC332020D9E937498CCE348 /* StorybookAdvancedLiveChart.swift */; };
 		EB0A4860FCC5B0E1D910DA93 /* LivelineDemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96A0ED5BF8E02B2290577882 /* LivelineDemoApp.swift */; };
 /* End PBXBuildFile section */
 
@@ -42,6 +43,7 @@
 		13316F5B9327791EC071BA54 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		14DB47BF894E4E310932A3E2 /* StorybookNextScenarios.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookNextScenarios.swift; sourceTree = "<group>"; };
 		2AA3FB67FFD448A011D77A88 /* DemoMarket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoMarket.swift; sourceTree = "<group>"; };
+		2BC332020D9E937498CCE348 /* StorybookAdvancedLiveChart.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookAdvancedLiveChart.swift; sourceTree = "<group>"; };
 		34BBE66DC9B5E7F4117C5FB4 /* StorybookAdvancedScenarios.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookAdvancedScenarios.swift; sourceTree = "<group>"; };
 		51B67FE02F589DE3867E6458 /* StorybookData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorybookData.swift; sourceTree = "<group>"; };
 		633F643D9B44AB75CA71DC4B /* DemoRegressionUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoRegressionUITests.swift; sourceTree = "<group>"; };
@@ -96,6 +98,7 @@
 				96A0ED5BF8E02B2290577882 /* LivelineDemoApp.swift */,
 				E3FBA6E02F6D0E95537C2066 /* StackedChartGestureTestView.swift */,
 				A9284CC10EF74997F0C5FFAB /* StorybookAdvancedChartData.swift */,
+				2BC332020D9E937498CCE348 /* StorybookAdvancedLiveChart.swift */,
 				34BBE66DC9B5E7F4117C5FB4 /* StorybookAdvancedScenarios.swift */,
 				A22812B815C9DEE80FFE9636 /* StorybookCartesianScenarios.swift */,
 				889CEFAA18D45D1947DB0C04 /* StorybookCoreScenarios.swift */,
@@ -245,6 +248,7 @@
 				EB0A4860FCC5B0E1D910DA93 /* LivelineDemoApp.swift in Sources */,
 				5DE6529AD9834DAC0525CB7C /* StackedChartGestureTestView.swift in Sources */,
 				675BB8278CA67DB2FD6C33E1 /* StorybookAdvancedChartData.swift in Sources */,
+				CDC9F401650BEF2A4D829B3A /* StorybookAdvancedLiveChart.swift in Sources */,
 				C6E1FB567495E1643DA85F47 /* StorybookAdvancedScenarios.swift in Sources */,
 				50A8196CDC4C6C75538429CB /* StorybookCartesianScenarios.swift in Sources */,
 				279B18038DFC9FEE9D1663A4 /* StorybookCoreScenarios.swift in Sources */,

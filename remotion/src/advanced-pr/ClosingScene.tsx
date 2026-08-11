@@ -26,14 +26,14 @@ export const AdvancedClosingScene: React.FC = () => {
         }}
       >
         <div style={{fontFamily: fontMono, fontSize: 23, fontWeight: 750, color: prColors.violet, letterSpacing: '0.09em'}}>
-          LIVELINE SWIFT · ADVANCED CHART CATALOG
+          LIVELINE SWIFT
         </div>
         <div style={{marginTop: 36, color: prColors.ink, fontSize: 142, lineHeight: 0.92, fontWeight: 820, letterSpacing: '-0.067em'}}>
-          21 new families.
-          <br />48 native charts.
+          21 new.
+          <br />48 total.
         </div>
         <div style={{marginTop: 42, color: prColors.muted, fontSize: 40, fontWeight: 520, lineHeight: 1.3}}>
-          Typed APIs, native interaction, VoiceOver, Audio Graphs, light and dark themes, plus universal Dither rendering.
+          Native. Live. Accessible.
         </div>
       </Interactive.Div>
       <Interactive.Div

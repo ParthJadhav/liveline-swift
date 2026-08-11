@@ -1,5 +1,5 @@
 import React from 'react';
-import {AbsoluteFill, Easing, Interactive, interpolate, useCurrentFrame, useVideoConfig} from 'remotion';
+import {AbsoluteFill, Interactive} from 'remotion';
 
 export const prColors = {
   canvas: '#f5f8fd',
@@ -115,27 +115,14 @@ export const AnimatedSceneCopy: React.FC<{
   detail: string;
   accent: string;
 }> = ({eyebrow, title, detail, accent}) => {
-  const frame = useCurrentFrame();
-  const {durationInFrames} = useVideoConfig();
-
   return (
     <Interactive.Div
       name="Chart description"
       style={{
         position: 'absolute',
         left: 88,
-        top: 112,
+        top: 180,
         width: 600,
-        opacity: interpolate(frame, [0, 14, durationInFrames - 10, durationInFrames], [0, 1, 1, 0], {
-          extrapolateLeft: 'clamp',
-          extrapolateRight: 'clamp',
-          easing: Easing.bezier(0.16, 1, 0.3, 1),
-        }),
-        translate: interpolate(frame, [0, 18], ['0px 24px', '0px 0px'], {
-          extrapolateLeft: 'clamp',
-          extrapolateRight: 'clamp',
-          easing: Easing.bezier(0.16, 1, 0.3, 1),
-        }),
       }}
     >
       <SceneLabel group={eyebrow} accent={accent} />
@@ -143,7 +130,7 @@ export const AnimatedSceneCopy: React.FC<{
         style={{
           marginTop: 30,
           color: prColors.ink,
-          fontSize: 92,
+          fontSize: 96,
           fontWeight: 790,
           letterSpacing: '-0.055em',
           lineHeight: 0.96,
@@ -153,40 +140,14 @@ export const AnimatedSceneCopy: React.FC<{
       </div>
       <div
         style={{
-          marginTop: 30,
+          marginTop: 24,
           color: prColors.muted,
-          fontSize: 34,
-          fontWeight: 510,
-          lineHeight: 1.34,
+          fontSize: 38,
+          fontWeight: 560,
+          lineHeight: 1.2,
         }}
       >
         {detail}
-      </div>
-      <div
-        style={{
-          display: 'flex',
-          gap: 12,
-          flexWrap: 'wrap',
-          marginTop: 34,
-        }}
-      >
-        {['Native SwiftUI', 'Interactive', 'Accessible'].map((label) => (
-          <div
-            key={label}
-            style={{
-              padding: '9px 13px',
-              borderRadius: 10,
-              border: `1px solid ${prColors.border}`,
-              backgroundColor: 'rgba(255,255,255,0.78)',
-              color: prColors.muted,
-              fontFamily: fontMono,
-              fontSize: 16,
-              fontWeight: 650,
-            }}
-          >
-            {label}
-          </div>
-        ))}
       </div>
     </Interactive.Div>
   );

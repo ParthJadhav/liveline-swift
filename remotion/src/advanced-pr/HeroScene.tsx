@@ -28,7 +28,7 @@ export const AdvancedHeroScene: React.FC = () => {
           }),
         }}
       >
-        LIVELINE SWIFT · PULL REQUEST #6
+        LIVELINE SWIFT
       </Interactive.Div>
       <Interactive.Div
         name="Hero headline"
@@ -56,7 +56,7 @@ export const AdvancedHeroScene: React.FC = () => {
       >
         21 new charts.
         <br />
-        Every one gets the frame.
+        Built to move.
       </Interactive.Div>
       <Interactive.Div
         name="Hero summary"
@@ -76,7 +76,7 @@ export const AdvancedHeroScene: React.FC = () => {
           }),
         }}
       >
-        Native SwiftUI rendering across distribution, planning, relationships, composition, and financial market structure.
+        Native SwiftUI. Live data. Every chart.
       </Interactive.Div>
       <Interactive.Div
         name="Total family metric"

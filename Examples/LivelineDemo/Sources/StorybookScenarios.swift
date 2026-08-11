@@ -26,6 +26,10 @@ struct StorybookLaunch {
         ProcessInfo.processInfo.arguments.contains("--advanced-demo-dither")
     }
 
+    static func advancedDemoLiveFromArguments() -> Bool {
+        ProcessInfo.processInfo.arguments.contains("--advanced-demo-live")
+    }
+
     static func advancedDemoDitherVariantFromArguments() -> LivelineDitherVariant {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: "--advanced-demo-dither-variant"),

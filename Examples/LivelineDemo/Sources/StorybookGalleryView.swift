@@ -336,7 +336,14 @@ struct StorybookScenarioScreen: View {
     }
 
     private var chart: some View {
-        scenario.makeView()
+        Group {
+            if StorybookLaunch.advancedDemoLiveFromArguments(),
+               StorybookAdvancedLiveChart.supports(scenario.id) {
+                StorybookAdvancedLiveChart(scenarioID: scenario.id)
+            } else {
+                scenario.makeView()
+            }
+        }
             .livelineSnapshotElapsedTime(StorybookLaunch.snapshotElapsedTimeFromArguments())
             .frame(height: scenario.height)
             .padding(.horizontal, 4)

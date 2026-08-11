@@ -16,9 +16,13 @@ if (new Set(chartIDs).size !== chartIDs.length) {
 }
 
 for (const id of chartIDs) {
-  const asset = resolve(import.meta.dir, `../public/advanced-pr-light/${id}.png`);
-  if (!existsSync(asset)) {
-    fail(`missing native light capture for ${id}`);
+  const stillAsset = resolve(import.meta.dir, `../public/advanced-pr-light/${id}.png`);
+  const liveAsset = resolve(import.meta.dir, `../public/advanced-pr-light/live/${id}.mp4`);
+  if (!existsSync(stillAsset)) {
+    fail(`missing native light still for ${id}`);
+  }
+  if (!existsSync(liveAsset)) {
+    fail(`missing native live recording for ${id}`);
   }
 }
 
@@ -32,4 +36,4 @@ for (const chart of ditherCharts) {
   }
 }
 
-console.log(`Verified ${advancedCharts.length} unique chart scenes and ${ditherCharts.length} advanced Dither scenes.`);
+console.log(`Verified ${advancedCharts.length} unique native-live chart scenes and ${ditherCharts.length} advanced Dither scenes.`);
