@@ -1,12 +1,13 @@
 # Liveline demo videos (Remotion)
 
-Three release compositions live here:
+Four release compositions live here:
 
 | Composition ID | Output | Length |
 | --- | --- | --- |
 | `LivelinePlatforms` | `Media/liveline-platforms.mp4` | ~22s |
 | `Liveline060` | `Media/liveline-0-6-0-demo.mp4` | 50s |
 | `Liveline070` | `Media/liveline-0-7-0-demo.mp4` | 26s |
+| `LivelineAdvancedPR` | `Media/liveline-advanced-charts-pr.mp4` | 25s |
 
 ```sh
 bun install --frozen-lockfile
@@ -14,7 +15,17 @@ bun run studio       # live-edit at http://localhost:3000
 bun run render       # writes ../Media/liveline-platforms.mp4
 bun run render:060   # writes ../Media/liveline-0-6-0-demo.mp4
 bun run render:070   # writes ../Media/liveline-0-7-0-demo.mp4
+bun run render:advanced-pr # writes ../Media/liveline-advanced-charts-pr.mp4
 ```
+
+## `LivelineAdvancedPR` — the advanced-chart PR demo
+
+The 25-second dark-mode cut introduces the 21 new chart families in PR #6,
+then spotlights distribution/planning, relationship/multivariate, and financial
+charts before showing the authentic animated Dither showcase and closing on the
+accessibility and verification story. Native chart captures live in
+`public/advanced-pr/`; the framing, reveals, typography, and scene transitions
+are authored in `src/advanced-pr/`.
 
 ## `Liveline070` — the 0.7.0 improvement demo
 
