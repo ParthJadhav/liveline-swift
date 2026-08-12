@@ -67,12 +67,14 @@ enum LivelineAdvancedInteractionBuilder {
                     values: values, style: style, layout: layout, textScale: textScale)
             else { return [] }
             let collapsed = LivelineAdvancedLayout.calendarValuesByDay(
-                values, calendar: geometry.calendar).values.sorted { $0.date < $1.date }
+                LivelineAdvancedLayout.calendarValuesInSupportedSpan(
+                    values, calendar: geometry.calendar),
+                calendar: geometry.calendar).values.sorted { $0.date < $1.date }
             return collapsed.compactMap { entry in
                 let date = geometry.calendar.startOfDay(for: entry.date)
                 guard
                     let day = geometry.calendar.dateComponents([.day], from: geometry.firstDay, to: date).day,
-                    day >= 0
+                    day >= 0, day < geometry.totalDays
                 else { return nil }
                 let rect = geometry.rect(dayOffset: day)
                 return target(
@@ -161,7 +163,8 @@ enum LivelineAdvancedInteractionBuilder {
             let geometry = LivelineAdvancedLayout.chord(
                 links: links, style: style, layout: layout, textScale: textScale)
             let ribbonTargets = geometry.ribbons.map { ribbon in
-                let path = ribbon.path(center: geometry.center, radius: geometry.innerRadius - 1)
+                let path = ribbon.path(
+                    center: geometry.center, radius: max(geometry.innerRadius - 1, 0))
                 let bounds = path.boundingRect
                 let anchor = CGPoint(x: bounds.midX, y: bounds.midY)
                 let colorIndex = geometry.arcs.first { $0.label == ribbon.link.source }?.index ?? 0

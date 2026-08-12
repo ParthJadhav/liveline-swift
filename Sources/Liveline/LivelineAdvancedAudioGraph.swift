@@ -64,7 +64,9 @@ enum LivelineAdvancedAudioGraph {
                         LivelineStrings.labelThirdQuartile,
                         series.map { ($0.label, LivelineAdvancedMath.quantile($0.values, probability: 0.75)) }),
                 ], order: order)
-        case .calendarHeatmap(let values, _):
+        case .calendarHeatmap(let values, let style):
+            let values = LivelineAdvancedLayout.calendarValuesInSupportedSpan(
+                values, calendar: style.calendar)
             return time([
                 timed(
                     LivelineStrings.labelValue, continuous: false,
@@ -149,17 +151,18 @@ enum LivelineAdvancedAudioGraph {
                 order: positive.map(\.label))
         case .network(let nodes, let edges, _):
             let order = nodes.map(\.label)
+            var seenNodeIDs: Set<String> = []
+            let connectionSamples = nodes.map { node -> (String, Double) in
+                let ownsIdentifier = seenNodeIDs.insert(node.id).inserted
+                let count = ownsIdentifier
+                    ? edges.filter { $0.source == node.id || $0.target == node.id }.count
+                    : 0
+                return (node.label, Double(count))
+            }
             return categories(
                 [
                     categorical(LivelineStrings.labelWeight, nodes.map { ($0.label, $0.weight) }),
-                    categorical(
-                        LivelineStrings.labelConnections,
-                        nodes.map { node in
-                            (
-                                node.label,
-                                Double(edges.filter { $0.source == node.id || $0.target == node.id }.count)
-                            )
-                        }),
+                    categorical(LivelineStrings.labelConnections, connectionSamples),
                 ], order: order)
         case .contour(let samples, _):
             let order = samples.map(\.id)
@@ -178,7 +181,7 @@ enum LivelineAdvancedAudioGraph {
                     categorical(LivelineStrings.labelMagnitude, valid.map { ($0.label, $0.magnitude) }),
                 ], order: order)
         case .volumeProfile(let levels, _):
-            let levels = levels.filter { $0.volume > 0 }
+            let levels = LivelineAdvancedLayout.volumeProfileLevels(levels)
             let order = levels.map { formatValue($0.price) }
             return categories(
                 [categorical(LivelineStrings.labelVolume, zip(order, levels).map { ($0, $1.volume) })],

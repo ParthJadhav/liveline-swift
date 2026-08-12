@@ -34,7 +34,7 @@ extension LivelineRenderer {
             for ribbon in geometry.ribbons {
                 let colorIndex = geometry.arcs.first { $0.label == ribbon.link.source }?.index ?? 0
                 context.fill(
-                    ribbon.path(center: center, radius: innerRadius - 1),
+                    ribbon.path(center: center, radius: max(innerRadius - 1, 0)),
                     with: .color(
                         advancedColor(index: colorIndex, colors: style.colors, palette: palette)
                             .opacity(style.resolvedRibbonOpacity * reveal)))

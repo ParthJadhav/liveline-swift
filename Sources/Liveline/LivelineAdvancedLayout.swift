@@ -163,15 +163,32 @@ struct LivelineCalendarLayout {
 }
 
 extension LivelineAdvancedLayout {
+    static let maximumCalendarDays = 366
+
+    static func calendarValuesInSupportedSpan(
+        _ values: [LivelineCalendarValue],
+        calendar: Calendar
+    ) -> [LivelineCalendarValue] {
+        let sorted = values.sorted { $0.date < $1.date }
+        guard let last = sorted.last else { return [] }
+        let lastDay = calendar.startOfDay(for: last.date)
+        guard
+            let firstSupportedDay = calendar.date(
+                byAdding: .day, value: -(maximumCalendarDays - 1), to: lastDay)
+        else { return Array(sorted.suffix(maximumCalendarDays)) }
+        return sorted.filter { calendar.startOfDay(for: $0.date) >= firstSupportedDay }
+    }
+
     static func calendar(
         values: [LivelineCalendarValue],
         style: LivelineCalendarHeatmapStyle,
         layout: LivelineLayout,
         textScale: LivelineTextScale
     ) -> LivelineCalendarLayout? {
-        guard let firstDate = values.first?.date, let lastDate = values.last?.date else { return nil }
         var calendar = style.calendar
         calendar.locale = calendar.locale ?? .current
+        let values = calendarValuesInSupportedSpan(values, calendar: calendar)
+        guard let firstDate = values.first?.date, let lastDate = values.last?.date else { return nil }
         let firstDay = calendar.startOfDay(for: firstDate)
         let lastDay = calendar.startOfDay(for: lastDate)
         let weekday = calendar.component(.weekday, from: firstDay)
@@ -268,7 +285,8 @@ extension LivelineAdvancedLayout {
         layout: LivelineLayout,
         textScale: LivelineTextScale
     ) -> LivelineGanttLayout {
-        let laneCount = max((tasks.map(\.lane).max() ?? 0) + 1, 1)
+        let maximumLane = min(max(tasks.map(\.lane).max() ?? 0, 0), 10_000)
+        let laneCount = maximumLane + 1
         let plot = LivelineRenderer.advancedPlotRect(layout)
             .insetBy(dx: textScale.scaled(2), dy: textScale.scaled(4))
         return LivelineGanttLayout(
@@ -342,7 +360,12 @@ struct LivelineBumpLayout {
             }
         }
         let visibleEnd = low
-        guard firstVisible < visibleEnd else { return nil }
+        guard firstVisible < visibleEnd else {
+            guard includingBoundaryPoints, firstVisible > 0, firstVisible < points.count else {
+                return nil
+            }
+            return (firstVisible - 1)...firstVisible
+        }
         let first = includingBoundaryPoints ? max(firstVisible - 1, 0) : firstVisible
         let last = includingBoundaryPoints ? min(visibleEnd, points.count - 1) : visibleEnd - 1
         return first...last

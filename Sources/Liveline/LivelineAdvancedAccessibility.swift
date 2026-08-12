@@ -12,6 +12,8 @@ extension LivelineAdvancedChartContent {
         case .violin(let series, _), .ridgeline(let series, _):
             return series.filter { !$0.values.isEmpty }.count
         case .calendarHeatmap(let values, let style):
+            let values = LivelineAdvancedLayout.calendarValuesInSupportedSpan(
+                values, calendar: style.calendar)
             return LivelineAdvancedLayout.calendarValuesByDay(values, calendar: style.calendar).count
         case .gantt(let tasks, _): return tasks.count
         case .chord(let links, _): return links.filter { $0.value > 0 }.count
@@ -28,7 +30,8 @@ extension LivelineAdvancedChartContent {
             return nodes.count + edges.filter { $0.value > 0 }.count
         case .contour(let samples, _): return samples.count
         case .ternary(let points, _): return points.filter { $0.total > 0 }.count
-        case .volumeProfile(let levels, _): return levels.filter { $0.volume > 0 }.count
+        case .volumeProfile(let levels, _):
+            return LivelineAdvancedLayout.volumeProfileLevels(levels).count
         case .renko(let series, _): return series.bricks.count
         case .heikinAshi(let series, _): return series.candles.count
         case .marketDepth(let levels, _):
@@ -61,8 +64,10 @@ extension LivelineAdvancedChartContent {
             }
 
         case .calendarHeatmap(let values, let style):
+            let supported = LivelineAdvancedLayout.calendarValuesInSupportedSpan(
+                values, calendar: style.calendar)
             let values = LivelineAdvancedLayout.calendarValuesByDay(
-                values, calendar: style.calendar).values.sorted { $0.date < $1.date }
+                supported, calendar: style.calendar).values.sorted { $0.date < $1.date }
             return values.map {
                 LivelineAccessibilityEntry(
                     id: "calendar-\($0.date.timeIntervalSinceReferenceDate)",
@@ -171,14 +176,18 @@ extension LivelineAdvancedChartContent {
         case .network(let nodes, let edges, _):
             var labelsByID: [String: String] = [:]
             for node in nodes where labelsByID[node.id] == nil { labelsByID[node.id] = node.label }
+            var seenNodeIDs: Set<String> = []
             let nodeEntries = nodes.map { node in
-                let connections = edges.filter { $0.source == node.id || $0.target == node.id }
+                let ownsIdentifier = seenNodeIDs.insert(node.id).inserted
+                let connections = ownsIdentifier
+                    ? edges.filter { $0.source == node.id || $0.target == node.id }.count
+                    : 0
                 return LivelineAccessibilityEntry(
                     id: node.id,
                     label: node.label,
                     value: String(
                         format: LivelineStrings.accessibilityNetworkFormat, formatValue(node.weight),
-                        connections.count)
+                        connections)
                 )
             }
             let edgeEntries = edges.filter { $0.value > 0 }.enumerated().map { index, edge in
@@ -229,7 +238,7 @@ extension LivelineAdvancedChartContent {
             }
 
         case .volumeProfile(let levels, _):
-            return levels.filter { $0.volume > 0 }.map {
+            return LivelineAdvancedLayout.volumeProfileLevels(levels).map {
                 LivelineAccessibilityEntry(
                     id: "volume-profile-\($0.price)",
                     label: String(

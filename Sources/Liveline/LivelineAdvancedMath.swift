@@ -133,6 +133,7 @@ enum LivelineAdvancedMath {
             guard rawCount.isFinite, rawCount <= 10_000 else { return [] }
             let count = Int(rawCount)
             guard count > 0 else { continue }
+            guard result.count <= 10_000 - count else { return [] }
             for _ in 0..<count {
                 let next = anchor + direction * size
                 result.append(

@@ -67,9 +67,12 @@ extension LivelineAdvancedLayout {
             totals[link.target, default: 0] += link.value
         }
         let total = max(totals.values.reduce(0, +), 0.000_001)
-        let plot = LivelineRenderer.advancedPlotRect(layout)
-            .insetBy(dx: textScale.scaled(18), dy: textScale.scaled(18))
-        let outerRadius = min(plot.width, plot.height) / 2
+        let basePlot = LivelineRenderer.advancedPlotRect(layout)
+        let inset = min(
+            textScale.scaled(18),
+            max(min(basePlot.width, basePlot.height) / 2 - 0.5, 0))
+        let plot = basePlot.insetBy(dx: inset, dy: inset)
+        let outerRadius = max(min(plot.width, plot.height) / 2, 0)
         let requestedGap = style.resolvedGapDegrees * Double.pi / 180
         let gap = labels.isEmpty ? 0 : min(requestedGap, 2 * Double.pi / Double(labels.count) * 0.9)
         let available = max(2 * Double.pi - gap * Double(labels.count), 0)
@@ -465,7 +468,8 @@ extension LivelineAdvancedLayout {
             }
             // Repeated identifiers are legal input; the first placement owns the
             // identifier so edges resolve to exactly one endpoint.
-            if positionsByID[node.id] == nil { positionsByID[node.id] = point }
+            let ownsIdentifier = positionsByID[node.id] == nil
+            if ownsIdentifier { positionsByID[node.id] = point }
             let group = node.group ?? "__\(index)"
             let colorIndex = groupIndices[group] ?? groupIndices.count
             groupIndices[group] = colorIndex
@@ -477,7 +481,7 @@ extension LivelineAdvancedLayout {
                         + (style.resolvedMaximumNodeSize - style.resolvedMinimumNodeSize)
                         * CGFloat(sqrt(node.weight / maxWeight)),
                     colorIndex: colorIndex,
-                    connections: connectionCounts[node.id] ?? 0
+                    connections: ownsIdentifier ? (connectionCounts[node.id] ?? 0) : 0
                 )
             )
         }

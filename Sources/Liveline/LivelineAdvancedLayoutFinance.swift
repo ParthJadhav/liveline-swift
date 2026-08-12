@@ -25,13 +25,23 @@ struct LivelineVolumeProfileLayout {
 }
 
 extension LivelineAdvancedLayout {
+    static func volumeProfileLevels(_ levels: [LivelinePriceVolume]) -> [LivelinePriceVolume] {
+        var volumeByPrice: [Double: Double] = [:]
+        for level in levels where level.volume > 0 {
+            let total = volumeByPrice[level.price, default: 0] + level.volume
+            volumeByPrice[level.price] = total.isFinite ? total : Double.greatestFiniteMagnitude
+        }
+        return volumeByPrice.map { LivelinePriceVolume(price: $0.key, volume: $0.value) }
+            .sorted { $0.price < $1.price }
+    }
+
     static func volumeProfile(
         levels: [LivelinePriceVolume],
         style: LivelineVolumeProfileStyle,
         layout: LivelineLayout,
         textScale: LivelineTextScale
     ) -> LivelineVolumeProfileLayout {
-        let valid = levels.filter { $0.volume > 0 }
+        let valid = volumeProfileLevels(levels)
         let plot = LivelineRenderer.advancedPlotRect(layout)
             .insetBy(dx: textScale.scaled(5), dy: textScale.scaled(5))
         let labelWidth = style.showsValues
@@ -73,8 +83,11 @@ struct LivelineRenkoLayout {
         let brick = bricks[index]
         let top = layout.y(for: max(brick.open, brick.close))
         let bottom = layout.y(for: min(brick.open, brick.close))
+        let slotX = layout.isRTL
+            ? plot.maxX - CGFloat(index + 1) * slot
+            : plot.minX + CGFloat(index) * slot
         return CGRect(
-            x: plot.minX + CGFloat(index) * slot + brickSpacing / 2,
+            x: slotX + brickSpacing / 2,
             y: min(top, bottom),
             width: width,
             height: max(abs(bottom - top), 1)

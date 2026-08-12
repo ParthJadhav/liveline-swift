@@ -88,10 +88,10 @@ extension LivelineAdvancedChartContent {
         case .ridgeline(let data, let style):
             return .ridgeline(data.map(Self.distribution), style)
         case .calendarHeatmap(let data, let style):
-            let values = data.map {
+            let values = LivelineAdvancedLayout.calendarValuesInSupportedSpan(data.map {
                 LivelineCalendarValue(date: $0.date, value: $0.value, label: $0.label)
             }
-            .sorted { $0.date < $1.date }
+            .sorted { $0.date < $1.date }, calendar: style.calendar)
             return .calendarHeatmap(values, style)
         case .gantt(let data, let style):
             let tasks = data.map {
@@ -160,10 +160,7 @@ extension LivelineAdvancedChartContent {
         case .waffle(let data, let style):
             return .waffle(LivelineInputNormalizer.categories(data), style)
         case .volumeProfile(let data, let style):
-            return .volumeProfile(
-                data.map { LivelinePriceVolume(price: $0.price, volume: $0.volume) }.sorted {
-                    $0.price < $1.price
-                }, style)
+            return .volumeProfile(LivelineAdvancedLayout.volumeProfileLevels(data), style)
         case .renko, .heikinAshi, .pointAndFigure:
             // The derived-series types normalize and derive in their initializer,
             // so these are already in their settled form.
@@ -395,11 +392,11 @@ extension LivelineAdvancedChartContent {
                 $0.end >= visibleRange.lowerBound && $0.start <= visibleRange.upperBound
             }
             let source = visible.isEmpty ? tasks : visible
-            let laneCount = max((tasks.map(\.lane).max() ?? 0) + 1, 1)
+            let maximumLane = min(max(tasks.map(\.lane).max() ?? 0, 0), 10_000)
             return LivelinePreparedChart(
                 primaryVisible: source.map { LivelinePoint(time: $0.end, value: $0.end - $0.start) },
                 rangePoints: source.map { LivelinePoint(time: $0.end, value: Double($0.lane)) },
-                rangeOverride: source.isEmpty ? nil : -0.5...Double(laneCount) - 0.5,
+                rangeOverride: source.isEmpty ? nil : -0.5...(Double(maximumLane) + 0.5),
                 primaryValue: tasks.last.map { $0.end - $0.start } ?? 0
             )
 

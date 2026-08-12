@@ -1093,6 +1093,118 @@ final class LivelineAdvancedChartTests: XCTestCase {
         XCTAssertEqual(ohlc[0].selection.hover.time, 60)
     }
 
+    func testNewestReviewFindingsAreBoundedMirroredAndAggregated() throws {
+        let extremeTask = LivelineGanttTask(
+            id: "extreme", label: "Extreme", start: 0, end: 1, lane: Int.max)
+        XCTAssertEqual(extremeTask.lane, 10_000)
+        let ganttContent = LivelineAdvancedChartContent.gantt([extremeTask], .init())
+        let ganttPrepared = ganttContent.prepared(
+            leftEdge: 0, rightEdge: 1, configuration: .init())
+        XCTAssertEqual(ganttPrepared.rangeOverride?.upperBound, 10_000.5)
+
+        let cumulativeRenko = LivelineAdvancedMath.renkoBricks(
+            points: [
+                .init(time: 0, value: 0),
+                .init(time: 1, value: 6_000),
+                .init(time: 2, value: 0),
+            ],
+            brickSize: 1
+        )
+        XCTAssertTrue(cumulativeRenko.isEmpty)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let recent = Date(timeIntervalSince1970: 1_900_000_000)
+        let ancient = try XCTUnwrap(
+            calendar.date(byAdding: .year, value: -100, to: recent))
+        let calendarValues = [
+            LivelineCalendarValue(date: ancient, value: 4),
+            LivelineCalendarValue(date: recent, value: 8),
+        ]
+        let supported = LivelineAdvancedLayout.calendarValuesInSupportedSpan(
+            calendarValues, calendar: calendar)
+        XCTAssertEqual(supported.map(\.value), [8])
+        XCTAssertEqual(LivelineCalendarValue(date: recent, value: -4).value, 0)
+
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0, maxValue: 10, leftEdge: 4, rightEdge: 6)
+        let calendarGeometry = try XCTUnwrap(
+            LivelineAdvancedLayout.calendar(
+                values: calendarValues, style: .init(calendar: calendar),
+                layout: layout, textScale: .standard))
+        XCTAssertLessThanOrEqual(
+            calendarGeometry.totalDays, LivelineAdvancedLayout.maximumCalendarDays)
+
+        let sparseRank = LivelineRankSeries(
+            id: "sparse", label: "Sparse",
+            points: [.init(time: 0, rank: 1), .init(time: 10, rank: 2)])
+        let bump = try XCTUnwrap(
+            LivelineAdvancedLayout.bump(
+                series: [sparseRank], style: .init(), layout: layout, textScale: .standard))
+        XCTAssertEqual(
+            bump.visibleIndexRange(in: sparseRank.points, includingBoundaryPoints: true),
+            0...1)
+        XCTAssertNil(
+            bump.visibleIndexRange(in: sparseRank.points, includingBoundaryPoints: false))
+
+        let bricks = [
+            LivelineRenkoBrick(time: 0, open: 0, close: 1, sourceHigh: 1, sourceLow: 0),
+            LivelineRenkoBrick(time: 1, open: 1, close: 2, sourceHigh: 2, sourceLow: 1),
+        ]
+        let renkoStyle = LivelineRenkoStyle(brickSize: 1, brickSpacing: 2)
+        let ltrRenko = LivelineAdvancedLayout.renko(
+            bricks: bricks, style: renkoStyle, layout: layout)
+        var rtlLayout = layout
+        rtlLayout.isRTL = true
+        let rtlRenko = LivelineAdvancedLayout.renko(
+            bricks: bricks, style: renkoStyle, layout: rtlLayout)
+        XCTAssertLessThan(
+            ltrRenko.rect(at: 0, layout: layout).midX,
+            ltrRenko.rect(at: 1, layout: layout).midX)
+        XCTAssertGreaterThan(
+            rtlRenko.rect(at: 0, layout: rtlLayout).midX,
+            rtlRenko.rect(at: 1, layout: rtlLayout).midX)
+
+        let duplicateNodes = [
+            LivelineNetworkNode(id: "shared", label: "Owner"),
+            LivelineNetworkNode(id: "shared", label: "Duplicate"),
+            LivelineNetworkNode(id: "target", label: "Target"),
+        ]
+        let edge = LivelineNetworkEdge(source: "shared", target: "target", value: 2)
+        let network = try XCTUnwrap(
+            LivelineAdvancedLayout.network(
+                nodes: duplicateNodes, edges: [edge], style: .init(),
+                layout: layout, textScale: .standard))
+        XCTAssertEqual(network.placements.map(\.connections), [1, 0, 1])
+
+        let duplicateLevels = [
+            LivelinePriceVolume(price: 100, volume: 6),
+            LivelinePriceVolume(price: 100, volume: 6),
+            LivelinePriceVolume(price: 101, volume: 10),
+        ]
+        let aggregated = LivelineAdvancedLayout.volumeProfileLevels(duplicateLevels)
+        XCTAssertEqual(aggregated.map(\.price), [100, 101])
+        XCTAssertEqual(aggregated.map(\.volume), [12, 10])
+        let volumeContent = LivelineAdvancedChartContent.volumeProfile(
+            duplicateLevels, .init())
+        XCTAssertEqual(volumeContent.accessibilityEntryCount, 2)
+        let volumeAudio = LivelineAdvancedAudioGraph.make(
+            content: volumeContent, visibleRange: nil)
+        XCTAssertEqual(volumeAudio.categoryOrder.count, 2)
+
+        let tinyLayout = LivelineLayout(
+            size: CGSize(width: 24, height: 24),
+            padding: .init(top: 8, right: 8, bottom: 8, left: 8),
+            minValue: 0, maxValue: 1, leftEdge: 0, rightEdge: 1)
+        let chord = LivelineAdvancedLayout.chord(
+            links: [.init(source: "A", target: "B", value: 1)],
+            style: .init(), layout: tinyLayout, textScale: .init(factor: 3))
+        XCTAssertGreaterThanOrEqual(chord.innerRadius, 0)
+        XCTAssertGreaterThanOrEqual(chord.outerRadius, chord.innerRadius)
+    }
+
     func testAccessibilityAndPreparationRejectInvisibleOrMisleadingData() throws {
         let nodes = [
             LivelineNetworkNode(id: "a", label: "Alpha"),

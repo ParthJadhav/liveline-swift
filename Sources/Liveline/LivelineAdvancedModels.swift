@@ -94,7 +94,7 @@ public struct LivelineCalendarValue: Identifiable, Hashable, Sendable {
 
     public init(date: Date, value: Double, label: String? = nil) {
         self.date = date
-        self.value = value.isFinite ? value : 0
+        self.value = value.isFinite ? max(value, 0) : 0
         self.label = label
     }
 }
@@ -157,7 +157,7 @@ public struct LivelineGanttTask: Identifiable, Hashable, Sendable {
         self.label = label
         self.start = min(start, end)
         self.end = max(start, end)
-        self.lane = max(lane, 0)
+        self.lane = min(max(lane, 0), 10_000)
         self.progress = progress.livelineClamped(0, 1, fallback: 0)
         self.dependencyIDs = dependencyIDs
     }
