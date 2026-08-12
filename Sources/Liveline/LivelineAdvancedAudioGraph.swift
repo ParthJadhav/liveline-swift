@@ -65,8 +65,10 @@ enum LivelineAdvancedAudioGraph {
                         series.map { ($0.label, LivelineAdvancedMath.quantile($0.values, probability: 0.75)) }),
                 ], order: order)
         case .calendarHeatmap(let values, let style):
-            let values = LivelineAdvancedLayout.calendarValuesInSupportedSpan(
+            let supported = LivelineAdvancedLayout.calendarValuesInSupportedSpan(
                 values, calendar: style.calendar)
+            let values = LivelineAdvancedLayout.calendarValuesByDay(
+                supported, calendar: style.calendar).values.sorted { $0.date < $1.date }
             return time([
                 timed(
                     LivelineStrings.labelValue, continuous: false,
@@ -103,13 +105,21 @@ enum LivelineAdvancedAudioGraph {
                     })
             }
             return categories(series, order: order)
-        case .hexbin(let points, _):
-            let order = points.map { $0.label ?? $0.id }
+        case .hexbin(let points, let style):
+            let cells = LivelineAdvancedLayout.hexbinCellsForInspection(
+                points: points, style: style)
+            let order = cells.enumerated().map { index, cell in
+                cell.count == 1 ? (cell.label ?? "\(LivelineStrings.labelPoint) \(index + 1)")
+                    : "\(LivelineStrings.labelPoint) \(index + 1)"
+            }
             return categories(
                 [
-                    categorical(LivelineStrings.labelX, zip(order, points).map { ($0, $1.x) }),
-                    categorical(LivelineStrings.labelY, zip(order, points).map { ($0, $1.y) }),
-                    categorical(LivelineStrings.labelWeight, zip(order, points).map { ($0, $1.weight) }),
+                    categorical(
+                        LivelineStrings.labelCount,
+                        zip(order, cells).map { ($0, Double($1.count)) }),
+                    categorical(
+                        LivelineStrings.labelWeight,
+                        zip(order, cells).map { ($0, $1.weight) }),
                 ], order: order)
         case .bump(let series, _):
             return time(
@@ -165,6 +175,7 @@ enum LivelineAdvancedAudioGraph {
                     categorical(LivelineStrings.labelConnections, connectionSamples),
                 ], order: order)
         case .contour(let samples, _):
+            let samples = LivelineAdvancedLayout.contourSamplesByCoordinate(samples)
             let order = samples.map(\.id)
             return categories(
                 [categorical(LivelineStrings.labelValue, zip(order, samples).map { ($0, $1.value) })],
@@ -175,9 +186,9 @@ enum LivelineAdvancedAudioGraph {
             let axes = LivelineAdvancedLayout.ternaryAxisLabels(style.axisLabels)
             return categories(
                 [
-                    categorical(axes[0], valid.map { ($0.label, $0.a / $0.total) }),
-                    categorical(axes[1], valid.map { ($0.label, $0.b / $0.total) }),
-                    categorical(axes[2], valid.map { ($0.label, $0.c / $0.total) }),
+                    categorical(axes[0], valid.map { ($0.label, $0.proportions.a) }),
+                    categorical(axes[1], valid.map { ($0.label, $0.proportions.b) }),
+                    categorical(axes[2], valid.map { ($0.label, $0.proportions.c) }),
                     categorical(LivelineStrings.labelMagnitude, valid.map { ($0.label, $0.magnitude) }),
                 ], order: order)
         case .volumeProfile(let levels, _):

@@ -134,15 +134,16 @@ enum LivelineAdvancedMath {
             let count = Int(rawCount)
             guard count > 0 else { continue }
             guard result.count <= 10_000 - count else { return [] }
-            for _ in 0..<count {
+            for brickIndex in 0..<count {
                 let next = anchor + direction * size
+                let isFinalBrick = brickIndex == count - 1
                 result.append(
                     LivelineRenkoBrick(
                         time: point.time,
                         open: anchor,
                         close: next,
-                        sourceHigh: max(anchor, point.value),
-                        sourceLow: min(anchor, point.value)
+                        sourceHigh: isFinalBrick ? max(anchor, point.value) : max(anchor, next),
+                        sourceLow: isFinalBrick ? min(anchor, point.value) : min(anchor, next)
                     )
                 )
                 anchor = next

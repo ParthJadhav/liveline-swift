@@ -297,7 +297,31 @@ enum LivelineAdvancedInteractionBuilder {
                 let geometry = LivelineAdvancedLayout.network(
                     nodes: nodes, edges: edges, style: style, layout: layout, textScale: textScale)
             else { return [] }
-            return geometry.placements.map { placement in
+            var labelsByID: [String: String] = [:]
+            for node in nodes where labelsByID[node.id] == nil { labelsByID[node.id] = node.label }
+            let maximumEdge = max(edges.map(\.value).max() ?? 0, 0.000_001)
+            let edgeTargets = edges.enumerated().compactMap { index, edge -> LivelineInteractionTarget? in
+                guard edge.value > 0,
+                    let start = geometry.positionsByID[edge.source],
+                    let end = geometry.positionsByID[edge.target]
+                else { return nil }
+                let anchor = CGPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+                let lineWidth = max(CGFloat(edge.value / maximumEdge) * 3, 0.75)
+                return target(
+                    time: Double(index), value: edge.value, anchor: anchor,
+                    heading: String(
+                        format: LivelineStrings.labelFlowRouteFormat,
+                        labelsByID[edge.source] ?? edge.source,
+                        labelsByID[edge.target] ?? edge.target),
+                    rows: [
+                        row(
+                            LivelineStrings.labelWeight, configuration.formatValue(edge.value),
+                            palette.gridLabel)
+                    ],
+                    region: networkEdgeRegion(
+                        from: start, to: end, hitWidth: max(lineWidth, 10)))
+            }
+            let nodeTargets = geometry.placements.map { placement in
                 let color = LivelineRenderer.advancedColor(
                     index: placement.colorIndex, colors: style.colors, palette: palette)
                 return target(
@@ -311,6 +335,7 @@ enum LivelineAdvancedInteractionBuilder {
                     ],
                     region: .circle(center: placement.center, radius: max(placement.size / 2, 8)))
             }
+            return edgeTargets + nodeTargets
 
         case .contour(let samples, _):
             guard
@@ -334,14 +359,15 @@ enum LivelineAdvancedInteractionBuilder {
                 style: style, layout: layout, textScale: textScale)
             return valid.enumerated().map { index, value in
                 let center = geometry.point(value)
+                let proportions = value.proportions
                 let color = LivelineRenderer.advancedColor(
                     index: index, colors: style.colors, palette: palette)
                 return target(
                     time: Double(index), value: value.magnitude, anchor: center, heading: value.label,
                     rows: [
-                        row(geometry.labels[0], percent(value.a / value.total), color),
-                        row(geometry.labels[1], percent(value.b / value.total), color),
-                        row(geometry.labels[2], percent(value.c / value.total), color),
+                        row(geometry.labels[0], percent(proportions.a), color),
+                        row(geometry.labels[1], percent(proportions.b), color),
+                        row(geometry.labels[2], percent(proportions.c), color),
                         row(LivelineStrings.labelMagnitude, configuration.formatValue(value.magnitude), color),
                     ], region: .circle(center: center, radius: 10))
             }
@@ -528,6 +554,28 @@ enum LivelineAdvancedInteractionBuilder {
         let after = elements[lower]
         return targetTime - before[keyPath: time] <= after[keyPath: time] - targetTime
             ? [before] : [after]
+    }
+
+    private static func networkEdgeRegion(
+        from start: CGPoint,
+        to end: CGPoint,
+        hitWidth: CGFloat
+    ) -> LivelineInteractionRegion {
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let length = hypot(dx, dy)
+        guard length > CGFloat.ulpOfOne else {
+            return .circle(center: start, radius: hitWidth / 2)
+        }
+        let halfWidth = hitWidth / 2
+        let offset = CGPoint(x: -dy / length * halfWidth, y: dx / length * halfWidth)
+        var path = Path()
+        path.move(to: CGPoint(x: start.x + offset.x, y: start.y + offset.y))
+        path.addLine(to: CGPoint(x: end.x + offset.x, y: end.y + offset.y))
+        path.addLine(to: CGPoint(x: end.x - offset.x, y: end.y - offset.y))
+        path.addLine(to: CGPoint(x: start.x - offset.x, y: start.y - offset.y))
+        path.closeSubpath()
+        return .path(path)
     }
 
     private static func target(

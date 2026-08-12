@@ -297,7 +297,7 @@ extension LivelineRenderer {
 
         if drawMarks {
             let maxEdge = max(edges.map(\.value).max() ?? 0, 0.000_001)
-            for edge in edges {
+            for edge in edges where edge.value > 0 {
                 guard let start = geometry.positionsByID[edge.source],
                     let end = geometry.positionsByID[edge.target]
                 else { continue }

@@ -123,9 +123,11 @@ struct LivelinePointFigureLayout {
     var slot: CGFloat
     var box: CGFloat
     var valueDomain: ClosedRange<Double>
+    var isRTL: Bool
 
     func x(column: LivelinePointFigureColumn) -> CGFloat {
-        body.minX + slot * (CGFloat(column.index) + 0.5)
+        let offset = slot * (CGFloat(column.index) + 0.5)
+        return isRTL ? body.maxX - offset : body.minX + offset
     }
 
     func y(_ value: Double) -> CGFloat {
@@ -170,7 +172,8 @@ extension LivelineAdvancedLayout {
                 ),
                 0.1
             ),
-            valueDomain: layout.minValue...max(layout.maxValue, layout.minValue + 0.000_001)
+            valueDomain: layout.minValue...max(layout.maxValue, layout.minValue + 0.000_001),
+            isRTL: layout.isRTL
         )
     }
 }

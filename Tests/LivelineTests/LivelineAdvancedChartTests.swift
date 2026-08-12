@@ -1205,6 +1205,124 @@ final class LivelineAdvancedChartTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(chord.outerRadius, chord.innerRadius)
     }
 
+    func testPostCIReviewFindingsShareRenderableGeometryAndDerivedData() throws {
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0, maxValue: 10, leftEdge: 0, rightEdge: 10)
+        let columns = [
+            LivelinePointFigureColumn(index: 0, isRising: true, low: 1, high: 2, boxSize: 1),
+            LivelinePointFigureColumn(index: 1, isRising: false, low: 0, high: 1, boxSize: 1),
+        ]
+        let ltrFigure = LivelineAdvancedLayout.pointAndFigure(
+            columns: columns, style: .init(boxSize: 1), layout: layout, textScale: .standard)
+        var rtlLayout = layout
+        rtlLayout.isRTL = true
+        let rtlFigure = LivelineAdvancedLayout.pointAndFigure(
+            columns: columns, style: .init(boxSize: 1), layout: rtlLayout, textScale: .standard)
+        XCTAssertLessThan(ltrFigure.x(column: columns[0]), ltrFigure.x(column: columns[1]))
+        XCTAssertGreaterThan(rtlFigure.x(column: columns[0]), rtlFigure.x(column: columns[1]))
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let day = Date(timeIntervalSince1970: 1_700_000_000)
+        let calendarAudio = LivelineAdvancedAudioGraph.make(
+            content: .calendarHeatmap([
+                .init(date: day, value: 2),
+                .init(date: day.addingTimeInterval(3_600), value: 8),
+            ], .init(calendar: calendar)),
+            visibleRange: nil)
+        XCTAssertEqual(calendarAudio.series[0].points.map(\.value), [8])
+
+        let repeatedPoints = (0..<4).map {
+            LivelineXYPoint(id: "p\($0)", x: 1, y: 1, weight: 2)
+        }
+        let hexbinAudio = LivelineAdvancedAudioGraph.make(
+            content: .hexbin(repeatedPoints, .init(binsAcross: 4)), visibleRange: nil)
+        XCTAssertEqual(hexbinAudio.categoryOrder.count, 1)
+        XCTAssertEqual(hexbinAudio.series[0].points.map(\.value), [4])
+        XCTAssertEqual(hexbinAudio.series[1].points.map(\.value), [8])
+
+        let visibleSegment = LivelineCategoryValue(id: "segment", label: "Segment", value: 4)
+        let marimekko = LivelineAdvancedChartContent.marimekko([
+            .init(id: "hidden", label: "Hidden", width: 0, segments: [visibleSegment]),
+            .init(id: "visible", label: "Visible", width: 2, segments: [visibleSegment]),
+        ], .init())
+        XCTAssertEqual(marimekko.accessibilityEntryCount, 1)
+        XCTAssertEqual(
+            marimekko.accessibilityEntries(
+                formatValue: { String($0) }, formatTime: { String($0) }).count,
+            1)
+
+        let contourSamples = [
+            LivelineContourSample(id: "a", x: 0, y: 0, value: 2),
+            LivelineContourSample(id: "b", x: 0, y: 0, value: 6),
+            LivelineContourSample(id: "c", x: 1, y: 0, value: 1),
+            LivelineContourSample(id: "d", x: 0, y: 1, value: 2),
+            LivelineContourSample(id: "e", x: 1, y: 1, value: 3),
+        ]
+        let contourContent = LivelineAdvancedChartContent.contour(contourSamples, .init())
+        XCTAssertEqual(contourContent.accessibilityEntryCount, 4)
+        XCTAssertEqual(
+            contourContent.accessibilityEntries(
+                formatValue: { String($0) }, formatTime: { String($0) }).count,
+            4)
+        XCTAssertEqual(
+            LivelineAdvancedAudioGraph.make(content: contourContent, visibleRange: nil)
+                .categoryOrder.count,
+            4)
+        let denseGrid = (0..<10).flatMap { y in
+            (0..<10).map { x in
+                LivelineContourSample(
+                    id: "\(x)-\(y)", x: Double(x), y: Double(y), value: Double(x + y))
+            }
+        }
+        let compactContourLayout = LivelineLayout(
+            size: CGSize(width: 30, height: 30),
+            padding: .init(top: 5, right: 5, bottom: 5, left: 5),
+            minValue: 0, maxValue: 20, leftEdge: 0, rightEdge: 9)
+        XCTAssertEqual(
+            LivelineAdvancedLayout.contour(
+                samples: denseGrid, layout: compactContourLayout, textScale: .standard)?.subdivisions,
+            1)
+
+        let extremeTernary = LivelineTernaryPoint(
+            id: "extreme", label: "Extreme",
+            a: Double.greatestFiniteMagnitude, b: Double.greatestFiniteMagnitude, c: 0)
+        XCTAssertTrue(extremeTernary.total.isFinite)
+        XCTAssertEqual(extremeTernary.proportions.a, 0.5)
+        XCTAssertEqual(extremeTernary.proportions.b, 0.5)
+        let ternaryPoint = LivelineAdvancedLayout.ternary(
+            style: .init(), layout: layout, textScale: .standard).point(extremeTernary)
+        XCTAssertTrue(ternaryPoint.x.isFinite && ternaryPoint.y.isFinite)
+
+        let nodes = [
+            LivelineNetworkNode(id: "a", label: "Alpha"),
+            LivelineNetworkNode(id: "b", label: "Beta"),
+        ]
+        let networkTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .network(nodes, [.init(source: "a", target: "b", value: 3)], .init()),
+            layout: layout,
+            palette: LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2),
+            configuration: .init(), targetLocation: nil, textScale: .standard)
+        XCTAssertEqual(networkTargets.count, 3)
+        XCTAssertEqual(networkTargets[0].selection.heading, "Alpha to Beta")
+
+        let depthPaths = try XCTUnwrap(
+            LivelineRenderer.depthCurvePaths(
+                points: [.init(time: 80, value: 5)],
+                plot: CGRect(x: 0, y: 0, width: 100, height: 100),
+                point: { _ in CGPoint(x: 80, y: 50) },
+                singletonBoundaryX: 0))
+        XCTAssertTrue(depthPaths.area.contains(CGPoint(x: 10, y: 90)))
+
+        let residualBricks = LivelineAdvancedMath.renkoBricks(
+            points: [.init(time: 0, value: 100), .init(time: 1, value: 103.5)],
+            brickSize: 1)
+        XCTAssertEqual(residualBricks.map(\.sourceHigh), [101, 102, 103.5])
+        XCTAssertEqual(residualBricks.map(\.sourceLow), [100, 101, 102])
+    }
+
     func testAccessibilityAndPreparationRejectInvisibleOrMisleadingData() throws {
         let nodes = [
             LivelineNetworkNode(id: "a", label: "Alpha"),

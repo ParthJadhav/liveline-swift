@@ -23,12 +23,14 @@ extension LivelineAdvancedChartContent {
         case .bump(let series, _): return series.reduce(0) { $0 + $1.points.count }
         case .horizon(let points, _): return points.count
         case .marimekko(let columns, _):
-            return columns.reduce(0) { $0 + $1.segments.filter { $0.value > 0 }.count }
+            return columns.filter { $0.width > 0 && $0.segments.contains { $0.value > 0 } }
+                .reduce(0) { $0 + $1.segments.filter { $0.value > 0 }.count }
         case .polarArea(let values, _), .waffle(let values, _):
             return values.filter { $0.value > 0 }.count
         case .network(let nodes, let edges, _):
             return nodes.count + edges.filter { $0.value > 0 }.count
-        case .contour(let samples, _): return samples.count
+        case .contour(let samples, _):
+            return LivelineAdvancedLayout.contourSamplesByCoordinate(samples).count
         case .ternary(let points, _): return points.filter { $0.total > 0 }.count
         case .volumeProfile(let levels, _):
             return LivelineAdvancedLayout.volumeProfileLevels(levels).count
@@ -145,7 +147,8 @@ extension LivelineAdvancedChartContent {
             }
 
         case .marimekko(let columns, _):
-            return columns.flatMap { column in
+            return columns.filter { $0.width > 0 && $0.segments.contains { $0.value > 0 } }
+                .flatMap { column in
                 column.segments.filter { $0.value > 0 }.map {
                     LivelineAccessibilityEntry(
                         id: "\(column.id)-\($0.id)",
@@ -205,7 +208,7 @@ extension LivelineAdvancedChartContent {
             return nodeEntries + edgeEntries
 
         case .contour(let samples, _):
-            return samples.map {
+            return LivelineAdvancedLayout.contourSamplesByCoordinate(samples).map {
                 LivelineAccessibilityEntry(
                     id: $0.id,
                     label: [
@@ -223,14 +226,15 @@ extension LivelineAdvancedChartContent {
         case .ternary(let points, let style):
             let axes = LivelineAdvancedLayout.ternaryAxisLabels(style.axisLabels)
             return points.filter { $0.total > 0 }.map {
-                LivelineAccessibilityEntry(
+                let proportions = $0.proportions
+                return LivelineAccessibilityEntry(
                     id: $0.id,
                     label: $0.label,
                     value: String(
                         format: LivelineStrings.accessibilityTernaryFormat,
-                        axes[0], percent($0.a / $0.total),
-                        axes[1], percent($0.b / $0.total),
-                        axes[2], percent($0.c / $0.total)
+                        axes[0], percent(proportions.a),
+                        axes[1], percent(proportions.b),
+                        axes[2], percent(proportions.c)
                     ) + ", " + String(
                         format: LivelineStrings.accessibilityNamedValueFormat,
                         LivelineStrings.labelMagnitude, formatValue($0.magnitude))
@@ -438,12 +442,7 @@ extension LivelineAdvancedChartContent {
         points: [LivelineXYPoint],
         style: LivelineHexbinStyle
     ) -> [LivelineHexbinCell] {
-        let layout = LivelineLayout(
-            size: CGSize(width: 320, height: 320),
-            padding: .init(top: 0, right: 0, bottom: 0, left: 0),
-            minValue: 0, maxValue: 1, leftEdge: 0, rightEdge: 1)
-        return LivelineAdvancedLayout.hexbin(
-            points: points, style: style, layout: layout, textScale: .standard)?.cells ?? []
+        LivelineAdvancedLayout.hexbinCellsForInspection(points: points, style: style)
     }
 
     private func shareDescription(

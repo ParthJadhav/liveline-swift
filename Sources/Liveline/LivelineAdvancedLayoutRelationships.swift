@@ -216,6 +216,18 @@ struct LivelineHexbinLayout {
 }
 
 extension LivelineAdvancedLayout {
+    static func hexbinCellsForInspection(
+        points: [LivelineXYPoint],
+        style: LivelineHexbinStyle
+    ) -> [LivelineHexbinCell] {
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 320),
+            padding: .init(top: 0, right: 0, bottom: 0, left: 0),
+            minValue: 0, maxValue: 1, leftEdge: 0, rightEdge: 1)
+        return hexbin(
+            points: points, style: style, layout: layout, textScale: .standard)?.cells ?? []
+    }
+
     static func hexbin(
         points: [LivelineXYPoint],
         style: LivelineHexbinStyle,
@@ -554,7 +566,7 @@ extension LivelineAdvancedLayout {
             xDomain: xs[0]...xs[xs.count - 1],
             yDomain: ys[0]...ys[ys.count - 1],
             valueRange: minimum...max(maximum, minimum),
-            subdivisions: min(max(Int(ceil(max(coarseCellWidth, coarseCellHeight) / 4)), 4), 16)
+            subdivisions: min(max(Int(ceil(max(coarseCellWidth, coarseCellHeight) / 4)), 1), 16)
         )
     }
 }
@@ -568,10 +580,12 @@ struct LivelineTernaryLayout {
     var labels: [String]
 
     func point(_ value: LivelineTernaryPoint) -> CGPoint {
-        let total = CGFloat(value.total)
+        let proportions = value.proportions
         return CGPoint(
-            x: (a.x * CGFloat(value.a) + b.x * CGFloat(value.b) + c.x * CGFloat(value.c)) / total,
-            y: (a.y * CGFloat(value.a) + b.y * CGFloat(value.b) + c.y * CGFloat(value.c)) / total
+            x: a.x * CGFloat(proportions.a) + b.x * CGFloat(proportions.b)
+                + c.x * CGFloat(proportions.c),
+            y: a.y * CGFloat(proportions.a) + b.y * CGFloat(proportions.b)
+                + c.y * CGFloat(proportions.c)
         )
     }
 }

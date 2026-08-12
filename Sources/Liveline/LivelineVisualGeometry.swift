@@ -242,7 +242,7 @@ enum LivelineVisualGeometry {
         }
 
         let levels = min(max(levelCount, 2), 16)
-        let subdivisions = min(max(subdivisions, 2), 16)
+        let subdivisions = min(max(subdivisions, 1), 16)
         let collapsed = LivelineAdvancedLayout.contourSamplesByCoordinate(samples)
         guard collapsed.count == xs.count * ys.count else {
             return LivelineContourGeometry(fillCells: [], lines: [])

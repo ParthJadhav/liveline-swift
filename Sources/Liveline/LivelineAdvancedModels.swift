@@ -600,7 +600,26 @@ public struct LivelineTernaryPoint: Identifiable, Hashable, Sendable {
         self.magnitude = magnitude.isFinite ? max(magnitude, 0) : 0
     }
 
-    var total: Double { a + b + c }
+    var total: Double {
+        let safeA = a.isFinite ? max(a, 0) : 0
+        let safeB = b.isFinite ? max(b, 0) : 0
+        let safeC = c.isFinite ? max(c, 0) : 0
+        let sum = safeA + safeB + safeC
+        return sum.isFinite ? sum : Double.greatestFiniteMagnitude
+    }
+
+    var proportions: (a: Double, b: Double, c: Double) {
+        let safeA = a.isFinite ? max(a, 0) : 0
+        let safeB = b.isFinite ? max(b, 0) : 0
+        let safeC = c.isFinite ? max(c, 0) : 0
+        let scale = max(safeA, safeB, safeC)
+        guard scale > 0 else { return (0, 0, 0) }
+        let scaledA = safeA / scale
+        let scaledB = safeB / scale
+        let scaledC = safeC / scale
+        let scaledTotal = scaledA + scaledB + scaledC
+        return (scaledA / scaledTotal, scaledB / scaledTotal, scaledC / scaledTotal)
+    }
 }
 
 /// Visual options for ternary plots.

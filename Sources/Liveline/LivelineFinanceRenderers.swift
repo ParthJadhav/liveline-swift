@@ -225,7 +225,24 @@ extension LivelineRenderer {
         reveal: Double,
         singletonBoundaryX: CGFloat
     ) {
-        guard let first = points.first, let last = points.last else { return }
+        guard
+            let paths = depthCurvePaths(
+                points: points, plot: plot, point: point,
+                singletonBoundaryX: singletonBoundaryX)
+        else { return }
+        context.fill(paths.area, with: .color(color.opacity(style.resolvedFillOpacity * reveal)))
+        context.stroke(
+            paths.line, with: .color(color.opacity(reveal)),
+            style: StrokeStyle(lineWidth: style.resolvedLineWidth, lineJoin: .round))
+    }
+
+    static func depthCurvePaths(
+        points: [LivelinePoint],
+        plot: CGRect,
+        point: (LivelinePoint) -> CGPoint,
+        singletonBoundaryX: CGFloat
+    ) -> (line: Path, area: Path)? {
+        guard let first = points.first, let last = points.last else { return nil }
         var line = Path()
         let firstPoint = point(first)
         line.move(to: firstPoint)
@@ -238,13 +255,10 @@ extension LivelineRenderer {
             line.addLine(to: next)
         }
         var area = line
-        area.addLine(to: CGPoint(x: point(last).x, y: plot.maxY))
+        area.addLine(to: CGPoint(x: line.currentPoint?.x ?? point(last).x, y: plot.maxY))
         area.addLine(to: CGPoint(x: firstPoint.x, y: plot.maxY))
         area.closeSubpath()
-        context.fill(area, with: .color(color.opacity(style.resolvedFillOpacity * reveal)))
-        context.stroke(
-            line, with: .color(color.opacity(reveal)),
-            style: StrokeStyle(lineWidth: style.resolvedLineWidth, lineJoin: .round))
+        return (line, area)
     }
 
     static func drawOHLCVolume(
