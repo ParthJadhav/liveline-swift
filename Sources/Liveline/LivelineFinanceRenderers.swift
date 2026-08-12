@@ -78,7 +78,9 @@ extension LivelineRenderer {
             if drawLabels, style.showsValues, index % max(levels.count / 8, 1) == 0 || isPOC {
                 drawText(
                     "\(configuration.formatValue(level.price)) · \(configuration.formatValue(level.volume))",
-                    context: &context, at: CGPoint(x: plot.maxX, y: rect.midY), anchor: .trailing,
+                    context: &context,
+                    at: CGPoint(x: geometry.isRTL ? plot.minX : plot.maxX, y: rect.midY),
+                    anchor: geometry.isRTL ? .leading : .trailing,
                     color: isPOC ? color : palette.gridLabel,
                     font: textScale.font(8, weight: isPOC ? .semibold : .regular, design: .monospaced))
             }

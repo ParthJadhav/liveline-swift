@@ -196,12 +196,15 @@ enum LivelineAdvancedMath {
         let size = boxSize.livelineAtLeast(0.000_001, fallback: 1)
         let reversal = max(reversalBoxes, 1)
         var anchor = (first.value / size).rounded() * size
+        guard anchor.isFinite else { return [] }
         var direction: Int = 0
         var columns: [LivelinePointFigureColumn] = []
 
         for point in points.dropFirst() {
-            let upBoxes = Int(((point.value - anchor) / size).rounded(.down))
-            let downBoxes = Int(((anchor - point.value) / size).rounded(.down))
+            guard
+                let upBoxes = representableBoxDelta(point.value - anchor, size: size),
+                let downBoxes = representableBoxDelta(anchor - point.value, size: size)
+            else { return [] }
 
             if direction == 0 {
                 if upBoxes >= 1 {
@@ -247,6 +250,16 @@ enum LivelineAdvancedMath {
             }
         }
         return columns
+    }
+
+    private static func representableBoxDelta(_ delta: Double, size: Double) -> Int? {
+        let quotient = (delta / size).rounded(.down)
+        guard
+            quotient.isFinite,
+            quotient > Double(Int.min),
+            quotient < Double(Int.max)
+        else { return nil }
+        return Int(quotient)
     }
 
     static func marketDepthCurve(_ levels: [LivelineOrderBookLevel]) -> LivelineMarketDepthCurve {

@@ -54,11 +54,13 @@ enum LivelineVisualGeometry {
         }
         guard !valid.isEmpty, body.width > 0, body.height > 0 else { return [] }
 
+        let horizontalGapCount = max(valid.count - 1, 0)
+        let horizontalGapBudgetLimit = max(body.width - CGFloat(valid.count) * 0.5, 0)
         let horizontalGap = min(
             max(columnSpacing, 0),
-            body.width / CGFloat(max(valid.count - 1, 1))
+            horizontalGapBudgetLimit / CGFloat(max(horizontalGapCount, 1))
         )
-        let horizontalGapBudget = horizontalGap * CGFloat(max(valid.count - 1, 0))
+        let horizontalGapBudget = horizontalGap * CGFloat(horizontalGapCount)
         let drawableWidth = max(body.width - horizontalGapBudget, 0)
         let totalWidth = max(valid.reduce(0) { $0 + $1.1.width }, 0.000_001)
 
@@ -73,11 +75,13 @@ enum LivelineVisualGeometry {
                 : drawableWidth * CGFloat(item.1.width / totalWidth)
             let columnRect = CGRect(x: x, y: body.minY, width: width, height: body.height)
 
+            let verticalGapCount = max(item.2.count - 1, 0)
+            let verticalGapBudgetLimit = max(body.height - CGFloat(item.2.count) * 0.5, 0)
             let verticalGap = min(
                 max(segmentSpacing, 0),
-                body.height / CGFloat(max(item.2.count - 1, 1))
+                verticalGapBudgetLimit / CGFloat(max(verticalGapCount, 1))
             )
-            let verticalGapBudget = verticalGap * CGFloat(max(item.2.count - 1, 0))
+            let verticalGapBudget = verticalGap * CGFloat(verticalGapCount)
             let drawableHeight = max(body.height - verticalGapBudget, 0)
             let totalValue = max(item.2.reduce(0) { $0 + $1.element.value }, 0.000_001)
             var y = body.maxY

@@ -119,6 +119,9 @@ enum LivelineAdvancedAudioGraph {
                 timed(LivelineStrings.labelValue, continuous: true, points.map { ($0.time, $0.value) })
             ])
         case .marimekko(let columns, _):
+            let columns = columns.filter { column in
+                column.width > 0 && column.segments.contains { $0.value > 0 }
+            }
             let labels = columns.map(\.label)
             var segmentOrder: [String] = []
             for segment in columns.flatMap(\.segments)
@@ -172,7 +175,8 @@ enum LivelineAdvancedAudioGraph {
                     categorical(axes[0], valid.map { ($0.label, $0.a / $0.total) }),
                     categorical(axes[1], valid.map { ($0.label, $0.b / $0.total) }),
                     categorical(axes[2], valid.map { ($0.label, $0.c / $0.total) }),
-                ], order: order, range: 0...1)
+                    categorical(LivelineStrings.labelMagnitude, valid.map { ($0.label, $0.magnitude) }),
+                ], order: order)
         case .volumeProfile(let levels, _):
             let levels = levels.filter { $0.volume > 0 }
             let order = levels.map { formatValue($0.price) }
@@ -205,7 +209,10 @@ enum LivelineAdvancedAudioGraph {
             let candles = values.map {
                 LivelineCandle(time: $0.time, open: $0.open, high: $0.high, low: $0.low, close: $0.close)
             }
-            return time(candleSeries(candles, timed: timed))
+            return time(
+                candleSeries(candles, timed: timed)
+                    + [timed(LivelineStrings.labelVolume, continuous: false, values.map { ($0.time, $0.volume) })]
+            )
         case .pointAndFigure(let series, _):
             let columns = series.columns
             let order = columns.map { String(format: LivelineStrings.labelColumnFormat, $0.index + 1) }

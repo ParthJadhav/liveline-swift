@@ -930,7 +930,167 @@ final class LivelineAdvancedChartTests: XCTestCase {
             content: .ohlcVolume([
                 .init(time: 0, open: 10, high: 12, low: 9, close: 11, volume: 1_000_000)
             ], .init()), visibleRange: nil)
-        XCTAssertFalse(ohlcAudio.series.contains { $0.name == LivelineStrings.labelVolume })
+        XCTAssertTrue(ohlcAudio.series.contains { $0.name == LivelineStrings.labelVolume })
+    }
+
+    func testLatestReviewFindingsStayAlignedAcrossGeometryAndInspectionModes() throws {
+        XCTAssertTrue(
+            LivelineAdvancedMath.pointFigureColumns(
+                points: [
+                    .init(time: 0, value: 0),
+                    .init(time: 1, value: Double.greatestFiniteMagnitude),
+                ], boxSize: 0.000_001, reversalBoxes: 3
+            ).isEmpty,
+            "An unrepresentable box delta must not trap during chart construction."
+        )
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let day = Date(timeIntervalSince1970: 1_700_000_000)
+        let calendarContent = LivelineAdvancedChartContent.calendarHeatmap([
+            .init(date: day, value: 2),
+            .init(date: day.addingTimeInterval(3_600), value: 8),
+        ], .init(calendar: calendar))
+        XCTAssertEqual(calendarContent.accessibilityEntryCount, 1)
+        XCTAssertEqual(
+            calendarContent.accessibilityEntries(
+                formatValue: { String($0) }, formatTime: { String($0) }
+            ).map(\.value),
+            ["8.0"]
+        )
+
+        let marimekko = LivelineAdvancedAudioGraph.make(
+            content: .marimekko([
+                .init(
+                    id: "hidden", label: "Hidden", width: 0,
+                    segments: [.init(id: "h", label: "H", value: 10)]),
+                .init(
+                    id: "visible", label: "Visible", width: 2,
+                    segments: [.init(id: "v", label: "V", value: 3)]),
+            ], .init()),
+            visibleRange: nil
+        )
+        XCTAssertEqual(marimekko.categoryOrder, ["Visible"])
+        XCTAssertTrue(marimekko.series.allSatisfy { series in
+            series.points.allSatisfy { $0.category == "Visible" }
+        })
+
+        let compactMekko = LivelineVisualGeometry.marimekko(
+            columns: [
+                .init(
+                    id: "a", label: "A", width: 1,
+                    segments: [
+                        .init(id: "a1", label: "A1", value: 1),
+                        .init(id: "a2", label: "A2", value: 1),
+                    ]),
+                .init(
+                    id: "b", label: "B", width: 1,
+                    segments: [
+                        .init(id: "b1", label: "B1", value: 1),
+                        .init(id: "b2", label: "B2", value: 1),
+                    ]),
+            ],
+            in: CGRect(x: 0, y: 0, width: 10, height: 10),
+            columnSpacing: 16,
+            segmentSpacing: 16
+        )
+        XCTAssertTrue(compactMekko.allSatisfy { $0.rect.width > 0 })
+        XCTAssertTrue(compactMekko.flatMap(\.segments).allSatisfy { $0.rect.height > 0 })
+
+        var rtlLayout = LivelineLayout(
+            size: CGSize(width: 160, height: 120),
+            padding: .init(top: 10, right: 10, bottom: 10, left: 10),
+            minValue: 0, maxValue: 10, leftEdge: 0, rightEdge: 1)
+        rtlLayout.isRTL = true
+        let volumeLayout = LivelineAdvancedLayout.volumeProfile(
+            levels: [.init(price: 100, volume: 5)],
+            style: .init(showsValues: true), layout: rtlLayout, textScale: .standard)
+        XCTAssertGreaterThan(volumeLayout.body.minX, volumeLayout.plot.minX)
+
+        var denseBricks: [LivelineRenkoBrick] = []
+        for index in 0..<100 {
+            denseBricks.append(
+                LivelineRenkoBrick(
+                    time: Double(index), open: Double(index), close: Double(index + 1),
+                    sourceHigh: Double(index + 1), sourceLow: Double(index)))
+        }
+        let denseRenkoStyle = LivelineRenkoStyle(brickSize: 1, brickSpacing: 12)
+        let renko = LivelineAdvancedLayout.renko(
+            bricks: denseBricks, style: denseRenkoStyle, layout: rtlLayout)
+        XCTAssertLessThanOrEqual(renko.brickSpacing, renko.slot * 0.5)
+        XCTAssertLessThanOrEqual(
+            renko.rect(at: 99, layout: rtlLayout).maxX,
+            renko.plot.maxX + 0.000_1)
+
+        let ternaryPoint = LivelineTernaryPoint(
+            id: "mix", label: "Mix", a: 1, b: 2, c: 3, magnitude: 42)
+        let ternaryContent = LivelineAdvancedChartContent.ternary([ternaryPoint], .init())
+        let ternaryEntry = try XCTUnwrap(
+            ternaryContent.accessibilityEntries(
+                formatValue: { String($0) }, formatTime: { String($0) }).first)
+        XCTAssertTrue(ternaryEntry.value.contains("42"))
+        let ternaryAudio = LivelineAdvancedAudioGraph.make(
+            content: ternaryContent, visibleRange: nil)
+        XCTAssertTrue(ternaryAudio.series.contains { $0.name == LivelineStrings.labelMagnitude })
+
+        let depthContent = LivelineAdvancedChartContent.marketDepth([
+            .init(price: 100, bidSize: 10),
+            .init(price: 99, bidSize: 20),
+        ], .init())
+        let depthEntries = depthContent.accessibilityEntries(
+            formatValue: { String($0) }, formatTime: { String($0) })
+        XCTAssertEqual(depthEntries.count, 2)
+        XCTAssertTrue(depthEntries.contains { $0.value.contains("30") })
+
+        let repeatedPoints = (0..<12).map {
+            LivelineXYPoint(id: "p\($0)", x: 1, y: 1, weight: 2)
+        }
+        let hexbinContent = LivelineAdvancedChartContent.hexbin(
+            repeatedPoints, .init(binsAcross: 4))
+        let hexbinEntries = hexbinContent.accessibilityEntries(
+            formatValue: { String($0) }, formatTime: { String($0) })
+        XCTAssertEqual(hexbinContent.accessibilityEntryCount, 1)
+        XCTAssertEqual(hexbinEntries.count, 1)
+        XCTAssertTrue(hexbinEntries[0].value.contains("12"))
+        XCTAssertTrue(hexbinEntries[0].value.contains("24"))
+    }
+
+    func testTargetedAdvancedInteractionFormatsOnlyNearestTimedMarks() {
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0, maxValue: 100, leftEdge: 0, rightEdge: 99)
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
+        let points = (0..<100).map { LivelinePoint(time: Double($0), value: Double($0)) }
+        let location = CGPoint(x: layout.x(for: 60), y: layout.y(for: 60))
+
+        let horizon = LivelineAdvancedInteractionBuilder.targets(
+            content: .horizon(points, .init()), layout: layout, palette: palette,
+            configuration: .init(), targetLocation: location, textScale: .standard)
+        XCTAssertEqual(horizon.count, 1)
+        XCTAssertEqual(horizon[0].selection.hover.time, 60)
+
+        let bump = LivelineAdvancedInteractionBuilder.targets(
+            content: .bump([
+                .init(
+                    id: "rank", label: "Rank",
+                    points: points.map { .init(time: $0.time, rank: $0.value) })
+            ], .init()),
+            layout: layout, palette: palette, configuration: .init(),
+            targetLocation: location, textScale: .standard)
+        XCTAssertEqual(bump.count, 1)
+        XCTAssertEqual(bump[0].selection.hover.time, 60)
+
+        let candles = points.map {
+            LivelineCandleVolume(
+                time: $0.time, open: $0.value, high: $0.value + 1,
+                low: $0.value - 1, close: $0.value, volume: 10)
+        }
+        let ohlc = LivelineAdvancedInteractionBuilder.targets(
+            content: .ohlcVolume(candles, .init()), layout: layout, palette: palette,
+            configuration: .init(), targetLocation: location, textScale: .standard)
+        XCTAssertEqual(ohlc.count, 1)
+        XCTAssertEqual(ohlc[0].selection.hover.time, 60)
     }
 
     func testAccessibilityAndPreparationRejectInvisibleOrMisleadingData() throws {

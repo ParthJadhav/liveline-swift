@@ -119,7 +119,10 @@ enum LivelineAdvancedInteractionBuilder {
                     let visible = geometry.visibleIndexRange(
                         in: entry.points, includingBoundaryPoints: false)
                 else { return [] }
-                return entry.points[visible].map { point in
+                let visiblePoints = Array(entry.points[visible])
+                return nearestTimed(
+                    visiblePoints, targetLocation: targetLocation, layout: layout, time: \.time
+                ).map { point in
                     let center = CGPoint(
                         x: geometry.x(time: point.time), y: geometry.y(rank: point.rank))
                     return target(
@@ -140,7 +143,10 @@ enum LivelineAdvancedInteractionBuilder {
 
         case .horizon(let points, _):
             let plot = LivelineRenderer.advancedPlotRect(layout)
-            return points.filter { $0.time >= layout.leftEdge - 2 && $0.time <= layout.rightEdge }.map {
+            let visible = points.filter { $0.time >= layout.leftEdge - 2 && $0.time <= layout.rightEdge }
+            return nearestTimed(
+                visible, targetLocation: targetLocation, layout: layout, time: \.time
+            ).map {
                 point in
                 let center = CGPoint(x: layout.x(for: point.time), y: plot.midY)
                 return target(
@@ -333,6 +339,7 @@ enum LivelineAdvancedInteractionBuilder {
                         row(geometry.labels[0], percent(value.a / value.total), color),
                         row(geometry.labels[1], percent(value.b / value.total), color),
                         row(geometry.labels[2], percent(value.c / value.total), color),
+                        row(LivelineStrings.labelMagnitude, configuration.formatValue(value.magnitude), color),
                     ], region: .circle(center: center, radius: 10))
             }
 
@@ -432,8 +439,11 @@ enum LivelineAdvancedInteractionBuilder {
             }
 
         case .heikinAshi(let series, _):
-            return series.candles
+            let visible = series.candles
                 .filter { $0.time >= layout.leftEdge - 2 && $0.time <= layout.rightEdge }
+            return nearestTimed(
+                visible, targetLocation: targetLocation, layout: layout, time: \.time
+            )
                 .map { candle in
                     let center = CGPoint(
                         x: layout.x(for: candle.time), y: layout.y(for: candle.close))
@@ -452,7 +462,9 @@ enum LivelineAdvancedInteractionBuilder {
                 let geometry = LivelineAdvancedLayout.ohlcVolume(
                     values: values, style: style, layout: layout)
             else { return [] }
-            return geometry.values.map { value in
+            return nearestTimed(
+                geometry.values, targetLocation: targetLocation, layout: layout, time: \.time
+            ).map { value in
                 let center = CGPoint(
                     x: layout.x(for: value.time), y: geometry.priceY(value.close))
                 let color = value.close >= value.open ? (style.upColor ?? palette.line) : style.downColor
@@ -487,6 +499,32 @@ enum LivelineAdvancedInteractionBuilder {
             row(LivelineStrings.labelLow, configuration.formatValue(candle.low), palette.gridLabel),
             row(LivelineStrings.labelClose, configuration.formatValue(candle.close), highlight),
         ]
+    }
+
+    private static func nearestTimed<Element>(
+        _ elements: [Element],
+        targetLocation: CGPoint?,
+        layout: LivelineLayout,
+        time: KeyPath<Element, TimeInterval>
+    ) -> [Element] {
+        guard let targetLocation, !elements.isEmpty else { return elements }
+        let targetTime = layout.time(for: targetLocation.x)
+        var lower = 0
+        var upper = elements.count
+        while lower < upper {
+            let middle = lower + (upper - lower) / 2
+            if elements[middle][keyPath: time] < targetTime {
+                lower = middle + 1
+            } else {
+                upper = middle
+            }
+        }
+        if lower == 0 { return [elements[0]] }
+        if lower == elements.count { return [elements[elements.count - 1]] }
+        let before = elements[lower - 1]
+        let after = elements[lower]
+        return targetTime - before[keyPath: time] <= after[keyPath: time] - targetTime
+            ? [before] : [after]
     }
 
     private static func target(

@@ -11,11 +11,13 @@ extension LivelineAdvancedChartContent {
         switch self {
         case .violin(let series, _), .ridgeline(let series, _):
             return series.filter { !$0.values.isEmpty }.count
-        case .calendarHeatmap(let values, _): return values.count
+        case .calendarHeatmap(let values, let style):
+            return LivelineAdvancedLayout.calendarValuesByDay(values, calendar: style.calendar).count
         case .gantt(let tasks, _): return tasks.count
         case .chord(let links, _): return links.filter { $0.value > 0 }.count
         case .parallelCoordinates(let records, _): return records.count
-        case .hexbin(let points, _): return points.count
+        case .hexbin(let points, let style):
+            return accessibilityHexbins(points: points, style: style).count
         case .bump(let series, _): return series.reduce(0) { $0 + $1.points.count }
         case .horizon(let points, _): return points.count
         case .marimekko(let columns, _):
@@ -30,7 +32,8 @@ extension LivelineAdvancedChartContent {
         case .renko(let series, _): return series.bricks.count
         case .heikinAshi(let series, _): return series.candles.count
         case .marketDepth(let levels, _):
-            return levels.filter { $0.bidSize > 0 || $0.askSize > 0 }.count
+            let curve = LivelineAdvancedMath.marketDepthCurve(levels)
+            return curve.bids.count + curve.asks.count
         case .ohlcVolume(let values, _): return values.count
         case .pointAndFigure(let series, _): return series.columns.count
         }
@@ -57,7 +60,9 @@ extension LivelineAdvancedChartContent {
                 )
             }
 
-        case .calendarHeatmap(let values, _):
+        case .calendarHeatmap(let values, let style):
+            let values = LivelineAdvancedLayout.calendarValuesByDay(
+                values, calendar: style.calendar).values.sorted { $0.date < $1.date }
             return values.map {
                 LivelineAccessibilityEntry(
                     id: "calendar-\($0.date.timeIntervalSinceReferenceDate)",
@@ -101,14 +106,17 @@ extension LivelineAdvancedChartContent {
                 return LivelineAccessibilityEntry(id: record.id, label: record.label, value: values)
             }
 
-        case .hexbin(let points, _):
-            return points.map {
+        case .hexbin(let points, let style):
+            return accessibilityHexbins(points: points, style: style).map {
                 LivelineAccessibilityEntry(
-                    id: $0.id,
-                    label: $0.label ?? LivelineStrings.labelPoint,
+                    id: "hexbin-\($0.column)-\($0.row)",
+                    label: $0.count == 1 ? ($0.label ?? LivelineStrings.labelPoint) : LivelineStrings.labelPoint,
                     value: String(
-                        format: LivelineStrings.accessibilityXYWeightFormat, formatValue($0.x),
-                        formatValue($0.y), formatValue($0.weight))
+                        format: LivelineStrings.accessibilityNamedValueFormat,
+                        LivelineStrings.labelCount, "\($0.count)")
+                        + ", " + String(
+                            format: LivelineStrings.accessibilityNamedValueFormat,
+                            LivelineStrings.labelWeight, formatValue($0.weight))
                 )
             }
 
@@ -214,7 +222,9 @@ extension LivelineAdvancedChartContent {
                         axes[0], percent($0.a / $0.total),
                         axes[1], percent($0.b / $0.total),
                         axes[2], percent($0.c / $0.total)
-                    )
+                    ) + ", " + String(
+                        format: LivelineStrings.accessibilityNamedValueFormat,
+                        LivelineStrings.labelMagnitude, formatValue($0.magnitude))
                 )
             }
 
@@ -256,16 +266,22 @@ extension LivelineAdvancedChartContent {
             }
 
         case .marketDepth(let levels, _):
-            return levels.filter { $0.bidSize > 0 || $0.askSize > 0 }.map {
-                LivelineAccessibilityEntry(
-                    id: "depth-\($0.price)",
-                    label: String(
-                        format: LivelineStrings.accessibilityNamedValueFormat, LivelineStrings.labelPrice,
-                        formatValue($0.price)),
-                    value: String(
-                        format: LivelineStrings.accessibilityDepthFormat, formatValue($0.bidSize),
-                        formatValue($0.askSize))
-                )
+            let curve = LivelineAdvancedMath.marketDepthCurve(levels)
+            return [
+                (LivelineStrings.labelBid, curve.bids),
+                (LivelineStrings.labelAsk, curve.asks),
+            ].flatMap { side, points in
+                points.map {
+                    LivelineAccessibilityEntry(
+                        id: "depth-\(side)-\($0.time)",
+                        label: side + ", " + String(
+                            format: LivelineStrings.accessibilityNamedValueFormat,
+                            LivelineStrings.labelPrice, formatValue($0.time)),
+                        value: String(
+                            format: LivelineStrings.accessibilityNamedValueFormat,
+                            LivelineStrings.labelVolume, formatValue($0.value))
+                    )
+                }
             }
 
         case .ohlcVolume(let values, _):
@@ -407,6 +423,18 @@ extension LivelineAdvancedChartContent {
             format: LivelineStrings.accessibilityPercentFormat,
             (value * 100).formatted(.number.precision(.fractionLength(1)))
         )
+    }
+
+    private func accessibilityHexbins(
+        points: [LivelineXYPoint],
+        style: LivelineHexbinStyle
+    ) -> [LivelineHexbinCell] {
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 320),
+            padding: .init(top: 0, right: 0, bottom: 0, left: 0),
+            minValue: 0, maxValue: 1, leftEdge: 0, rightEdge: 1)
+        return LivelineAdvancedLayout.hexbin(
+            points: points, style: style, layout: layout, textScale: .standard)?.cells ?? []
     }
 
     private func shareDescription(

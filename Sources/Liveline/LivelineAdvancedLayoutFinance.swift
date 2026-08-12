@@ -32,11 +32,13 @@ extension LivelineAdvancedLayout {
         textScale: LivelineTextScale
     ) -> LivelineVolumeProfileLayout {
         let valid = levels.filter { $0.volume > 0 }
-        let labelWidth = style.showsValues ? textScale.scaled(70) : 0
         let plot = LivelineRenderer.advancedPlotRect(layout)
             .insetBy(dx: textScale.scaled(5), dy: textScale.scaled(5))
+        let labelWidth = style.showsValues
+            ? min(textScale.scaled(70), max(plot.width - 1, 0))
+            : 0
         let body = CGRect(
-            x: plot.minX,
+            x: layout.isRTL ? plot.minX + labelWidth : plot.minX,
             y: plot.minY,
             width: max(plot.width - labelWidth, 1),
             height: plot.height
@@ -88,12 +90,13 @@ extension LivelineAdvancedLayout {
     ) -> LivelineRenkoLayout {
         let plot = LivelineRenderer.advancedPlotRect(layout)
         let slot = plot.width / CGFloat(max(bricks.count, 1))
+        let brickSpacing = min(style.resolvedBrickSpacing, slot * 0.5)
         return LivelineRenkoLayout(
             bricks: bricks,
             plot: plot,
             slot: slot,
-            width: max(slot - style.resolvedBrickSpacing, 1),
-            brickSpacing: style.resolvedBrickSpacing
+            width: max(slot - brickSpacing, CGFloat.ulpOfOne),
+            brickSpacing: brickSpacing
         )
     }
 }
