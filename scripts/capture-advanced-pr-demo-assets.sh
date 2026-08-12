@@ -84,6 +84,10 @@ for scenario in "${SCENARIOS[@]}"; do
     --storybook-chart-only \
     --advanced-demo-light \
     --advanced-demo-live >/dev/null
+  # Let the foreground transition settle before recording. Starting recordVideo
+  # during app activation can capture SpringBoard or black frames instead of
+  # the native chart, especially after repeated scenario launches.
+  sleep 1.0
 
   xcrun simctl io "$DEVICE_ID" recordVideo --codec=h264 --mask=ignored --force "$raw_video" &
   record_pid=$!

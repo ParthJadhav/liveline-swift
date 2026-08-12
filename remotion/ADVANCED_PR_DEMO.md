@@ -75,3 +75,5 @@ The final files are:
 - `Media/liveline-advanced-charts-pr-poster.png`
 
 Before publishing, inspect at least one frame from every section and two time-separated frames from several standard and every Dither clip. Confirm that chart pixels change while the video card bounds remain fixed, and that all 21 chart IDs occur exactly once in the standard chart sequence.
+
+The capture script waits for each Storybook launch to settle before recording. The verification step also rejects any native clip containing sustained black frames, so a simulator focus or launch failure cannot silently ship in the reel.

@@ -6,6 +6,35 @@ const fail = (message: string): never => {
   throw new Error(`Advanced PR demo verification failed: ${message}`);
 };
 
+const assertNoSustainedBlackFrames = (asset: string): void => {
+  const result = Bun.spawnSync(
+    [
+      'ffmpeg',
+      '-hide_banner',
+      '-loglevel',
+      'info',
+      '-i',
+      asset,
+      '-vf',
+      'blackdetect=d=0.25:pix_th=0.10',
+      '-an',
+      '-f',
+      'null',
+      '-',
+    ],
+    {stdout: 'pipe', stderr: 'pipe'},
+  );
+
+  if (result.exitCode !== 0) {
+    fail(`could not inspect ${asset}`);
+  }
+
+  const diagnostics = result.stderr.toString();
+  if (diagnostics.includes('black_start:')) {
+    fail(`sustained black frames found in ${asset}`);
+  }
+};
+
 if (advancedCharts.length !== 21) {
   fail(`expected 21 standard chart scenes, found ${advancedCharts.length}`);
 }
@@ -24,6 +53,7 @@ for (const id of chartIDs) {
   if (!existsSync(liveAsset)) {
     fail(`missing native live recording for ${id}`);
   }
+  assertNoSustainedBlackFrames(liveAsset);
 }
 
 for (const chart of ditherCharts) {
@@ -34,6 +64,7 @@ for (const chart of ditherCharts) {
   if (!existsSync(asset)) {
     fail(`missing native Dither recording ${chart.file}`);
   }
+  assertNoSustainedBlackFrames(asset);
 }
 
 console.log(`Verified ${advancedCharts.length} unique native-live chart scenes and ${ditherCharts.length} advanced Dither scenes.`);
