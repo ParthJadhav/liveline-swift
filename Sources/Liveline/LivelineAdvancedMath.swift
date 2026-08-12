@@ -57,7 +57,12 @@ enum LivelineAdvancedMath {
         let upper = Int(position.rounded(.up))
         guard lower != upper else { return sorted[lower] }
         let fraction = position - Double(lower)
-        return sorted[lower] + (sorted[upper] - sorted[lower]) * fraction
+        let lowerValue = sorted[lower]
+        let upperValue = sorted[upper]
+        if lowerValue.sign == upperValue.sign {
+            return lowerValue + (upperValue - lowerValue) * fraction
+        }
+        return lowerValue * (1 - fraction) + upperValue * fraction
     }
 
     static func median(_ values: [Double]) -> Double {
@@ -69,46 +74,58 @@ enum LivelineAdvancedMath {
         bandwidth requestedBandwidth: Double?,
         sampleCount: Int = 64
     ) -> LivelineDensityProfile? {
-        let values = values.filter(\.isFinite).sorted()
-        guard let minimum = values.first, let maximum = values.last else { return nil }
-        let lowerQuartile = quantile(values, probability: 0.25)
-        let median = quantile(values, probability: 0.5)
-        let upperQuartile = quantile(values, probability: 0.75)
-        let spread = max(maximum - minimum, 0.000_001)
+        let originalValues = values.filter(\.isFinite).sorted()
+        guard let minimum = originalValues.first, let maximum = originalValues.last else { return nil }
+        let maximumMagnitude = max(abs(minimum), abs(maximum))
+        let doubledMagnitude = maximumMagnitude * 2
+        let scale = doubledMagnitude.isFinite && doubledMagnitude > 0
+            ? doubledMagnitude
+            : max(maximumMagnitude, 1)
+        let values = originalValues.map { $0 / scale }
+        let normalizedMinimum = values[0]
+        let normalizedMaximum = values[values.count - 1]
+        let normalizedLowerQuartile = quantile(values, probability: 0.25)
+        let normalizedMedian = quantile(values, probability: 0.5)
+        let normalizedUpperQuartile = quantile(values, probability: 0.75)
+        let spread = max(normalizedMaximum - normalizedMinimum, 0.000_001)
         let bandwidth: Double
         if let requestedBandwidth, requestedBandwidth.isFinite, requestedBandwidth > 0 {
-            bandwidth = requestedBandwidth
+            let normalized = requestedBandwidth / scale
+            bandwidth = max(normalized.isFinite ? normalized : 1, 0.000_000_000_001)
         } else if values.count > 1 {
             let mean = values.reduce(0, +) / Double(values.count)
             let variance = values.reduce(0) { $0 + pow($1 - mean, 2) } / Double(values.count - 1)
             let standardDeviation = sqrt(max(variance, 0))
-            let robustSigma = min(standardDeviation, (upperQuartile - lowerQuartile) / 1.34)
+            let robustSigma = min(
+                standardDeviation,
+                (normalizedUpperQuartile - normalizedLowerQuartile) / 1.34)
             let scale = robustSigma > 0 ? robustSigma : spread / 4
             bandwidth = max(0.9 * scale * pow(Double(values.count), -0.2), spread / 200)
         } else {
-            bandwidth = max(abs(minimum) * 0.05, 1)
+            bandwidth = max(abs(normalizedMinimum) * 0.05, 0.000_001)
         }
 
         let padding = max(bandwidth * 2.5, spread * 0.04)
-        let domainMin = minimum - padding
-        let domainMax = maximum + padding
+        let normalizedLimit = Double.greatestFiniteMagnitude / scale
+        let domainMin = max(normalizedMinimum - padding, -normalizedLimit)
+        let domainMax = min(normalizedMaximum + padding, normalizedLimit)
         let count = min(max(sampleCount, 24), 160)
         let gaussianScale = 1 / (Double(values.count) * bandwidth * sqrt(2 * Double.pi))
         let samples = (0..<count).map { index -> LivelineDensitySample in
             let t = Double(index) / Double(max(count - 1, 1))
-            let value = domainMin + (domainMax - domainMin) * t
+            let normalizedValue = domainMin + (domainMax - domainMin) * t
             let sum = values.reduce(0) { partial, observation in
-                let z = (value - observation) / bandwidth
+                let z = (normalizedValue - observation) / bandwidth
                 return partial + exp(-0.5 * z * z)
             }
-            return LivelineDensitySample(value: value, density: sum * gaussianScale)
+            return LivelineDensitySample(value: normalizedValue * scale, density: sum * gaussianScale)
         }
         return LivelineDensityProfile(
             samples: samples,
             minimum: minimum,
-            lowerQuartile: lowerQuartile,
-            median: median,
-            upperQuartile: upperQuartile,
+            lowerQuartile: normalizedLowerQuartile * scale,
+            median: normalizedMedian * scale,
+            upperQuartile: normalizedUpperQuartile * scale,
             maximum: maximum,
             peakDensity: max(samples.map(\.density).max() ?? 0, 0.000_001)
         )

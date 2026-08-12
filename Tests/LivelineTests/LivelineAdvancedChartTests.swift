@@ -1449,6 +1449,131 @@ final class LivelineAdvancedChartTests: XCTestCase {
         XCTAssertEqual(normalizedSeries[0].points, [.init(time: 0, rank: 0)])
     }
 
+    func testFourthReviewBatchCoversRenderedPathsAndExtremeFiniteInputs() throws {
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0, maxValue: 10, leftEdge: 0, rightEdge: 10)
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
+
+        let parallelRecords = [
+            LivelineParallelRecord(id: "record", label: "Record", values: [1, 9, 2])
+        ]
+        let parallelGeometry = try XCTUnwrap(
+            LivelineAdvancedLayout.parallelCoordinates(
+                records: parallelRecords, layout: layout, textScale: .standard))
+        let parallelTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .parallelCoordinates(parallelRecords, .init()), layout: layout,
+            palette: palette, configuration: .init(), targetLocation: nil,
+            textScale: .standard)
+        guard case .path(let parallelPath) = try XCTUnwrap(parallelTargets.first).region else {
+            return XCTFail("Expected the rendered parallel polyline to be the hit region")
+        }
+        let parallelSegmentPoint = CGPoint(
+            x: (parallelGeometry.x(axis: 0) + parallelGeometry.x(axis: 1)) / 2,
+            y: (parallelGeometry.y(1, axis: 0) + parallelGeometry.y(9, axis: 1)) / 2)
+        XCTAssertTrue(parallelPath.contains(parallelSegmentPoint))
+
+        let depthLevels = [
+            LivelineOrderBookLevel(price: 99, bidSize: 1),
+            LivelineOrderBookLevel(price: 100, bidSize: 2),
+        ]
+        let depthGeometry = try XCTUnwrap(
+            LivelineAdvancedLayout.marketDepth(
+                levels: depthLevels, layout: layout, textScale: .standard))
+        let depthTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .marketDepth(depthLevels, .init()), layout: layout, palette: palette,
+            configuration: .init(), targetLocation: nil, textScale: .standard)
+        guard case .path(let depthPath) = try XCTUnwrap(depthTargets.first).region else {
+            return XCTFail("Expected the rendered market-depth step to be the hit region")
+        }
+        let firstDepthPoint = depthGeometry.point(depthGeometry.curve.bids[0])
+        let secondDepthPoint = depthGeometry.point(depthGeometry.curve.bids[1])
+        XCTAssertTrue(depthPath.contains(CGPoint(
+            x: (firstDepthPoint.x + secondDepthPoint.x) / 2,
+            y: firstDepthPoint.y)))
+
+        let extremeHexbins = try XCTUnwrap(
+            LivelineAdvancedLayout.hexbin(
+                points: [
+                    .init(id: "minimum", x: -Double.greatestFiniteMagnitude,
+                          y: -Double.greatestFiniteMagnitude),
+                    .init(id: "maximum", x: Double.greatestFiniteMagnitude,
+                          y: Double.greatestFiniteMagnitude),
+                ],
+                style: .init(binsAcross: 12), layout: layout, textScale: .standard))
+        XCTAssertEqual(extremeHexbins.cells.count, 2)
+        XCTAssertTrue(extremeHexbins.cells.allSatisfy {
+            $0.center.x.isFinite && $0.center.y.isFinite
+        })
+
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        var shifted = utc
+        shifted.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 12 * 3_600))
+        let calendarValues = [
+            LivelineCalendarValue(date: Date(timeIntervalSince1970: 1_700_000_000), value: 1)
+        ]
+        let utcKey = LivelineAdvancedChartContent.calendarHeatmap(
+            calendarValues, .init(calendar: utc)).accessibilityCacheDescriptor
+        let shiftedKey = LivelineAdvancedChartContent.calendarHeatmap(
+            calendarValues, .init(calendar: shifted)).accessibilityCacheDescriptor
+        XCTAssertNotEqual(utcKey.identifiers, shiftedKey.identifiers)
+
+        let extremeMekko = LivelineVisualGeometry.marimekko(
+            columns: [
+                .init(
+                    id: "a", label: "A", width: .greatestFiniteMagnitude,
+                    segments: [.init(id: "one", label: "One", value: .greatestFiniteMagnitude)]),
+                .init(
+                    id: "b", label: "B", width: .greatestFiniteMagnitude,
+                    segments: [.init(id: "two", label: "Two", value: .greatestFiniteMagnitude)]),
+            ],
+            in: CGRect(x: 0, y: 0, width: 200, height: 100),
+            columnSpacing: 0, segmentSpacing: 0)
+        XCTAssertEqual(extremeMekko[0].rect.width, extremeMekko[1].rect.width, accuracy: 0.000_1)
+
+        let extremeDensity = try XCTUnwrap(
+            LivelineAdvancedMath.densityProfile(
+                values: [-Double.greatestFiniteMagnitude, Double.greatestFiniteMagnitude],
+                bandwidth: nil))
+        XCTAssertTrue(extremeDensity.samples.allSatisfy {
+            $0.value.isFinite && $0.density.isFinite
+        })
+        XCTAssertTrue(extremeDensity.lowerQuartile.isFinite)
+        XCTAssertTrue(extremeDensity.median.isFinite)
+        XCTAssertTrue(extremeDensity.upperQuartile.isFinite)
+
+        let mekkoAudio = LivelineAdvancedAudioGraph.make(
+            content: .marimekko([
+                .init(
+                    id: "column", label: "Column", width: 1,
+                    segments: [
+                        .init(id: "first", label: "Shared", value: 2),
+                        .init(id: "second", label: "Shared", value: 3),
+                    ])
+            ], .init()),
+            visibleRange: nil)
+        XCTAssertEqual(mekkoAudio.series.map(\.name), [
+            LivelineStrings.labelColumnWidth, "Shared", "Shared",
+        ])
+        XCTAssertEqual(mekkoAudio.series.dropFirst().compactMap { $0.points.first?.value }, [2, 3])
+
+        let networkAudio = LivelineAdvancedAudioGraph.make(
+            content: .network(
+                [
+                    .init(id: "a", label: "Alpha"),
+                    .init(id: "b", label: "Beta"),
+                ],
+                [.init(source: "a", target: "b", value: 7)],
+                .init()),
+            visibleRange: nil)
+        let flow = try XCTUnwrap(
+            networkAudio.series.first { $0.name == LivelineStrings.labelFlow })
+        XCTAssertEqual(flow.points.map(\.value), [7])
+        XCTAssertEqual(flow.points.first?.category, "Alpha to Beta")
+    }
+
     func testAccessibilityAndPreparationRejectInvisibleOrMisleadingData() throws {
         let nodes = [
             LivelineNetworkNode(id: "a", label: "Alpha"),

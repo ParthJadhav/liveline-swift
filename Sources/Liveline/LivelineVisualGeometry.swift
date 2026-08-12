@@ -62,7 +62,8 @@ enum LivelineVisualGeometry {
         )
         let horizontalGapBudget = horizontalGap * CGFloat(horizontalGapCount)
         let drawableWidth = max(body.width - horizontalGapBudget, 0)
-        let totalWidth = max(valid.reduce(0) { $0 + $1.1.width }, 0.000_001)
+        let maximumWidth = max(valid.map { $0.1.width }.max() ?? 0, 0.000_001)
+        let totalWidth = max(valid.reduce(0) { $0 + $1.1.width / maximumWidth }, 0.000_001)
 
         var result: [LivelineMarimekkoColumnGeometry] = []
         result.reserveCapacity(valid.count)
@@ -72,7 +73,7 @@ enum LivelineVisualGeometry {
             let isLastColumn = validIndex == valid.count - 1
             let width = isLastColumn
                 ? max(body.maxX - x, 0)
-                : drawableWidth * CGFloat(item.1.width / totalWidth)
+                : drawableWidth * CGFloat((item.1.width / maximumWidth) / totalWidth)
             let columnRect = CGRect(x: x, y: body.minY, width: width, height: body.height)
 
             let verticalGapCount = max(item.2.count - 1, 0)
@@ -83,7 +84,10 @@ enum LivelineVisualGeometry {
             )
             let verticalGapBudget = verticalGap * CGFloat(verticalGapCount)
             let drawableHeight = max(body.height - verticalGapBudget, 0)
-            let totalValue = max(item.2.reduce(0) { $0 + $1.element.value }, 0.000_001)
+            let maximumValue = max(item.2.map { $0.element.value }.max() ?? 0, 0.000_001)
+            let totalValue = max(
+                item.2.reduce(0) { $0 + $1.element.value / maximumValue },
+                0.000_001)
             var y = body.maxY
             var segments: [LivelineMarimekkoSegmentGeometry] = []
             segments.reserveCapacity(item.2.count)
@@ -92,7 +96,8 @@ enum LivelineVisualGeometry {
                 let isLastSegment = segmentOrder == item.2.count - 1
                 let height = isLastSegment
                     ? max(y - body.minY, 0)
-                    : drawableHeight * CGFloat(segment.element.value / totalValue)
+                    : drawableHeight
+                        * CGFloat((segment.element.value / maximumValue) / totalValue)
                 let rect = CGRect(x: x, y: y - height, width: width, height: height)
                 segments.append(
                     LivelineMarimekkoSegmentGeometry(

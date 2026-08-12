@@ -143,17 +143,17 @@ enum LivelineAdvancedAudioGraph {
                 column.width > 0 && column.segments.contains { $0.value > 0 }
             }
             let labels = columns.map(\.label)
-            var segmentOrder: [String] = []
+            var segmentOrder: [(id: String, label: String)] = []
             for segment in columns.flatMap(\.segments)
-            where segment.value > 0 && !segmentOrder.contains(segment.label) {
-                segmentOrder.append(segment.label)
+            where segment.value > 0 && !segmentOrder.contains(where: { $0.id == segment.id }) {
+                segmentOrder.append((segment.id, segment.label))
             }
-            let segmentSeries = segmentOrder.map { segmentLabel in
+            let segmentSeries = segmentOrder.map { segmentIdentity in
                 categorical(
-                    segmentLabel,
+                    segmentIdentity.label,
                     columns.compactMap { column in
                         let value = column.segments
-                            .filter { $0.label == segmentLabel && $0.value > 0 }
+                            .filter { $0.id == segmentIdentity.id && $0.value > 0 }
                             .reduce(0) { $0 + $1.value }
                         return value > 0 ? (column.label, value) : nil
                     })
@@ -168,7 +168,7 @@ enum LivelineAdvancedAudioGraph {
                 [categorical(LivelineStrings.labelValue, positive.map { ($0.label, $0.value) })],
                 order: positive.map(\.label))
         case .network(let nodes, let edges, _):
-            let order = nodes.map(\.label)
+            let nodeOrder = nodes.map(\.label)
             var seenNodeIDs: Set<String> = []
             let connectionSamples = nodes.map { node -> (String, Double) in
                 let ownsIdentifier = seenNodeIDs.insert(node.id).inserted
@@ -177,11 +177,23 @@ enum LivelineAdvancedAudioGraph {
                     : 0
                 return (node.label, Double(count))
             }
+            var labelsByID: [String: String] = [:]
+            for node in nodes where labelsByID[node.id] == nil { labelsByID[node.id] = node.label }
+            let edgeSamples = edges.filter { $0.value > 0 }.map {
+                (
+                    String(
+                        format: LivelineStrings.labelFlowRouteFormat,
+                        labelsByID[$0.source] ?? $0.source,
+                        labelsByID[$0.target] ?? $0.target),
+                    $0.value
+                )
+            }
             return categories(
                 [
                     categorical(LivelineStrings.labelWeight, nodes.map { ($0.label, $0.weight) }),
                     categorical(LivelineStrings.labelConnections, connectionSamples),
-                ], order: order)
+                    categorical(LivelineStrings.labelFlow, edgeSamples),
+                ], order: nodeOrder + edgeSamples.map(\.0))
         case .contour(let samples, _):
             let samples = LivelineAdvancedLayout.contourSamplesByCoordinate(samples)
             let order = samples.map(\.id)

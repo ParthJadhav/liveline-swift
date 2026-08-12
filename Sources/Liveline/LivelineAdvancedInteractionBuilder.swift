@@ -216,12 +216,13 @@ enum LivelineAdvancedInteractionBuilder {
                         LivelineAdvancedLayout.axisLabel(style.axisLabels, at: axis),
                         configuration.formatValue(value), color)
                 }
-                let finalAxis = record.values.count - 1
-                let anchor = CGPoint(
-                    x: geometry.x(axis: finalAxis), y: geometry.y(last, axis: finalAxis))
+                let points = record.values.enumerated().map { axis, value in
+                    CGPoint(x: geometry.x(axis: axis), y: geometry.y(value, axis: axis))
+                }
+                guard let anchor = points.last else { return nil }
                 return target(
                     time: Double(index), value: last, anchor: anchor, heading: record.label, rows: rows,
-                    region: .circle(center: anchor, radius: 9))
+                    region: polylineRegion(points, hitWidth: 12))
             }
 
         case .hexbin(let points, let style):
@@ -447,16 +448,24 @@ enum LivelineAdvancedInteractionBuilder {
                     levels: levels, layout: layout, textScale: textScale)
             else { return [] }
             return [
-                (LivelineStrings.labelBid, geometry.curve.bids, style.bidColor),
-                (LivelineStrings.labelAsk, geometry.curve.asks, style.askColor),
-            ].flatMap { label, points, color in
-                points.map { point in
+                (LivelineStrings.labelBid, geometry.curve.bids, style.bidColor, geometry.plot.minX),
+                (LivelineStrings.labelAsk, geometry.curve.asks, style.askColor, geometry.plot.maxX),
+            ].flatMap { label, points, color, boundaryX in
+                let lineRegion = LivelineRenderer.depthCurvePaths(
+                    points: points, plot: geometry.plot, point: geometry.point,
+                    singletonBoundaryX: boundaryX
+                ).map {
+                    LivelineInteractionRegion.path(
+                        $0.line.strokedPath(
+                            StrokeStyle(lineWidth: 12, lineCap: .round, lineJoin: .round)))
+                }
+                return points.map { point in
                     let center = geometry.point(point)
                     return target(
                         time: point.time, value: point.value, anchor: center,
                         heading: configuration.formatValue(point.time),
                         rows: [row(label, configuration.formatValue(point.value), color)],
-                        region: .circle(center: center, radius: 8))
+                        region: lineRegion ?? .circle(center: center, radius: 8))
                 }
             }
 
@@ -593,6 +602,22 @@ enum LivelineAdvancedInteractionBuilder {
         path.addLine(to: CGPoint(x: start.x - offset.x, y: start.y - offset.y))
         path.closeSubpath()
         return .path(path)
+    }
+
+    private static func polylineRegion(
+        _ points: [CGPoint],
+        hitWidth: CGFloat
+    ) -> LivelineInteractionRegion {
+        guard let first = points.first else { return .rect(.null) }
+        guard points.count > 1 else {
+            return .circle(center: first, radius: hitWidth / 2)
+        }
+        var path = Path()
+        path.move(to: first)
+        for point in points.dropFirst() { path.addLine(to: point) }
+        return .path(
+            path.strokedPath(
+                StrokeStyle(lineWidth: hitWidth, lineCap: .round, lineJoin: .round)))
     }
 
     private static func target(

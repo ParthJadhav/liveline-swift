@@ -270,8 +270,8 @@ extension LivelineAdvancedLayout {
         }
         var bins: [LivelineHexbinCellKey: Aggregate] = [:]
         for point in points {
-            let normalizedX = xMin == xMax ? 0.5 : CGFloat((point.x - xMin) / (xMax - xMin))
-            let normalizedY = yMin == yMax ? 0.5 : CGFloat((yMax - point.y) / (yMax - yMin))
+            let normalizedX = CGFloat(normalizedProgress(point.x, minimum: xMin, maximum: xMax))
+            let normalizedY = CGFloat(1 - normalizedProgress(point.y, minimum: yMin, maximum: yMax))
             let column = Int((normalizedX / (normalizedRadius * 1.5)).rounded())
             let rowOffset = column.isMultiple(of: 2) ? 0 : normalizedRowHeight / 2
             let row = Int(((normalizedY - rowOffset) / normalizedRowHeight).rounded())
@@ -309,6 +309,21 @@ extension LivelineAdvancedLayout {
             cells: cells,
             maximumWeight: max(cells.map(\.weight).max() ?? 0, 0.000_001)
         )
+    }
+
+    private static func normalizedProgress(
+        _ value: Double,
+        minimum: Double,
+        maximum: Double
+    ) -> Double {
+        guard minimum != maximum else { return 0.5 }
+        let scale = max(abs(minimum), abs(maximum), 1)
+        let scaledMinimum = minimum / scale
+        let scaledMaximum = maximum / scale
+        let span = scaledMaximum - scaledMinimum
+        guard span.isFinite, span > 0 else { return 0.5 }
+        return ((value / scale - scaledMinimum) / span)
+            .livelineClamped(0, 1, fallback: 0.5)
     }
 }
 

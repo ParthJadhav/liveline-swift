@@ -354,9 +354,16 @@ extension LivelineAdvancedChartContent {
             identifiers = series.flatMap { [$0.id, $0.label] }
             variants = series.flatMap(\.values)
             count = variants.count
-        case .calendarHeatmap(let values, _):
-            identifiers = values.map { $0.label ?? "" }
-            variants = values.flatMap { [$0.date.timeIntervalSinceReferenceDate, $0.value] }
+        case .calendarHeatmap(let values, let style):
+            identifiers = [
+                String(describing: style.calendar.identifier),
+                style.calendar.timeZone.identifier,
+                style.calendar.locale?.identifier ?? "",
+            ] + values.map { $0.label ?? "" }
+            variants = [
+                Double(style.calendar.firstWeekday),
+                Double(style.calendar.minimumDaysInFirstWeek),
+            ] + values.flatMap { [$0.date.timeIntervalSinceReferenceDate, $0.value] }
             count = values.count
         case .gantt(let tasks, _):
             identifiers = tasks.flatMap { [$0.id, $0.label] + $0.dependencyIDs }
