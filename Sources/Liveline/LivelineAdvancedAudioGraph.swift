@@ -90,10 +90,18 @@ enum LivelineAdvancedAudioGraph {
                     })
             ])
         case .chord(let links, _):
-            let samples = links.filter { $0.value > 0 }.map {
+            let nodeSamples = LivelineAdvancedLayout.chordNodeTotals(links).map {
+                ($0.label, $0.value)
+            }
+            let linkSamples = links.filter { $0.value > 0 }.map {
                 (String(format: LivelineStrings.labelFlowRouteFormat, $0.source, $0.target), $0.value)
             }
-            return categories([categorical(LivelineStrings.labelFlow, samples)], order: samples.map(\.0))
+            return categories(
+                [
+                    categorical(LivelineStrings.labelTotal, nodeSamples),
+                    categorical(LivelineStrings.labelFlow, linkSamples),
+                ],
+                order: nodeSamples.map(\.0) + linkSamples.map(\.0))
         case .parallelCoordinates(let records, let style):
             let axisCount = records.map(\.values.count).max() ?? 0
             let order = records.map(\.label)

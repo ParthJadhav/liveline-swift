@@ -16,7 +16,9 @@ extension LivelineAdvancedChartContent {
                 values, calendar: style.calendar)
             return LivelineAdvancedLayout.calendarValuesByDay(values, calendar: style.calendar).count
         case .gantt(let tasks, _): return tasks.count
-        case .chord(let links, _): return links.filter { $0.value > 0 }.count
+        case .chord(let links, _):
+            return links.filter { $0.value > 0 }.count
+                + LivelineAdvancedLayout.chordNodeTotals(links).count
         case .parallelCoordinates(let records, _): return records.count
         case .hexbin(let points, let style):
             return accessibilityHexbins(points: points, style: style).count
@@ -94,13 +96,23 @@ extension LivelineAdvancedChartContent {
             }
 
         case .chord(let links, _):
-            return links.filter { $0.value > 0 }.map {
+            let nodeEntries = LivelineAdvancedLayout.chordNodeTotals(links).map {
+                LivelineAccessibilityEntry(
+                    id: "chord-node-\($0.label)",
+                    label: $0.label,
+                    value: String(
+                        format: LivelineStrings.accessibilityNamedValueFormat,
+                        LivelineStrings.labelTotal, formatValue($0.value))
+                )
+            }
+            let linkEntries = links.filter { $0.value > 0 }.map {
                 LivelineAccessibilityEntry(
                     id: $0.id,
                     label: String(format: LivelineStrings.labelFlowRouteFormat, $0.source, $0.target),
                     value: formatValue($0.value)
                 )
             }
+            return nodeEntries + linkEntries
 
         case .parallelCoordinates(let records, let style):
             return records.map { record in
@@ -358,9 +370,10 @@ extension LivelineAdvancedChartContent {
             identifiers = style.axisLabels + records.flatMap { [$0.id, $0.label] }
             variants = records.flatMap(\.values)
             count = records.count
-        case .hexbin(let points, _):
+        case .hexbin(let points, let style):
             identifiers = points.flatMap { [$0.id, $0.label ?? ""] }
-            variants = points.flatMap { [$0.x, $0.y, $0.weight] }
+            variants = [Double(style.resolvedBinsAcross)]
+                + points.flatMap { [$0.x, $0.y, $0.weight] }
             count = points.count
         case .bump(let series, _):
             identifiers = series.flatMap { [$0.id, $0.label] }

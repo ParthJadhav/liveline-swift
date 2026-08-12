@@ -23,6 +23,18 @@ extension Array where Element: LivelineTimedDatum {
         return Array(self[lower..<upper])
     }
 
+    func livelineVisibleIncludingBoundaryPoints(
+        in range: ClosedRange<TimeInterval>
+    ) -> [Element] {
+        guard !isEmpty else { return [] }
+        let lower = lowerBound(for: range.lowerBound)
+        let upper = upperBound(for: range.upperBound)
+        let start = Swift.max(lower - 1, 0)
+        let end = Swift.min(Swift.max(upper + 1, lower + 1), count)
+        guard start < end else { return [] }
+        return Array(self[start..<end])
+    }
+
     private func lowerBound(for time: TimeInterval) -> Int {
         var lower = 0
         var upper = count

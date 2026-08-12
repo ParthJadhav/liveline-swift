@@ -1323,6 +1323,132 @@ final class LivelineAdvancedChartTests: XCTestCase {
         XCTAssertEqual(residualBricks.map(\.sourceLow), [100, 101, 102])
     }
 
+    func testThirdReviewBatchUsesSharedDomainsBoundariesAndInspectionGeometry() throws {
+        let renkoStyle = LivelineRenkoStyle(brickSize: 1)
+        let renkoSeries = LivelineRenkoSeries(
+            points: [
+                .init(time: 0, value: 0),
+                .init(time: 1, value: 10),
+                .init(time: 100, value: 11),
+            ],
+            style: renkoStyle)
+        let renkoPrepared = LivelineAdvancedChartContent.renko(renkoSeries, renkoStyle)
+            .prepared(leftEdge: 99, rightEdge: 101, configuration: .init())
+        XCTAssertLessThan(try XCTUnwrap(renkoPrepared.rangeOverride).lowerBound, 0)
+
+        let hexbinPoints = [
+            LivelineXYPoint(id: "a", x: 0, y: 0, weight: 1),
+            LivelineXYPoint(id: "b", x: 0.2, y: 0.25, weight: 2),
+            LivelineXYPoint(id: "c", x: 0.8, y: 0.75, weight: 3),
+            LivelineXYPoint(id: "d", x: 1, y: 1, weight: 4),
+        ]
+        func hexbinLayout(width: CGFloat, height: CGFloat) -> LivelineHexbinLayout? {
+            LivelineAdvancedLayout.hexbin(
+                points: hexbinPoints, style: .init(binsAcross: 8),
+                layout: LivelineLayout(
+                    size: CGSize(width: width, height: height),
+                    padding: .init(top: 5, right: 5, bottom: 5, left: 5),
+                    minValue: 0, maxValue: 1, leftEdge: 0, rightEdge: 1),
+                textScale: .standard)
+        }
+        let wideHexbins = try XCTUnwrap(hexbinLayout(width: 480, height: 160))
+        let tallHexbins = try XCTUnwrap(hexbinLayout(width: 160, height: 480))
+        XCTAssertEqual(
+            wideHexbins.cells.map { ($0.column, $0.row, $0.count) }.description,
+            tallHexbins.cells.map { ($0.column, $0.row, $0.count) }.description)
+        XCTAssertEqual(wideHexbins.cells.map(\.weight), tallHexbins.cells.map(\.weight))
+
+        let tinyLayout = LivelineLayout(
+            size: CGSize(width: 24, height: 24),
+            padding: .init(top: 8, right: 8, bottom: 8, left: 8),
+            minValue: 0, maxValue: 1, leftEdge: 0, rightEdge: 1)
+        let polar = LivelineAdvancedLayout.polarArea(
+            values: [.init(id: "a", label: "A", value: 1)],
+            style: .init(), layout: tinyLayout, textScale: .init(factor: 3))
+        XCTAssertGreaterThanOrEqual(polar.innerRadius, 0)
+        XCTAssertGreaterThanOrEqual(polar.outerRadius, polar.innerRadius)
+
+        let parallelRecords = [
+            LivelineParallelRecord(id: "record", label: "Record", values: [1, 2, 3])
+        ]
+        let baseLayout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0, maxValue: 20, leftEdge: 0, rightEdge: 10)
+        let ltrParallel = try XCTUnwrap(
+            LivelineAdvancedLayout.parallelCoordinates(
+                records: parallelRecords, layout: baseLayout, textScale: .standard))
+        var rtlLayout = baseLayout
+        rtlLayout.isRTL = true
+        let rtlParallel = try XCTUnwrap(
+            LivelineAdvancedLayout.parallelCoordinates(
+                records: parallelRecords, layout: rtlLayout, textScale: .standard))
+        XCTAssertLessThan(ltrParallel.x(axis: 0), ltrParallel.x(axis: 2))
+        XCTAssertGreaterThan(rtlParallel.x(axis: 0), rtlParallel.x(axis: 2))
+
+        let lowResolutionKey = LivelineAdvancedChartContent.hexbin(
+            hexbinPoints, .init(binsAcross: 4)).accessibilityCacheDescriptor
+        let highResolutionKey = LivelineAdvancedChartContent.hexbin(
+            hexbinPoints, .init(binsAcross: 40)).accessibilityCacheDescriptor
+        XCTAssertNotEqual(lowResolutionKey.variants, highResolutionKey.variants)
+
+        let depth = LivelineAdvancedMath.marketDepthCurve([
+            .init(price: 100, bidSize: 3, askSize: 2),
+            .init(price: 100, bidSize: 4, askSize: 5),
+            .init(price: 101, askSize: 1),
+        ])
+        XCTAssertEqual(depth.bids.count, 1)
+        XCTAssertEqual(depth.bids[0].value, 7)
+        XCTAssertEqual(depth.asks.map(\.value), [7, 8])
+
+        let contourSamples = [
+            LivelineContourSample(id: "00", x: 0, y: 0, value: 0),
+            LivelineContourSample(id: "10", x: 1, y: 0, value: 10),
+            LivelineContourSample(id: "01", x: 0, y: 1, value: 10),
+            LivelineContourSample(id: "11", x: 1, y: 1, value: 20),
+        ]
+        let contourGeometry = try XCTUnwrap(
+            LivelineAdvancedLayout.contour(
+                samples: contourSamples, layout: baseLayout, textScale: .standard))
+        let contourTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .contour(contourSamples, .init()), layout: baseLayout,
+            palette: LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2),
+            configuration: .init(), targetLocation: CGPoint(
+                x: contourGeometry.plot.midX, y: contourGeometry.plot.midY),
+            textScale: .standard)
+        XCTAssertEqual(contourTargets.count, 1)
+        XCTAssertEqual(contourTargets[0].selection.hover.value, 10, accuracy: 0.000_1)
+
+        let chordLinks = [
+            LivelineChordLink(source: "A", target: "B", value: 2),
+            LivelineChordLink(source: "B", target: "C", value: 3),
+        ]
+        let chordContent = LivelineAdvancedChartContent.chord(chordLinks, .init())
+        XCTAssertEqual(chordContent.accessibilityEntryCount, 5)
+        let chordEntries = chordContent.accessibilityEntries(
+            formatValue: { String($0) }, formatTime: { String($0) })
+        XCTAssertEqual(chordEntries.filter { $0.id.hasPrefix("chord-node-") }.count, 3)
+
+        let sparseHorizon = [
+            LivelinePoint(time: 0, value: 2),
+            LivelinePoint(time: 10, value: 8),
+        ]
+        XCTAssertEqual(
+            sparseHorizon.livelineVisibleIncludingBoundaryPoints(in: 4...6),
+            sparseHorizon)
+
+        var mutatedRank = LivelineRankPoint(time: 1, rank: 2)
+        mutatedRank.time = .nan
+        mutatedRank.rank = .infinity
+        let normalizedBump = LivelineAdvancedChartContent.bump([
+            .init(id: "rank", label: "Rank", points: [mutatedRank])
+        ], .init()).normalized()
+        guard case .bump(let normalizedSeries, _) = normalizedBump else {
+            return XCTFail("Expected bump content")
+        }
+        XCTAssertEqual(normalizedSeries[0].points, [.init(time: 0, rank: 0)])
+    }
+
     func testAccessibilityAndPreparationRejectInvisibleOrMisleadingData() throws {
         let nodes = [
             LivelineNetworkNode(id: "a", label: "Alpha"),

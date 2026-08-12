@@ -145,7 +145,8 @@ enum LivelineAdvancedInteractionBuilder {
 
         case .horizon(let points, _):
             let plot = LivelineRenderer.advancedPlotRect(layout)
-            let visible = points.filter { $0.time >= layout.leftEdge - 2 && $0.time <= layout.rightEdge }
+            let visible = points.livelineVisibleIncludingBoundaryPoints(
+                in: layout.leftEdge...layout.rightEdge)
             return nearestTimed(
                 visible, targetLocation: targetLocation, layout: layout, time: \.time
             ).map {
@@ -342,7 +343,23 @@ enum LivelineAdvancedInteractionBuilder {
                 let geometry = LivelineAdvancedLayout.contour(
                     samples: samples, layout: layout, textScale: textScale)
             else { return [] }
-            return LivelineAdvancedLayout.contourSamplesByCoordinate(samples).map { sample in
+            let collapsed = LivelineAdvancedLayout.contourSamplesByCoordinate(samples)
+            if let targetLocation,
+                let sample = geometry.interpolatedSample(at: targetLocation, samples: collapsed)
+            {
+                return [
+                    target(
+                        time: sample.x, value: sample.value, anchor: targetLocation,
+                        heading: "\(configuration.formatValue(sample.x)), \(configuration.formatValue(sample.y))",
+                        rows: [
+                            row(
+                                LivelineStrings.labelValue, configuration.formatValue(sample.value),
+                                palette.line)
+                        ],
+                        region: .rect(geometry.plot))
+                ]
+            }
+            return collapsed.map { sample in
                 let point = geometry.point(x: sample.x, y: sample.y)
                 return target(
                     time: sample.x, value: sample.value, anchor: point,

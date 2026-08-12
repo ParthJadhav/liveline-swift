@@ -113,8 +113,12 @@ extension LivelineRenderer {
                     let y = geometry.y(value, axis: finalAxis)
                     drawText(
                         record.label, context: &context,
-                        at: CGPoint(x: geometry.x(axis: finalAxis) + textScale.scaled(5), y: y),
-                        anchor: .leading, color: color, font: textScale.font(8, weight: .semibold))
+                        at: CGPoint(
+                            x: geometry.x(axis: finalAxis)
+                                + (geometry.isRTL ? -textScale.scaled(5) : textScale.scaled(5)),
+                            y: y),
+                        anchor: geometry.isRTL ? .trailing : .leading,
+                        color: color, font: textScale.font(8, weight: .semibold))
                 }
             }
         }

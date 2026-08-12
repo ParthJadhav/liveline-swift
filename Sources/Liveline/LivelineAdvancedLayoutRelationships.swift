@@ -50,6 +50,23 @@ struct LivelineChordRibbon {
 }
 
 extension LivelineAdvancedLayout {
+    static func chordNodeTotals(
+        _ links: [LivelineChordLink]
+    ) -> [(label: String, value: Double)] {
+        var labels: [String] = []
+        var seenLabels: Set<String> = []
+        var totals: [String: Double] = [:]
+        for link in links where link.value > 0 {
+            if seenLabels.insert(link.source).inserted { labels.append(link.source) }
+            if seenLabels.insert(link.target).inserted { labels.append(link.target) }
+            for label in [link.source, link.target] {
+                let sum = totals[label, default: 0] + link.value
+                totals[label] = sum.isFinite ? sum : Double.greatestFiniteMagnitude
+            }
+        }
+        return labels.map { ($0, totals[$0, default: 0]) }
+    }
+
     static func chord(
         links: [LivelineChordLink],
         style: LivelineChordStyle,
@@ -57,16 +74,11 @@ extension LivelineAdvancedLayout {
         textScale: LivelineTextScale
     ) -> LivelineChordLayout {
         let positive = links.filter { $0.value > 0 }
-        var labels: [String] = []
-        var seenLabels: Set<String> = []
-        var totals: [String: Double] = [:]
-        for link in positive {
-            if seenLabels.insert(link.source).inserted { labels.append(link.source) }
-            if seenLabels.insert(link.target).inserted { labels.append(link.target) }
-            totals[link.source, default: 0] += link.value
-            totals[link.target, default: 0] += link.value
-        }
-        let total = max(totals.values.reduce(0, +), 0.000_001)
+        let nodeTotals = chordNodeTotals(positive)
+        let labels = nodeTotals.map(\.label)
+        let totals = Dictionary(uniqueKeysWithValues: nodeTotals.map { ($0.label, $0.value) })
+        let maximumNodeTotal = max(nodeTotals.map(\.value).max() ?? 0, 0.000_001)
+        let scaledTotal = max(nodeTotals.reduce(0) { $0 + $1.value / maximumNodeTotal }, 0.000_001)
         let basePlot = LivelineRenderer.advancedPlotRect(layout)
         let inset = min(
             textScale.scaled(18),
@@ -82,7 +94,7 @@ extension LivelineAdvancedLayout {
         arcs.reserveCapacity(labels.count)
         for (index, label) in labels.enumerated() {
             let value = totals[label, default: 0]
-            let sweep = available * (value / total)
+            let sweep = available * ((value / maximumNodeTotal) / scaledTotal)
             arcs.append(
                 LivelineChordArc(index: index, label: label, value: value, start: angle, sweep: sweep)
             )
@@ -134,9 +146,11 @@ struct LivelineParallelLayout {
     var axisCount: Int
     var ranges: [ClosedRange<Double>]
     var recordLabelWidth: CGFloat
+    var isRTL: Bool
 
     func x(axis: Int) -> CGFloat {
-        body.minX + CGFloat(axis) / CGFloat(max(axisCount - 1, 1)) * body.width
+        let offset = CGFloat(axis) / CGFloat(max(axisCount - 1, 1)) * body.width
+        return isRTL ? body.maxX - offset : body.minX + offset
     }
 
     func y(_ value: Double, axis: Int) -> CGFloat {
@@ -168,14 +182,15 @@ extension LivelineAdvancedLayout {
         return LivelineParallelLayout(
             plot: plot,
             body: CGRect(
-                x: plot.minX,
+                x: plot.minX + (layout.isRTL ? recordLabelWidth : 0),
                 y: plot.minY + labelHeight,
                 width: max(plot.width - recordLabelWidth, 1),
                 height: max(plot.height - labelHeight, 1)
             ),
             axisCount: axisCount,
             ranges: ranges,
-            recordLabelWidth: recordLabelWidth
+            recordLabelWidth: recordLabelWidth,
+            isRTL: layout.isRTL
         )
     }
 
@@ -220,6 +235,8 @@ extension LivelineAdvancedLayout {
         points: [LivelineXYPoint],
         style: LivelineHexbinStyle
     ) -> [LivelineHexbinCell] {
+        // Membership is computed from normalized data coordinates in `hexbin`,
+        // so this canonical plot affects only returned centers, never grouping.
         let layout = LivelineLayout(
             size: CGSize(width: 320, height: 320),
             padding: .init(top: 0, right: 0, bottom: 0, left: 0),
@@ -242,7 +259,8 @@ extension LivelineAdvancedLayout {
         let yMin = points.map(\.y).min() ?? 0
         let yMax = points.map(\.y).max() ?? 1
         let radius = max(plot.width / CGFloat(style.resolvedBinsAcross) / 1.5, 2)
-        let rowHeight = radius * sqrt(3)
+        let normalizedRadius = 1 / CGFloat(style.resolvedBinsAcross) / 1.5
+        let normalizedRowHeight = normalizedRadius * sqrt(3)
 
         struct Aggregate {
             var center: CGPoint
@@ -252,24 +270,21 @@ extension LivelineAdvancedLayout {
         }
         var bins: [LivelineHexbinCellKey: Aggregate] = [:]
         for point in points {
-            let px = xMin == xMax
-                ? plot.midX
-                : LivelineRenderer.mapped(point.x, from: xMin...xMax, to: plot.minX...plot.maxX)
-            let py = yMin == yMax
-                ? plot.midY
-                : LivelineRenderer.mapped(point.y, from: yMin...yMax, to: (plot.maxY, plot.minY))
-            let column = Int(((px - plot.minX) / (radius * 1.5)).rounded())
-            let rowOffset = column.isMultiple(of: 2) ? 0 : rowHeight / 2
-            let row = Int(((py - plot.minY - rowOffset) / rowHeight).rounded())
+            let normalizedX = xMin == xMax ? 0.5 : CGFloat((point.x - xMin) / (xMax - xMin))
+            let normalizedY = yMin == yMax ? 0.5 : CGFloat((yMax - point.y) / (yMax - yMin))
+            let column = Int((normalizedX / (normalizedRadius * 1.5)).rounded())
+            let rowOffset = column.isMultiple(of: 2) ? 0 : normalizedRowHeight / 2
+            let row = Int(((normalizedY - rowOffset) / normalizedRowHeight).rounded())
             let center = CGPoint(
-                x: plot.minX + CGFloat(column) * radius * 1.5,
-                y: plot.minY + CGFloat(row) * rowHeight + rowOffset)
+                x: CGFloat(column) * normalizedRadius * 1.5,
+                y: CGFloat(row) * normalizedRowHeight + rowOffset)
             let key = LivelineHexbinCellKey(column: column, row: row)
             let current = bins[key]
+            let weight = (current?.weight ?? 0) + point.weight
             bins[key] = Aggregate(
                 center: center,
                 count: (current?.count ?? 0) + 1,
-                weight: (current?.weight ?? 0) + point.weight,
+                weight: weight.isFinite ? weight : Double.greatestFiniteMagnitude,
                 label: current?.label ?? point.label
             )
         }
@@ -279,7 +294,9 @@ extension LivelineAdvancedLayout {
                 LivelineHexbinCell(
                     column: $0.key.column,
                     row: $0.key.row,
-                    center: $0.value.center,
+                    center: CGPoint(
+                        x: plot.minX + $0.value.center.x * plot.width,
+                        y: plot.minY + $0.value.center.y * plot.height),
                     count: $0.value.count,
                     weight: $0.value.weight,
                     label: $0.value.label
@@ -387,9 +404,12 @@ extension LivelineAdvancedLayout {
         textScale: LivelineTextScale
     ) -> LivelinePolarAreaLayout {
         let valid = values.filter { $0.value > 0 }
-        let plot = LivelineRenderer.advancedPlotRect(layout)
-            .insetBy(dx: textScale.scaled(20), dy: textScale.scaled(20))
-        let outer = min(plot.width, plot.height) / 2
+        let basePlot = LivelineRenderer.advancedPlotRect(layout)
+        let inset = min(
+            textScale.scaled(20),
+            max(min(basePlot.width, basePlot.height) / 2 - 0.5, 0))
+        let plot = basePlot.insetBy(dx: inset, dy: inset)
+        let outer = max(min(plot.width, plot.height) / 2, 0)
         let inner = outer * style.resolvedInnerRadiusRatio
         let maximum = max(valid.map(\.value).max() ?? 0, 0.000_001)
         let slice = valid.isEmpty ? 0 : 2 * Double.pi / Double(valid.count)
@@ -519,6 +539,41 @@ struct LivelineContourLayout {
             x: LivelineRenderer.mapped(x, from: xDomain, to: plot.minX...plot.maxX),
             y: LivelineRenderer.mapped(y, from: yDomain, to: (plot.maxY, plot.minY))
         )
+    }
+
+    func interpolatedSample(
+        at location: CGPoint,
+        samples: [LivelineContourSample]
+    ) -> (x: Double, y: Double, value: Double)? {
+        guard plot.contains(location), plot.width > 0, plot.height > 0 else { return nil }
+        let xs = Array(Set(samples.map(\.x))).sorted()
+        let ys = Array(Set(samples.map(\.y))).sorted()
+        guard xs.count >= 2, ys.count >= 2 else { return nil }
+        let xProgress = Double((location.x - plot.minX) / plot.width)
+        let yProgress = Double((plot.maxY - location.y) / plot.height)
+        let x = xDomain.lowerBound + xProgress * (xDomain.upperBound - xDomain.lowerBound)
+        let y = yDomain.lowerBound + yProgress * (yDomain.upperBound - yDomain.lowerBound)
+        let upperX = xs.firstIndex { $0 >= x } ?? xs.count - 1
+        let upperY = ys.firstIndex { $0 >= y } ?? ys.count - 1
+        let lowerX = max(upperX - 1, 0)
+        let lowerY = max(upperY - 1, 0)
+        let values = Dictionary(
+            uniqueKeysWithValues: samples.map {
+                (LivelineContourCoordinate(x: $0.x, y: $0.y), $0.value)
+            })
+        guard
+            let lowerLeft = values[LivelineContourCoordinate(x: xs[lowerX], y: ys[lowerY])],
+            let lowerRight = values[LivelineContourCoordinate(x: xs[upperX], y: ys[lowerY])],
+            let upperLeft = values[LivelineContourCoordinate(x: xs[lowerX], y: ys[upperY])],
+            let upperRight = values[LivelineContourCoordinate(x: xs[upperX], y: ys[upperY])]
+        else { return nil }
+        let xSpan = xs[upperX] - xs[lowerX]
+        let ySpan = ys[upperY] - ys[lowerY]
+        let tx = xSpan > 0 ? (x - xs[lowerX]) / xSpan : 0
+        let ty = ySpan > 0 ? (y - ys[lowerY]) / ySpan : 0
+        let lower = lowerLeft + (lowerRight - lowerLeft) * tx
+        let upper = upperLeft + (upperRight - upperLeft) * tx
+        return (x, y, lower + (upper - lower) * ty)
     }
 }
 

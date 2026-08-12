@@ -264,17 +264,35 @@ enum LivelineAdvancedMath {
         return Int(quotient)
     }
 
+    static func marketDepthLevels(_ levels: [LivelineOrderBookLevel]) -> [LivelineOrderBookLevel] {
+        var sizesByPrice: [Double: (bid: Double, ask: Double)] = [:]
+        for level in levels {
+            let current = sizesByPrice[level.price] ?? (0, 0)
+            let bid = current.bid + level.bidSize
+            let ask = current.ask + level.askSize
+            sizesByPrice[level.price] = (
+                bid.isFinite ? bid : Double.greatestFiniteMagnitude,
+                ask.isFinite ? ask : Double.greatestFiniteMagnitude)
+        }
+        return sizesByPrice.map {
+            LivelineOrderBookLevel(price: $0.key, bidSize: $0.value.bid, askSize: $0.value.ask)
+        }.sorted { $0.price < $1.price }
+    }
+
     static func marketDepthCurve(_ levels: [LivelineOrderBookLevel]) -> LivelineMarketDepthCurve {
+        let levels = marketDepthLevels(levels)
         let bids = levels.filter { $0.bidSize > 0 }.sorted { $0.price > $1.price }
         let asks = levels.filter { $0.askSize > 0 }.sorted { $0.price < $1.price }
         var bidTotal = 0.0
         let bidPoints = bids.map { level -> LivelinePoint in
-            bidTotal += level.bidSize
+            let total = bidTotal + level.bidSize
+            bidTotal = total.isFinite ? total : Double.greatestFiniteMagnitude
             return LivelinePoint(time: level.price, value: bidTotal)
         }.sorted { $0.time < $1.time }
         var askTotal = 0.0
         let askPoints = asks.map { level -> LivelinePoint in
-            askTotal += level.askSize
+            let total = askTotal + level.askSize
+            askTotal = total.isFinite ? total : Double.greatestFiniteMagnitude
             return LivelinePoint(time: level.price, value: askTotal)
         }
         return LivelineMarketDepthCurve(

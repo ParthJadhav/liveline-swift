@@ -530,7 +530,8 @@ extension LivelineRenderer {
         drawMarks: Bool
     ) {
         guard drawMarks, points.count >= 2 else { return }
-        let visible = points.livelineVisible(in: (layout.leftEdge - 2)...layout.rightEdge)
+        let visible = points.livelineVisibleIncludingBoundaryPoints(
+            in: layout.leftEdge...layout.rightEdge)
         guard !visible.isEmpty else { return }
         let plot = advancedPlotRect(layout)
         let maximum = max(visible.map { abs($0.value) }.max() ?? 0, 0.000_001)

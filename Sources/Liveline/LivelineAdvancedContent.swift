@@ -120,7 +120,13 @@ extension LivelineAdvancedChartContent {
                 }, style)
         case .bump(let data, let style):
             return .bump(
-                data.map { LivelineRankSeries(id: $0.id, label: $0.label, points: $0.points) }, style)
+                data.map {
+                    LivelineRankSeries(
+                        id: $0.id, label: $0.label,
+                        points: $0.points.map {
+                            LivelineRankPoint(time: $0.time, rank: $0.rank)
+                        })
+                }, style)
         case .horizon(let data, let style):
             return .horizon(LivelineInputNormalizer.points(data), style)
         case .marimekko(let data, let style):
@@ -166,10 +172,10 @@ extension LivelineAdvancedChartContent {
             // so these are already in their settled form.
             return self
         case .marketDepth(let data, let style):
-            return .marketDepth(
+            return .marketDepth(LivelineAdvancedMath.marketDepthLevels(
                 data.map {
                     LivelineOrderBookLevel(price: $0.price, bidSize: $0.bidSize, askSize: $0.askSize)
-                }.sorted { $0.price < $1.price }, style)
+                }), style)
         case .ohlcVolume(let data, let style):
             let values = data.map {
                 LivelineCandleVolume(
@@ -427,7 +433,7 @@ extension LivelineAdvancedChartContent {
             )
 
         case .horizon(let points, _):
-            let visible = points.livelineVisible(in: visibleRange)
+            let visible = points.livelineVisibleIncludingBoundaryPoints(in: visibleRange)
             let source = visible.isEmpty ? points : visible
             let magnitude = max(source.map { abs($0.value) }.max() ?? 0, 0.000_001)
             return LivelinePreparedChart(
@@ -463,8 +469,7 @@ extension LivelineAdvancedChartContent {
         case .renko(let series, let style):
             let bricks = series.bricks
             let visible = bricks.filter { visibleRange.contains($0.time) }
-            let source = visible.isEmpty ? bricks : visible
-            let range = source.flatMap { brick in
+            let range = bricks.flatMap { brick in
                 style.showsWicks
                     ? [brick.open, brick.close, brick.sourceHigh, brick.sourceLow]
                     : [brick.open, brick.close]
