@@ -48,7 +48,10 @@ extension LivelineAdvancedLayout {
             slot: body.height / CGFloat(max(valid.count, 1)),
             maximumVolume: max(valid.map(\.volume).max() ?? 0, 0.000_001),
             widthRatio: style.resolvedWidthRatio,
-            barSpacing: style.resolvedBarSpacing,
+            barSpacing: min(
+                style.resolvedBarSpacing,
+                body.height / CGFloat(max(valid.count, 1)) * 0.9
+            ),
             isRTL: layout.isRTL
         )
     }
@@ -112,6 +115,20 @@ struct LivelinePointFigureLayout {
     func y(_ value: Double) -> CGFloat {
         LivelineRenderer.mapped(value, from: valueDomain, to: (body.maxY, body.minY))
     }
+
+    /// At most one symbol per visible pixel row is useful. Bounding this list
+    /// also prevents tiny public box sizes from turning one column into millions
+    /// of paths on the render thread.
+    func symbolIndices(for column: LivelinePointFigureColumn) -> [Int] {
+        let capacity = max(min(Int(body.height / max(box, 1)), 2_048), 1)
+        guard column.boxCount > capacity else { return Array(0..<column.boxCount) }
+        return (0..<capacity).map { sample in
+            Int(
+                (Double(sample) * Double(column.boxCount - 1) / Double(max(capacity - 1, 1)))
+                    .rounded()
+            )
+        }
+    }
 }
 
 extension LivelineAdvancedLayout {
@@ -122,28 +139,22 @@ extension LivelineAdvancedLayout {
         textScale: LivelineTextScale
     ) -> LivelinePointFigureLayout {
         let plot = LivelineRenderer.advancedPlotRect(layout)
-            .insetBy(dx: textScale.scaled(6), dy: textScale.scaled(6))
-        let legendHeight = textScale.scaled(15)
-        let body = CGRect(
-            x: plot.minX,
-            y: plot.minY + legendHeight,
-            width: plot.width,
-            height: max(plot.height - legendHeight, 1)
-        )
-        let low = columns.map(\.low).min() ?? 0
-        let high = columns.map(\.high).max() ?? 1
+        let body = plot
         let slot = body.width / CGFloat(max(columns.count, 1))
         return LivelinePointFigureLayout(
             columns: columns,
             plot: plot,
             body: body,
             slot: slot,
-            box: min(
-                slot - style.resolvedColumnSpacing,
-                body.height
-                    / CGFloat(max(Int(((high - low) / style.resolvedBoxSize).rounded(.down)) + 1, 1))
+            box: max(
+                min(
+                    slot - min(style.resolvedColumnSpacing, slot * 0.9),
+                    body.height * CGFloat(style.resolvedBoxSize)
+                        / CGFloat(max(layout.maxValue - layout.minValue, 0.000_001))
+                ),
+                0.1
             ),
-            valueDomain: low...(low == high ? high + 1 : high)
+            valueDomain: layout.minValue...max(layout.maxValue, layout.minValue + 0.000_001)
         )
     }
 }
@@ -181,10 +192,17 @@ extension LivelineAdvancedLayout {
             .insetBy(dx: textScale.scaled(8), dy: textScale.scaled(8))
         let minimum = all.map(\.time).min() ?? 0
         let maximum = all.map(\.time).max() ?? 1
+        let priceDomain: ClosedRange<Double>
+        if minimum == maximum {
+            let padding = max(abs(minimum) * 0.01, 1)
+            priceDomain = (minimum - padding)...(maximum + padding)
+        } else {
+            priceDomain = minimum...maximum
+        }
         return LivelineMarketDepthLayout(
             curve: curve,
             plot: plot,
-            priceDomain: minimum...(minimum == maximum ? maximum + 1 : maximum),
+            priceDomain: priceDomain,
             maximumSize: max(all.map(\.value).max() ?? 0, 0.000_001)
         )
     }

@@ -267,7 +267,8 @@ struct LivelineAudioGraphModel: Equatable {
         case let .advanced(content):
             let descriptor = LivelineAdvancedAudioGraph.make(
                 content: content,
-                visibleRange: visibleRange
+                visibleRange: visibleRange,
+                formatValue: configuration.formatValue
             )
             series = descriptor.series
             isCategorical = descriptor.isCategorical

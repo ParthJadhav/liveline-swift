@@ -233,7 +233,10 @@ enum LivelineRenderer {
             if state.shakeAmplitude < 0.2 { state.shakeAmplitude = 0 }
         }
 
-        if let referenceLine = config.referenceLine, state.chartReveal > 0.01 {
+        if let referenceLine = config.referenceLine,
+            capabilities.usesCartesianGrid,
+            state.chartReveal > 0.01
+        {
             drawReferenceLine(context: &layer, layout: layout, palette: palette, referenceLine: referenceLine, formatValue: config.formatValue, textScale: textScale, alpha: state.chartReveal)
         }
 
@@ -269,7 +272,8 @@ enum LivelineRenderer {
             includeTargets: input.hoverLocation != nil,
             targetLocation: input.hoverLocation,
             textScale: textScale,
-            displayScale: context.environment.displayScale
+            displayScale: context.environment.displayScale,
+            state: state
         )
         state.interactionSnapshot = interactionSnapshot
         let tooltipSelection = LivelineHoverResolver.resolveSelection(

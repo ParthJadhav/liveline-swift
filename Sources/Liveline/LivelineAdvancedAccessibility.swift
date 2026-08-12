@@ -22,7 +22,8 @@ extension LivelineAdvancedChartContent {
             return columns.reduce(0) { $0 + $1.segments.filter { $0.value > 0 }.count }
         case .polarArea(let values, _), .waffle(let values, _):
             return values.filter { $0.value > 0 }.count
-        case .network(let nodes, _, _): return nodes.count
+        case .network(let nodes, let edges, _):
+            return nodes.count + edges.filter { $0.value > 0 }.count
         case .contour(let samples, _): return samples.count
         case .ternary(let points, _): return points.filter { $0.total > 0 }.count
         case .volumeProfile(let levels, _): return levels.filter { $0.volume > 0 }.count
@@ -160,7 +161,9 @@ extension LivelineAdvancedChartContent {
             }
 
         case .network(let nodes, let edges, _):
-            return nodes.map { node in
+            var labelsByID: [String: String] = [:]
+            for node in nodes where labelsByID[node.id] == nil { labelsByID[node.id] = node.label }
+            let nodeEntries = nodes.map { node in
                 let connections = edges.filter { $0.source == node.id || $0.target == node.id }
                 return LivelineAccessibilityEntry(
                     id: node.id,
@@ -170,6 +173,19 @@ extension LivelineAdvancedChartContent {
                         connections.count)
                 )
             }
+            let edgeEntries = edges.filter { $0.value > 0 }.enumerated().map { index, edge in
+                LivelineAccessibilityEntry(
+                    id: "network-edge-\(index)-\(edge.source)-\(edge.target)",
+                    label: String(
+                        format: LivelineStrings.labelFlowRouteFormat,
+                        labelsByID[edge.source] ?? edge.source,
+                        labelsByID[edge.target] ?? edge.target),
+                    value: String(
+                        format: LivelineStrings.accessibilityNamedValueFormat,
+                        LivelineStrings.labelWeight, formatValue(edge.value))
+                )
+            }
+            return nodeEntries + edgeEntries
 
         case .contour(let samples, _):
             return samples.map {
@@ -343,8 +359,9 @@ extension LivelineAdvancedChartContent {
             identifiers = samples.map(\.id)
             variants = samples.flatMap { [$0.x, $0.y, $0.value] }
             count = samples.count
-        case .ternary(let points, _):
-            identifiers = points.flatMap { [$0.id, $0.label] }
+        case .ternary(let points, let style):
+            identifiers = LivelineAdvancedLayout.ternaryAxisLabels(style.axisLabels)
+                + points.flatMap { [$0.id, $0.label] }
             variants = points.flatMap { [$0.a, $0.b, $0.c, $0.magnitude] }
             count = points.count
         case .volumeProfile(let levels, _):

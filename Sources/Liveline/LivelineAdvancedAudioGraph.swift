@@ -10,7 +10,8 @@ struct LivelineAdvancedAudioGraphDescriptor {
 enum LivelineAdvancedAudioGraph {
     static func make(
         content: LivelineAdvancedChartContent,
-        visibleRange: ClosedRange<TimeInterval>?
+        visibleRange: ClosedRange<TimeInterval>?,
+        formatValue: (Double) -> String = { String($0) }
     ) -> LivelineAdvancedAudioGraphDescriptor {
         func timed(_ name: String, continuous: Bool, _ samples: [(TimeInterval, Double)])
             -> LivelineAudioGraphSeries
@@ -49,6 +50,7 @@ enum LivelineAdvancedAudioGraph {
 
         switch content {
         case .violin(let series, _), .ridgeline(let series, _):
+            let series = series.filter { !$0.values.isEmpty }
             let order = series.map(\.label)
             return categories(
                 [
@@ -69,10 +71,19 @@ enum LivelineAdvancedAudioGraph {
                     values.map { ($0.date.timeIntervalSince1970, $0.value) })
             ])
         case .gantt(let tasks, _):
+            let visible = tasks.filter { task in
+                guard let visibleRange else { return true }
+                return task.end >= visibleRange.lowerBound && task.start <= visibleRange.upperBound
+            }
             return time([
-                timed(
-                    LivelineStrings.labelDuration, continuous: false,
-                    tasks.map { ($0.start, $0.end - $0.start) })
+                LivelineAudioGraphSeries(
+                    name: LivelineStrings.labelDuration,
+                    isContinuous: false,
+                    points: visible.map { task in
+                        LivelineAudioGraphPoint(
+                            time: max(task.start, visibleRange?.lowerBound ?? task.start),
+                            category: nil, value: task.end - task.start)
+                    })
             ])
         case .chord(let links, _):
             let samples = links.filter { $0.value > 0 }.map {
@@ -109,8 +120,24 @@ enum LivelineAdvancedAudioGraph {
             ])
         case .marimekko(let columns, _):
             let labels = columns.map(\.label)
+            var segmentOrder: [String] = []
+            for segment in columns.flatMap(\.segments)
+            where segment.value > 0 && !segmentOrder.contains(segment.label) {
+                segmentOrder.append(segment.label)
+            }
+            let segmentSeries = segmentOrder.map { segmentLabel in
+                categorical(
+                    segmentLabel,
+                    columns.compactMap { column in
+                        let value = column.segments
+                            .filter { $0.label == segmentLabel && $0.value > 0 }
+                            .reduce(0) { $0 + $1.value }
+                        return value > 0 ? (column.label, value) : nil
+                    })
+            }
             return categories(
-                [categorical(LivelineStrings.labelColumnWidth, columns.map { ($0.label, $0.width) })],
+                [categorical(LivelineStrings.labelColumnWidth, columns.map { ($0.label, $0.width) })]
+                    + segmentSeries,
                 order: labels)
         case .polarArea(let values, _), .waffle(let values, _):
             let positive = values.filter { $0.value > 0 }
@@ -147,31 +174,38 @@ enum LivelineAdvancedAudioGraph {
                     categorical(axes[2], valid.map { ($0.label, $0.c / $0.total) }),
                 ], order: order, range: 0...1)
         case .volumeProfile(let levels, _):
-            let order = levels.map { String($0.price) }
+            let levels = levels.filter { $0.volume > 0 }
+            let order = levels.map { formatValue($0.price) }
             return categories(
                 [categorical(LivelineStrings.labelVolume, zip(order, levels).map { ($0, $1.volume) })],
                 order: order)
         case .renko(let series, _):
             let bricks = series.bricks
-            return time([
-                timed(LivelineStrings.labelClose, continuous: false, bricks.map { ($0.time, $0.close) })
-            ])
+            let order = bricks.indices.map {
+                String(format: LivelineStrings.labelColumnFormat, $0 + 1)
+            }
+            return categories(
+                [categorical(LivelineStrings.labelClose, zip(order, bricks).map { ($0, $1.close) })],
+                order: order)
         case .heikinAshi(let series, _):
             return time(candleSeries(series.candles, timed: timed))
         case .marketDepth(let levels, _):
             let curve = LivelineAdvancedMath.marketDepthCurve(levels)
-            return time([
-                timed(LivelineStrings.labelBid, continuous: true, curve.bids.map { ($0.time, $0.value) }),
-                timed(LivelineStrings.labelAsk, continuous: true, curve.asks.map { ($0.time, $0.value) }),
-            ])
+            let prices = Array(Set((curve.bids + curve.asks).map(\.time))).sorted()
+            let order = prices.map(formatValue)
+            return categories([
+                categorical(
+                    LivelineStrings.labelBid,
+                    curve.bids.map { (formatValue($0.time), $0.value) }),
+                categorical(
+                    LivelineStrings.labelAsk,
+                    curve.asks.map { (formatValue($0.time), $0.value) }),
+            ], order: order)
         case .ohlcVolume(let values, _):
             let candles = values.map {
                 LivelineCandle(time: $0.time, open: $0.open, high: $0.high, low: $0.low, close: $0.close)
             }
-            return time(
-                candleSeries(candles, timed: timed) + [
-                    timed(LivelineStrings.labelVolume, continuous: false, values.map { ($0.time, $0.volume) })
-                ])
+            return time(candleSeries(candles, timed: timed))
         case .pointAndFigure(let series, _):
             let columns = series.columns
             let order = columns.map { String(format: LivelineStrings.labelColumnFormat, $0.index + 1) }

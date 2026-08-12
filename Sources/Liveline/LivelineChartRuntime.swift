@@ -275,6 +275,7 @@ enum LivelineInteractionRegion {
     case x
     case rect(CGRect)
     case circle(center: CGPoint, radius: CGFloat)
+    case path(Path)
     case sector(center: CGPoint, innerRadius: CGFloat, outerRadius: CGFloat, startAngle: Double, endAngle: Double)
 }
 
@@ -376,6 +377,8 @@ enum LivelineHoverResolver {
                 .contains(location)
         case let .circle(center, radius):
             return distanceSquared(location, center) <= radius * radius
+        case let .path(path):
+            return path.contains(location, eoFill: false)
         case let .sector(center, innerRadius, outerRadius, startAngle, endAngle):
             let dx = location.x - center.x
             let dy = location.y - center.y

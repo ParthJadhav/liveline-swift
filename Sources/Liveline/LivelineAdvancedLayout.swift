@@ -35,6 +35,7 @@ struct LivelineViolinLayout {
     var plot: CGRect
     var bodyBottom: CGFloat
     var slot: CGFloat
+    var valueDomain: ClosedRange<Double>
 
     func centerX(at index: Int) -> CGFloat { plot.minX + slot * (CGFloat(index) + 0.5) }
 
@@ -86,17 +87,21 @@ extension LivelineAdvancedLayout {
         series: [LivelineDistributionSeries],
         style: LivelineViolinStyle,
         layout: LivelineLayout,
-        textScale: LivelineTextScale
+        textScale: LivelineTextScale,
+        profiles suppliedProfiles: [LivelineDistributionProfile]? = nil
     ) -> LivelineViolinLayout {
-        let profiles = distributionProfiles(series, bandwidth: style.bandwidth)
+        let profiles = suppliedProfiles ?? distributionProfiles(series, bandwidth: style.bandwidth)
         let plot = LivelineRenderer.advancedPlotRect(layout)
             .insetBy(dx: textScale.scaled(4), dy: textScale.scaled(4))
         let labelHeight = style.showsLabels ? textScale.scaled(22) : 0
+        let lower = profiles.compactMap { $0.profile.samples.first?.value }.min() ?? 0
+        let upper = profiles.compactMap { $0.profile.samples.last?.value }.max() ?? 1
         return LivelineViolinLayout(
             profiles: profiles,
             plot: plot,
             bodyBottom: plot.maxY - labelHeight,
-            slot: plot.width / CGFloat(max(profiles.count, 1))
+            slot: plot.width / CGFloat(max(profiles.count, 1)),
+            valueDomain: lower <= upper ? lower...upper : upper...lower
         )
     }
 
@@ -104,9 +109,10 @@ extension LivelineAdvancedLayout {
         series: [LivelineDistributionSeries],
         style: LivelineRidgelineStyle,
         layout: LivelineLayout,
-        textScale: LivelineTextScale
+        textScale: LivelineTextScale,
+        profiles suppliedProfiles: [LivelineDistributionProfile]? = nil
     ) -> LivelineRidgelineLayout {
-        let profiles = distributionProfiles(series, bandwidth: style.bandwidth)
+        let profiles = suppliedProfiles ?? distributionProfiles(series, bandwidth: style.bandwidth)
         let plot = LivelineRenderer.advancedPlotRect(layout)
             .insetBy(dx: textScale.scaled(4), dy: textScale.scaled(8))
         let labelWidth = style.showsLabels ? min(textScale.scaled(82), layout.chartWidth * 0.24) : 0
@@ -182,7 +188,14 @@ extension LivelineAdvancedLayout {
             width: max(plot.width - weekdayGutter, 1),
             height: max(plot.height - monthGutter, 1)
         )
-        let spacing = style.resolvedCellSpacing
+        let requestedSpacing = style.resolvedCellSpacing
+        let spacing = min(
+            requestedSpacing,
+            min(
+                weeks > 1 ? body.width / CGFloat(weeks - 1) : requestedSpacing,
+                body.height / 6
+            ) * 0.9
+        )
         let cell = min(
             (body.width - spacing * CGFloat(max(weeks - 1, 0))) / CGFloat(weeks),
             (body.height - spacing * 6) / 7
@@ -194,10 +207,14 @@ extension LivelineAdvancedLayout {
             totalDays: totalDays,
             leadingOffset: leadingOffset,
             body: body,
-            cell: cell,
+            cell: max(cell, 0.1),
             spacing: spacing,
             originX: body.minX + max((body.width - usedWidth) / 2, 0),
-            maximumValue: max(values.map(\.value).filter { $0 > 0 }.max() ?? 0, 0.000_001)
+            maximumValue: max(
+                calendarValuesByDay(values, calendar: calendar).values
+                    .map(\.value).filter { $0 > 0 }.max() ?? 0,
+                0.000_001
+            )
         )
     }
 
@@ -234,10 +251,11 @@ struct LivelineGanttLayout {
     func rect(for task: LivelineGanttTask, layout: LivelineLayout, reveal: Double = 1) -> CGRect {
         let x1 = layout.x(for: task.start)
         let x2 = layout.x(for: task.end)
+        let width = max(abs(x2 - x1) * CGFloat(reveal), 2)
         return CGRect(
-            x: min(x1, x2),
+            x: layout.isRTL ? max(x1, x2) - width : min(x1, x2),
             y: plot.minY + slot * CGFloat(task.lane) + rowSpacing / 2,
-            width: max(abs(x2 - x1) * CGFloat(reveal), 2),
+            width: width,
             height: max(slot - rowSpacing, 2)
         )
     }
@@ -256,7 +274,7 @@ extension LivelineAdvancedLayout {
         return LivelineGanttLayout(
             plot: plot,
             slot: plot.height / CGFloat(laneCount),
-            rowSpacing: style.resolvedRowSpacing
+            rowSpacing: min(style.resolvedRowSpacing, plot.height / CGFloat(laneCount) * 0.9)
         )
     }
 
@@ -279,15 +297,55 @@ struct LivelineBumpLayout {
     var rankDomain: ClosedRange<Double>
     var lowerRankIsBetter: Bool
     var timeDomain: ClosedRange<TimeInterval>
+    var isRTL: Bool
 
     func x(time: TimeInterval) -> CGFloat {
-        LivelineRenderer.mapped(time, from: timeDomain, to: body.minX...body.maxX)
+        let x = LivelineRenderer.mapped(time, from: timeDomain, to: body.minX...body.maxX)
+        return isRTL ? body.minX + body.maxX - x : x
     }
 
     func y(rank: Double) -> CGFloat {
         let span = max(rankDomain.upperBound - rankDomain.lowerBound, 0.000_001)
         let t = (rank - rankDomain.lowerBound) / span
         return body.minY + CGFloat(lowerRankIsBetter ? t : 1 - t) * body.height
+    }
+
+    /// Finds the visible slice without walking an arbitrarily long live history.
+    /// The input model is time-sorted, so two binary searches reduce each render
+    /// pass to O(log n + visible points).
+    func visibleIndexRange(
+        in points: [LivelineRankPoint],
+        includingBoundaryPoints: Bool
+    ) -> ClosedRange<Int>? {
+        guard !points.isEmpty else { return nil }
+
+        var low = 0
+        var high = points.count
+        while low < high {
+            let middle = low + (high - low) / 2
+            if points[middle].time < timeDomain.lowerBound {
+                low = middle + 1
+            } else {
+                high = middle
+            }
+        }
+        let firstVisible = low
+
+        low = firstVisible
+        high = points.count
+        while low < high {
+            let middle = low + (high - low) / 2
+            if points[middle].time <= timeDomain.upperBound {
+                low = middle + 1
+            } else {
+                high = middle
+            }
+        }
+        let visibleEnd = low
+        guard firstVisible < visibleEnd else { return nil }
+        let first = includingBoundaryPoints ? max(firstVisible - 1, 0) : firstVisible
+        let last = includingBoundaryPoints ? min(visibleEnd, points.count - 1) : visibleEnd - 1
+        return first...last
     }
 }
 
@@ -306,7 +364,7 @@ extension LivelineAdvancedLayout {
             .insetBy(dx: textScale.scaled(3), dy: textScale.scaled(8))
         return LivelineBumpLayout(
             body: CGRect(
-                x: plot.minX,
+                x: plot.minX + (layout.isRTL ? labelReserve : 0),
                 y: plot.minY,
                 width: max(plot.width - labelReserve, 1),
                 height: plot.height
@@ -314,7 +372,8 @@ extension LivelineAdvancedLayout {
             rankDomain: minimum...maximum,
             lowerRankIsBetter: style.lowerRankIsBetter,
             timeDomain: layout.leftEdge...(layout.leftEdge == layout.rightEdge
-                ? layout.rightEdge + 1 : layout.rightEdge)
+                ? layout.rightEdge + 1 : layout.rightEdge),
+            isRTL: layout.isRTL
         )
     }
 }

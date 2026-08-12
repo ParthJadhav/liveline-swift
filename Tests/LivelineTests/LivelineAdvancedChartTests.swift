@@ -703,6 +703,311 @@ final class LivelineAdvancedChartTests: XCTestCase {
         XCTAssertEqual(rtl.valueAxisLabelX(offset: 6), 44, accuracy: 0.000_1)
     }
 
+    func testDenseAdvancedLayoutsKeepPositiveGeometryAndBoundSymbolWork() throws {
+        let layout = LivelineLayout(
+            size: CGSize(width: 120, height: 90),
+            padding: .init(top: 5, right: 5, bottom: 5, left: 5),
+            minValue: 0, maxValue: 100, leftEdge: 0, rightEdge: 10)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let start = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 1, day: 1)))
+        let days = (0..<365).map { offset in
+            LivelineCalendarValue(
+                date: calendar.date(byAdding: .day, value: offset, to: start)!, value: Double(offset + 1))
+        }
+        let calendarGeometry = try XCTUnwrap(
+            LivelineAdvancedLayout.calendar(
+                values: days,
+                style: .init(calendar: calendar, cellSpacing: 8),
+                layout: layout,
+                textScale: .standard))
+        XCTAssertGreaterThan(calendarGeometry.cell, 0)
+
+        let waffle = LivelineAdvancedLayout.waffle(
+            values: [.init(id: "all", label: "All", value: 1)],
+            style: .init(columns: 40, rows: 40, spacing: 10, showsLegend: false),
+            layout: layout,
+            textScale: .standard)
+        XCTAssertGreaterThan(waffle.cell, 0)
+
+        let tasks = (0..<20).map {
+            LivelineGanttTask(id: "\($0)", label: "Task", start: 0, end: 10, lane: $0)
+        }
+        let gantt = LivelineAdvancedLayout.gantt(
+            tasks: tasks, style: .init(rowSpacing: 20), layout: layout, textScale: .standard)
+        XCTAssertLessThan(gantt.rowSpacing, gantt.slot)
+        XCTAssertGreaterThan(gantt.rect(for: tasks.last!, layout: layout).height, 0)
+
+        let levels = (0..<80).map { LivelinePriceVolume(price: Double($0), volume: 1) }
+        let volume = LivelineAdvancedLayout.volumeProfile(
+            levels: levels, style: .init(barSpacing: 12), layout: layout, textScale: .standard)
+        XCTAssertLessThan(volume.barSpacing, volume.slot)
+        XCTAssertGreaterThan(volume.rect(at: 0).height, 0)
+
+        let column = LivelinePointFigureColumn(
+            index: 0, isRising: true, low: 0, high: 100, boxSize: 0.000_001)
+        let figure = LivelineAdvancedLayout.pointAndFigure(
+            columns: [column], style: .init(boxSize: 0.000_001, columnSpacing: 20),
+            layout: layout, textScale: .standard)
+        XCTAssertGreaterThan(figure.box, 0)
+        XCTAssertLessThanOrEqual(figure.symbolIndices(for: column).count, 2_048)
+    }
+
+    func testChordGeometryPartitionsLinksAndHandlesLargeGapsAndSelfLinks() {
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 10, right: 10, bottom: 10, left: 10),
+            minValue: 0, maxValue: 10, leftEdge: 0, rightEdge: 1)
+        let links = [
+            LivelineChordLink(source: "A", target: "A", value: 2),
+            LivelineChordLink(source: "A", target: "B", value: 3),
+            LivelineChordLink(source: "A", target: "C", value: 1),
+        ]
+        let geometry = LivelineAdvancedLayout.chord(
+            links: links, style: .init(gapDegrees: 12), layout: layout, textScale: .standard)
+        XCTAssertEqual(geometry.arcs.map(\.label), ["A", "B", "C"])
+        XCTAssertEqual(geometry.ribbons.count, links.count)
+        let aEndpoints = geometry.ribbons.flatMap { ribbon -> [ClosedRange<Double>] in
+            var result: [ClosedRange<Double>] = []
+            if ribbon.link.source == "A" { result.append(ribbon.sourceStart...ribbon.sourceEnd) }
+            if ribbon.link.target == "A" { result.append(ribbon.targetStart...ribbon.targetEnd) }
+            return result
+        }.sorted { $0.lowerBound < $1.lowerBound }
+        for pair in zip(aEndpoints, aEndpoints.dropFirst()) {
+            XCTAssertLessThanOrEqual(pair.0.upperBound, pair.1.lowerBound + 0.000_001)
+        }
+        let first = geometry.arcs.first!.start
+        let last = geometry.arcs.last!.end
+        XCTAssertLessThanOrEqual(last - first, 2 * Double.pi + 0.000_001)
+    }
+
+    func testAggregatedMarksProduceOneMatchingHoverTarget() throws {
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0, maxValue: 20, leftEdge: 0, rightEdge: 10)
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let day = Date(timeIntervalSince1970: 1_700_000_000)
+        let calendarTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .calendarHeatmap([
+                .init(date: day, value: 2),
+                .init(date: day.addingTimeInterval(3_600), value: 8),
+            ], .init(calendar: calendar)),
+            layout: layout, palette: palette, configuration: .init(),
+            targetLocation: nil, textScale: .standard)
+        XCTAssertEqual(calendarTargets.count, 1)
+        XCTAssertEqual(calendarTargets[0].selection.hover.value, 8)
+
+        let contour = [
+            LivelineContourSample(id: "a", x: 0, y: 0, value: 2),
+            LivelineContourSample(id: "b", x: 0, y: 0, value: 6),
+            LivelineContourSample(id: "c", x: 1, y: 0, value: 1),
+            LivelineContourSample(id: "d", x: 0, y: 1, value: 2),
+            LivelineContourSample(id: "e", x: 1, y: 1, value: 3),
+        ]
+        let contourTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .contour(contour, .init()), layout: layout, palette: palette,
+            configuration: .init(), targetLocation: nil, textScale: .standard)
+        XCTAssertEqual(contourTargets.count, 4)
+        XCTAssertEqual(contourTargets.first { $0.selection.hover.time == 0 }?.selection.hover.value, 4)
+    }
+
+    func testPolarAreaBoundsGapsAndPreservesAnnularAreaRatios() {
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 10, right: 10, bottom: 10, left: 10),
+            minValue: 0, maxValue: 10, leftEdge: 0, rightEdge: 1)
+        let crowded = (0..<25).map {
+            LivelineCategoryValue(id: "\($0)", label: "\($0)", value: 1)
+        }
+        let crowdedGeometry = LivelineAdvancedLayout.polarArea(
+            values: crowded, style: .init(gapDegrees: 15), layout: layout, textScale: .standard)
+        XCTAssertTrue(crowdedGeometry.wedges.allSatisfy { $0.sweep > 0 })
+
+        let annular = LivelineAdvancedLayout.polarArea(
+            values: [
+                .init(id: "small", label: "Small", value: 1),
+                .init(id: "large", label: "Large", value: 4),
+            ], style: .init(innerRadiusRatio: 0.75, gapDegrees: 0),
+            layout: layout, textScale: .standard)
+        let areas = annular.wedges.map {
+            Double($0.radius * $0.radius - annular.innerRadius * annular.innerRadius)
+        }
+        XCTAssertEqual(areas[0] / areas[1], 0.25, accuracy: 0.000_1)
+    }
+
+    func testBumpAndParallelTargetsFollowVisibleAndFinalGeometry() throws {
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 1, maxValue: 3, leftEdge: 2, rightEdge: 4)
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
+        let rank = LivelineRankSeries(
+            id: "team", label: "Falcons",
+            points: (0...6).map { .init(time: Double($0), rank: Double($0 % 3 + 1)) })
+        let bumpTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .bump([rank], .init()), layout: layout, palette: palette,
+            configuration: .init(), targetLocation: nil, textScale: .standard)
+        XCTAssertEqual(bumpTargets.count, 3)
+        XCTAssertTrue(bumpTargets.allSatisfy { $0.selection.heading == "Falcons" })
+        XCTAssertFalse(
+            LivelineChartContent.advanced(.bump([rank], .init())).semantics().capabilities
+                .usesCartesianGrid)
+
+        var rtl = layout
+        rtl.isRTL = true
+        let ltrGeometry = try XCTUnwrap(
+            LivelineAdvancedLayout.bump(
+                series: [rank], style: .init(), layout: layout, textScale: .standard))
+        let rtlGeometry = try XCTUnwrap(
+            LivelineAdvancedLayout.bump(
+                series: [rank], style: .init(), layout: rtl, textScale: .standard))
+        XCTAssertEqual(
+            ltrGeometry.x(time: 4) + rtlGeometry.x(time: 4),
+            layout.plotLeftX + layout.rightX,
+            accuracy: 0.001)
+
+        let records = [
+            LivelineParallelRecord(id: "short", label: "Short", values: [1, 2]),
+            LivelineParallelRecord(id: "long", label: "Long", values: [1, 2, 3]),
+        ]
+        let parallel = try XCTUnwrap(
+            LivelineAdvancedLayout.parallelCoordinates(
+                records: records, layout: layout, textScale: .standard))
+        let parallelTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .parallelCoordinates(records, .init()), layout: layout, palette: palette,
+            configuration: .init(), targetLocation: nil, textScale: .standard)
+        XCTAssertEqual(parallelTargets[0].selection.anchor.x, parallel.x(axis: 1), accuracy: 0.001)
+    }
+
+    func testAdvancedAudioGraphMatchesRenderedDimensionsAndViewport() {
+        let distributions = [
+            LivelineDistributionSeries(id: "empty", label: "Empty", values: []),
+            LivelineDistributionSeries(id: "real", label: "Real", values: [2, 3, 4]),
+        ]
+        let distributionAudio = LivelineAdvancedAudioGraph.make(
+            content: .violin(distributions, .init()), visibleRange: nil)
+        XCTAssertEqual(distributionAudio.categoryOrder, ["Real"])
+
+        let ganttAudio = LivelineAdvancedAudioGraph.make(
+            content: .gantt([
+                .init(id: "overlap", label: "Overlap", start: 0, end: 8, lane: 0),
+                .init(id: "outside", label: "Outside", start: 0, end: 1, lane: 1),
+            ], .init()), visibleRange: 5...10)
+        XCTAssertEqual(ganttAudio.series[0].points.count, 1)
+        XCTAssertEqual(ganttAudio.series[0].points[0].time, 5)
+
+        let marimekkoAudio = LivelineAdvancedAudioGraph.make(
+            content: .marimekko([
+                .init(
+                    id: "one", label: "One", width: 2,
+                    segments: [.init(id: "a", label: "A", value: 3)])
+            ], .init()), visibleRange: nil)
+        XCTAssertEqual(marimekkoAudio.series.map(\.name), [LivelineStrings.labelColumnWidth, "A"])
+
+        let volumeAudio = LivelineAdvancedAudioGraph.make(
+            content: .volumeProfile([
+                .init(price: 100, volume: 0), .init(price: 101, volume: 5),
+            ], .init()), visibleRange: nil, formatValue: { "P\(Int($0))" })
+        XCTAssertEqual(volumeAudio.categoryOrder, ["P101"])
+
+        let depthAudio = LivelineAdvancedAudioGraph.make(
+            content: .marketDepth([.init(price: 99, bidSize: 2)], .init()),
+            visibleRange: nil, formatValue: { "P\(Int($0))" })
+        XCTAssertTrue(depthAudio.isCategorical)
+        XCTAssertEqual(depthAudio.categoryOrder, ["P99"])
+
+        let renkoStyle = LivelineRenkoStyle(brickSize: 1)
+        let renkoAudio = LivelineAdvancedAudioGraph.make(
+            content: .renko(
+                .init(points: [.init(time: 0, value: 100), .init(time: 1, value: 103)], style: renkoStyle),
+                renkoStyle), visibleRange: nil)
+        XCTAssertTrue(renkoAudio.isCategorical)
+
+        let ohlcAudio = LivelineAdvancedAudioGraph.make(
+            content: .ohlcVolume([
+                .init(time: 0, open: 10, high: 12, low: 9, close: 11, volume: 1_000_000)
+            ], .init()), visibleRange: nil)
+        XCTAssertFalse(ohlcAudio.series.contains { $0.name == LivelineStrings.labelVolume })
+    }
+
+    func testAccessibilityAndPreparationRejectInvisibleOrMisleadingData() throws {
+        let nodes = [
+            LivelineNetworkNode(id: "a", label: "Alpha"),
+            LivelineNetworkNode(id: "b", label: "Beta"),
+        ]
+        let content = LivelineAdvancedChartContent.network(
+            nodes,
+            [.init(source: "a", target: "b", value: 0), .init(source: "a", target: "b", value: 4)],
+            .init()).normalized()
+        guard case .network(_, let edges, _) = content else { return XCTFail("Expected network") }
+        XCTAssertEqual(edges.count, 1)
+        XCTAssertEqual(content.accessibilityEntryCount, 3)
+        let accessibilityEntries = content.accessibilityEntries(
+            formatValue: { String($0) }, formatTime: { String($0) })
+        XCTAssertTrue(
+            accessibilityEntries.contains {
+                $0.label == "Alpha to Beta" && $0.value.contains("4")
+            })
+
+        let point = LivelineTernaryPoint(id: "t", label: "T", a: 1, b: 2, c: 3)
+        let oldKey = LivelineAdvancedChartContent.ternary(
+            [point], .init(axisLabels: ["A", "B", "C"])).accessibilityCacheDescriptor
+        let newKey = LivelineAdvancedChartContent.ternary(
+            [point], .init(axisLabels: ["X", "Y", "Z"])).accessibilityCacheDescriptor
+        XCTAssertNotEqual(oldKey.identifiers, newKey.identifiers)
+
+        let sparse = LivelineAdvancedChartContent.contour([
+            .init(id: "0", x: 0, y: 0, value: 0),
+            .init(id: "1", x: 1, y: 0, value: 1),
+            .init(id: "2", x: 0, y: 1, value: 1),
+        ], .init())
+        XCTAssertTrue(sparse.isEmpty)
+        XCTAssertFalse(
+            sparse.prepared(leftEdge: 0, rightEdge: 1, configuration: .init()).hasData)
+
+        let hugeRenkoStyle = LivelineRenkoStyle(brickSize: 0.000_001)
+        let hugeRenko = LivelineRenkoSeries(
+            points: [.init(time: 0, value: 0), .init(time: 1, value: 100)],
+            style: hugeRenkoStyle)
+        XCTAssertTrue(hugeRenko.bricks.isEmpty)
+        XCTAssertTrue(LivelineAdvancedChartContent.renko(hugeRenko, hugeRenkoStyle).isEmpty)
+
+        let wickPoints = [LivelinePoint(time: 0, value: 100), LivelinePoint(time: 1, value: 101.9)]
+        let hiddenStyle = LivelineRenkoStyle(brickSize: 1, showsWicks: false)
+        let shownStyle = LivelineRenkoStyle(brickSize: 1, showsWicks: true)
+        let series = LivelineRenkoSeries(points: wickPoints, style: hiddenStyle)
+        let hidden = LivelineAdvancedChartContent.renko(series, hiddenStyle)
+            .prepared(leftEdge: 0, rightEdge: 2, configuration: .init())
+        let shown = LivelineAdvancedChartContent.renko(series, shownStyle)
+            .prepared(leftEdge: 0, rightEdge: 2, configuration: .init())
+        XCTAssertEqual(hidden.rangePoints.map(\.value).max(), 101)
+        XCTAssertEqual(shown.rangePoints.map(\.value).max(), 101.9)
+    }
+
+    func testDistributionProfilesShareOneDomainAndOneRenderStateCacheEntry() {
+        let series = [
+            LivelineDistributionSeries(id: "small", label: "Small", values: [0, 1]),
+            LivelineDistributionSeries(id: "large", label: "Large", values: [100, 110]),
+        ]
+        let state = LivelineRenderState()
+        let first = state.distributionProfiles(series: series, bandwidth: nil)
+        let second = state.distributionProfiles(series: series, bandwidth: nil)
+        XCTAssertEqual(first.map(\.profile), second.map(\.profile))
+        XCTAssertEqual(state.distributionProfileBuildCount, 1)
+
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0, maxValue: 110, leftEdge: 0, rightEdge: 1)
+        let geometry = LivelineAdvancedLayout.violin(
+            series: series, style: .init(), layout: layout, textScale: .standard, profiles: first)
+        XCTAssertLessThanOrEqual(geometry.valueDomain.lowerBound, 0)
+        XCTAssertGreaterThanOrEqual(geometry.valueDomain.upperBound, 110)
+    }
+
     private static func fixture(named name: String) -> LivelineAdvancedChartContent {
         fixtures.first { $0.name == name }!.content
     }

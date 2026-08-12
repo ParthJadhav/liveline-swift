@@ -33,7 +33,9 @@ struct LivelinePointFigureColumn: Equatable {
     var boxSize: Double
 
     var boxCount: Int {
-        max(Int(((high - low) / boxSize).rounded(.down)) + 1, 1)
+        let raw = ((high - low) / boxSize).rounded(.down)
+        guard raw.isFinite, raw < Double(Int.max - 1) else { return Int.max }
+        return max(Int(raw) + 1, 1)
     }
 }
 
@@ -123,7 +125,13 @@ enum LivelineAdvancedMath {
         for point in points.dropFirst() {
             let delta = point.value - anchor
             let direction = delta >= 0 ? 1.0 : -1.0
-            let count = min(Int((abs(delta) / size).rounded(.down)), 10_000)
+            let rawCount = (abs(delta) / size).rounded(.down)
+            // A move this large cannot be represented faithfully inside the
+            // bounded derived-series contract. Reject it instead of returning a
+            // truncated chart whose final brick and internal anchor disagree
+            // with the processed price.
+            guard rawCount.isFinite, rawCount <= 10_000 else { return [] }
+            let count = Int(rawCount)
             guard count > 0 else { continue }
             for _ in 0..<count {
                 let next = anchor + direction * size

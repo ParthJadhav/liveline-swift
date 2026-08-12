@@ -15,9 +15,38 @@ struct LivelineChordArc {
 
 struct LivelineChordLayout {
     var arcs: [LivelineChordArc]
+    var ribbons: [LivelineChordRibbon]
     var center: CGPoint
     var innerRadius: CGFloat
     var outerRadius: CGFloat
+}
+
+struct LivelineChordRibbon {
+    var index: Int
+    var link: LivelineChordLink
+    var sourceStart: Double
+    var sourceEnd: Double
+    var targetStart: Double
+    var targetEnd: Double
+
+    func path(center: CGPoint, radius: CGFloat) -> Path {
+        let start = LivelineMath.polarPoint(center: center, radius: radius, angle: sourceStart)
+        let end = LivelineMath.polarPoint(center: center, radius: radius, angle: targetEnd)
+        var ribbon = Path()
+        ribbon.move(to: start)
+        ribbon.addCurve(to: end, control1: center, control2: center)
+        ribbon.addArc(
+            center: center, radius: radius, startAngle: .radians(targetEnd),
+            endAngle: .radians(targetStart), clockwise: true)
+        let sourceReturn = LivelineMath.polarPoint(
+            center: center, radius: radius, angle: sourceEnd)
+        ribbon.addCurve(to: sourceReturn, control1: center, control2: center)
+        ribbon.addArc(
+            center: center, radius: radius, startAngle: .radians(sourceEnd),
+            endAngle: .radians(sourceStart), clockwise: true)
+        ribbon.closeSubpath()
+        return ribbon
+    }
 }
 
 extension LivelineAdvancedLayout {
@@ -29,10 +58,11 @@ extension LivelineAdvancedLayout {
     ) -> LivelineChordLayout {
         let positive = links.filter { $0.value > 0 }
         var labels: [String] = []
+        var seenLabels: Set<String> = []
         var totals: [String: Double] = [:]
         for link in positive {
-            if totals[link.source] == nil { labels.append(link.source) }
-            if totals[link.target] == nil { labels.append(link.target) }
+            if seenLabels.insert(link.source).inserted { labels.append(link.source) }
+            if seenLabels.insert(link.target).inserted { labels.append(link.target) }
             totals[link.source, default: 0] += link.value
             totals[link.target, default: 0] += link.value
         }
@@ -40,8 +70,9 @@ extension LivelineAdvancedLayout {
         let plot = LivelineRenderer.advancedPlotRect(layout)
             .insetBy(dx: textScale.scaled(18), dy: textScale.scaled(18))
         let outerRadius = min(plot.width, plot.height) / 2
-        let gap = style.resolvedGapDegrees * Double.pi / 180
-        let available = max(2 * Double.pi - gap * Double(labels.count), 0.1)
+        let requestedGap = style.resolvedGapDegrees * Double.pi / 180
+        let gap = labels.isEmpty ? 0 : min(requestedGap, 2 * Double.pi / Double(labels.count) * 0.9)
+        let available = max(2 * Double.pi - gap * Double(labels.count), 0)
 
         var angle = -Double.pi / 2
         var arcs: [LivelineChordArc] = []
@@ -54,8 +85,37 @@ extension LivelineAdvancedLayout {
             )
             angle += sweep + gap
         }
+        let arcsByLabel = Dictionary(uniqueKeysWithValues: arcs.map { ($0.label, $0) })
+        var offsets: [String: Double] = [:]
+        let ribbons = positive.enumerated().compactMap { index, link -> LivelineChordRibbon? in
+            guard let source = arcsByLabel[link.source], let target = arcsByLabel[link.target] else {
+                return nil
+            }
+            if link.source == link.target {
+                let start = source.start + offsets[link.source, default: 0]
+                let sweep = source.sweep * min(2 * link.value / max(source.value, 0.000_001), 1)
+                let midpoint = start + sweep / 2
+                offsets[link.source, default: 0] += sweep
+                return LivelineChordRibbon(
+                    index: index, link: link,
+                    sourceStart: start, sourceEnd: midpoint,
+                    targetStart: midpoint, targetEnd: start + sweep)
+            }
+            let sourceStart = source.start + offsets[link.source, default: 0]
+            let sourceSweep = source.sweep * link.value / max(source.value, 0.000_001)
+            offsets[link.source, default: 0] += sourceSweep
+            let targetStart = target.start + offsets[link.target, default: 0]
+            let targetSweep = target.sweep * link.value / max(target.value, 0.000_001)
+            offsets[link.target, default: 0] += targetSweep
+            return LivelineChordRibbon(
+                index: index, link: link,
+                sourceStart: sourceStart, sourceEnd: sourceStart + sourceSweep,
+                targetStart: targetStart, targetEnd: targetStart + targetSweep
+            )
+        }
         return LivelineChordLayout(
             arcs: arcs,
+            ribbons: ribbons,
             center: CGPoint(x: plot.midX, y: plot.midY),
             innerRadius: outerRadius * style.resolvedInnerRadiusRatio,
             outerRadius: outerRadius
@@ -177,10 +237,12 @@ extension LivelineAdvancedLayout {
         }
         var bins: [LivelineHexbinCellKey: Aggregate] = [:]
         for point in points {
-            let px = LivelineRenderer.mapped(
-                point.x, from: xMin...(xMin == xMax ? xMax + 1 : xMax), to: plot.minX...plot.maxX)
-            let py = LivelineRenderer.mapped(
-                point.y, from: yMin...(yMin == yMax ? yMax + 1 : yMax), to: (plot.maxY, plot.minY))
+            let px = xMin == xMax
+                ? plot.midX
+                : LivelineRenderer.mapped(point.x, from: xMin...xMax, to: plot.minX...plot.maxX)
+            let py = yMin == yMax
+                ? plot.midY
+                : LivelineRenderer.mapped(point.y, from: yMin...yMax, to: (plot.maxY, plot.minY))
             let column = Int(((px - plot.minX) / (radius * 1.5)).rounded())
             let rowOffset = column.isMultiple(of: 2) ? 0 : rowHeight / 2
             let row = Int(((py - plot.minY - rowOffset) / rowHeight).rounded())
@@ -316,14 +378,20 @@ extension LivelineAdvancedLayout {
         let inner = outer * style.resolvedInnerRadiusRatio
         let maximum = max(valid.map(\.value).max() ?? 0, 0.000_001)
         let slice = valid.isEmpty ? 0 : 2 * Double.pi / Double(valid.count)
-        let gap = style.resolvedGapDegrees * Double.pi / 180
+        let requestedGap = style.resolvedGapDegrees * Double.pi / 180
+        let gap = slice > 0 ? min(requestedGap, slice * 0.9) : 0
         let wedges = valid.enumerated().map { index, value in
             LivelinePolarWedge(
                 index: index,
                 value: value,
                 start: -Double.pi / 2 + Double(index) * slice + gap / 2,
                 sweep: slice - gap,
-                radius: inner + (outer - inner) * CGFloat(sqrt(value.value / maximum))
+                radius: CGFloat(
+                    sqrt(
+                        Double(inner * inner)
+                            + Double(outer * outer - inner * inner) * value.value / maximum
+                    )
+                )
             )
         }
         return LivelinePolarAreaLayout(
@@ -438,7 +506,28 @@ struct LivelineContourLayout {
     }
 }
 
+struct LivelineContourCoordinate: Hashable {
+    var x: Double
+    var y: Double
+}
+
 extension LivelineAdvancedLayout {
+    static func contourSamplesByCoordinate(
+        _ samples: [LivelineContourSample]
+    ) -> [LivelineContourSample] {
+        var grouped: [LivelineContourCoordinate: (sum: Double, count: Int)] = [:]
+        for sample in samples {
+            let key = LivelineContourCoordinate(x: sample.x, y: sample.y)
+            let previous = grouped[key] ?? (0, 0)
+            grouped[key] = (previous.sum + sample.value, previous.count + 1)
+        }
+        return grouped.map { key, aggregate in
+            LivelineContourSample(
+                id: "\(key.x):\(key.y)", x: key.x, y: key.y,
+                value: aggregate.sum / Double(aggregate.count))
+        }.sorted { ($0.x, $0.y) < ($1.x, $1.y) }
+    }
+
     static func contour(
         samples: [LivelineContourSample],
         layout: LivelineLayout,
@@ -446,11 +535,14 @@ extension LivelineAdvancedLayout {
     ) -> LivelineContourLayout? {
         let xs = Array(Set(samples.map(\.x))).sorted()
         let ys = Array(Set(samples.map(\.y))).sorted()
-        guard xs.count >= 2, ys.count >= 2 else { return nil }
+        let collapsed = contourSamplesByCoordinate(samples)
+        guard xs.count >= 2, ys.count >= 2, collapsed.count == xs.count * ys.count else {
+            return nil
+        }
         let plot = LivelineRenderer.advancedPlotRect(layout)
             .insetBy(dx: textScale.scaled(5), dy: textScale.scaled(5))
-        let minimum = samples.map(\.value).min() ?? 0
-        let maximum = samples.map(\.value).max() ?? 1
+        let minimum = collapsed.map(\.value).min() ?? 0
+        let maximum = collapsed.map(\.value).max() ?? 1
         let coarseCellWidth = plot.width / CGFloat(xs.count - 1)
         let coarseCellHeight = plot.height / CGFloat(ys.count - 1)
         return LivelineContourLayout(
@@ -599,7 +691,14 @@ extension LivelineAdvancedLayout {
         )
         let columns = style.resolvedColumns
         let rows = style.resolvedRows
-        let spacing = style.resolvedSpacing
+        let requestedSpacing = style.resolvedSpacing
+        let spacing = min(
+            requestedSpacing,
+            min(
+                columns > 1 ? body.width / CGFloat(columns - 1) : requestedSpacing,
+                rows > 1 ? body.height / CGFloat(rows - 1) : requestedSpacing
+            ) * 0.9
+        )
         let cell = min(
             (body.width - spacing * CGFloat(columns - 1)) / CGFloat(columns),
             (body.height - spacing * CGFloat(rows - 1)) / CGFloat(rows)
@@ -612,7 +711,7 @@ extension LivelineAdvancedLayout {
             plot: plot,
             body: body,
             origin: CGPoint(x: body.midX - gridWidth / 2, y: body.midY - gridHeight / 2),
-            cell: cell,
+            cell: max(cell, 0.1),
             spacing: spacing,
             columns: columns,
             rows: rows

@@ -1,12 +1,5 @@
+import Foundation
 import SwiftUI
-
-private struct LivelineChordNodeGeometry {
-    var label: String
-    var start: Double
-    var end: Double
-    var value: Double
-    var color: Color
-}
 
 extension LivelineRenderer {
     static func drawChord(
@@ -27,62 +20,30 @@ extension LivelineRenderer {
         let center = geometry.center
         let outerRadius = geometry.outerRadius
         let innerRadius = geometry.innerRadius
-        let nodes = geometry.arcs.map { arc in
-            LivelineChordNodeGeometry(
-                label: arc.label,
-                start: arc.start,
-                end: arc.start + arc.sweep * reveal,
-                value: arc.value,
-                color: advancedColor(index: arc.index, colors: style.colors, palette: palette)
-            )
-        }
-        let byLabel = Dictionary(nodes.map { ($0.label, $0) }, uniquingKeysWith: { first, _ in first })
         if drawMarks {
-            for node in nodes {
+            for node in geometry.arcs {
                 var arc = Path()
                 arc.addArc(
                     center: center, radius: (outerRadius + innerRadius) / 2, startAngle: .radians(node.start),
-                    endAngle: .radians(node.end), clockwise: false)
+                    endAngle: .radians(node.start + node.sweep * reveal), clockwise: false)
                 context.stroke(
-                    arc, with: .color(node.color),
+                    arc, with: .color(
+                        advancedColor(index: node.index, colors: style.colors, palette: palette)),
                     style: StrokeStyle(lineWidth: max(outerRadius - innerRadius, 2), lineCap: .butt))
             }
-            for link in positive {
-                guard let source = byLabel[link.source], let target = byLabel[link.target] else { continue }
-                let sourceAngle = (source.start + source.end) / 2
-                let targetAngle = (target.start + target.end) / 2
-                let sourceHalf =
-                    (source.end - source.start) * min(link.value / max(source.value, 0.000_001), 1) * 0.42
-                let targetHalf =
-                    (target.end - target.start) * min(link.value / max(target.value, 0.000_001), 1) * 0.42
-                let sourceStart = sourceAngle - sourceHalf
-                let sourceEnd = sourceAngle + sourceHalf
-                let targetStart = targetAngle - targetHalf
-                let targetEnd = targetAngle + targetHalf
-                let start = LivelineMath.polarPoint(
-                    center: center, radius: innerRadius - 1, angle: sourceStart)
-                let end = LivelineMath.polarPoint(center: center, radius: innerRadius - 1, angle: targetEnd)
-                var ribbon = Path()
-                ribbon.move(to: start)
-                ribbon.addCurve(to: end, control1: center, control2: center)
-                ribbon.addArc(
-                    center: center, radius: innerRadius - 1, startAngle: .radians(targetEnd),
-                    endAngle: .radians(targetStart), clockwise: true)
-                let sourceReturn = LivelineMath.polarPoint(
-                    center: center, radius: innerRadius - 1, angle: sourceEnd)
-                ribbon.addCurve(to: sourceReturn, control1: center, control2: center)
-                ribbon.addArc(
-                    center: center, radius: innerRadius - 1, startAngle: .radians(sourceEnd),
-                    endAngle: .radians(sourceStart), clockwise: true)
-                ribbon.closeSubpath()
+            for ribbon in geometry.ribbons {
+                let colorIndex = geometry.arcs.first { $0.label == ribbon.link.source }?.index ?? 0
                 context.fill(
-                    ribbon, with: .color(source.color.opacity(style.resolvedRibbonOpacity * reveal)))
+                    ribbon.path(center: center, radius: innerRadius - 1),
+                    with: .color(
+                        advancedColor(index: colorIndex, colors: style.colors, palette: palette)
+                            .opacity(style.resolvedRibbonOpacity * reveal)))
             }
         }
 
         if drawLabels, style.showsLabels {
-            for node in nodes where node.end - node.start > 0.08 {
-                let middle = (node.start + node.end) / 2
+            for node in geometry.arcs where node.sweep * reveal > 0.08 {
+                let middle = node.start + node.sweep * reveal / 2
                 let point = LivelineMath.polarPoint(
                     center: center, radius: outerRadius + textScale.scaled(9), angle: middle)
                 let anchor: UnitPoint = cos(middle) >= 0 ? .leading : .trailing
@@ -148,9 +109,11 @@ extension LivelineRenderer {
                 for (index, record) in records.enumerated() {
                     guard let value = record.values.last else { continue }
                     let color = advancedColor(index: index, colors: style.colors, palette: palette)
-                    let y = geometry.y(value, axis: record.values.count - 1)
+                    let finalAxis = record.values.count - 1
+                    let y = geometry.y(value, axis: finalAxis)
                     drawText(
-                        record.label, context: &context, at: CGPoint(x: body.maxX + textScale.scaled(5), y: y),
+                        record.label, context: &context,
+                        at: CGPoint(x: geometry.x(axis: finalAxis) + textScale.scaled(5), y: y),
                         anchor: .leading, color: color, font: textScale.font(8, weight: .semibold))
                 }
             }
@@ -200,7 +163,9 @@ extension LivelineRenderer {
         var path = Path()
         for index in 0..<6 {
             let angle = Double(index) * Double.pi / 3
-            let point = CGPoint(x: center.x + cos(angle) * radius, y: center.y + sin(angle) * radius)
+            let point = CGPoint(
+                x: center.x + CGFloat(Foundation.cos(angle)) * radius,
+                y: center.y + CGFloat(Foundation.sin(angle)) * radius)
             index == 0 ? path.move(to: point) : path.addLine(to: point)
         }
         path.closeSubpath()

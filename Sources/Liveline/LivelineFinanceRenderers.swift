@@ -176,10 +176,10 @@ extension LivelineRenderer {
         if drawMarks {
             drawDepthCurve(
                 context: &context, points: curve.bids, color: style.bidColor, plot: plot, point: point,
-                style: style, reveal: reveal)
+                style: style, reveal: reveal, singletonBoundaryX: plot.minX)
             drawDepthCurve(
                 context: &context, points: curve.asks, color: style.askColor, plot: plot, point: point,
-                style: style, reveal: reveal)
+                style: style, reveal: reveal, singletonBoundaryX: plot.maxX)
             if style.showsSpread, let bid = curve.bestBid, let ask = curve.bestAsk {
                 let left = geometry.x(price: bid)
                 let right = geometry.x(price: ask)
@@ -220,12 +220,16 @@ extension LivelineRenderer {
         plot: CGRect,
         point: (LivelinePoint) -> CGPoint,
         style: LivelineMarketDepthStyle,
-        reveal: Double
+        reveal: Double,
+        singletonBoundaryX: CGFloat
     ) {
         guard let first = points.first, let last = points.last else { return }
         var line = Path()
         let firstPoint = point(first)
         line.move(to: firstPoint)
+        if points.count == 1 {
+            line.addLine(to: CGPoint(x: singletonBoundaryX, y: firstPoint.y))
+        }
         for value in points.dropFirst() {
             let next = point(value)
             line.addLine(to: CGPoint(x: next.x, y: line.currentPoint?.y ?? next.y))
@@ -324,7 +328,7 @@ extension LivelineRenderer {
         if drawMarks {
             for column in columns.prefix(revealedCount(columns.count, reveal: reveal)) {
                 let x = geometry.x(column: column)
-                for index in 0..<column.boxCount {
+                for index in geometry.symbolIndices(for: column) {
                     let y = geometry.y(column.low + Double(index) * style.resolvedBoxSize)
                     let rect = CGRect(x: x - box / 2, y: y - box / 2, width: box, height: box)
                     let color = column.isRising ? (style.risingColor ?? palette.line) : style.fallingColor

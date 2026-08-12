@@ -66,10 +66,12 @@ extension LivelineRenderer {
         case .violin(let data, let style):
             drawViolins(
                 context: &context, series: data, style: style, layout: layout, palette: palette,
+                profiles: state.distributionProfiles(series: data, bandwidth: style.bandwidth),
                 reveal: reveal, textScale: textScale, drawMarks: drawMarks, drawLabels: drawLabels)
         case .ridgeline(let data, let style):
             drawRidgelines(
                 context: &context, series: data, style: style, layout: layout, palette: palette,
+                profiles: state.distributionProfiles(series: data, bandwidth: style.bandwidth),
                 reveal: reveal, textScale: textScale, drawMarks: drawMarks, drawLabels: drawLabels)
         case .calendarHeatmap(let data, let style):
             drawCalendarHeatmap(
@@ -177,21 +179,23 @@ extension LivelineRenderer {
         style: LivelineViolinStyle,
         layout: LivelineLayout,
         palette: LivelinePalette,
+        profiles: [LivelineDistributionProfile],
         reveal: Double,
         textScale: LivelineTextScale,
         drawMarks: Bool,
         drawLabels: Bool
     ) {
         let geometry = LivelineAdvancedLayout.violin(
-            series: series, style: style, layout: layout, textScale: textScale)
+            series: series, style: style, layout: layout, textScale: textScale, profiles: profiles)
         guard !geometry.profiles.isEmpty else { return }
         let halfWidth = geometry.halfWidth(ratio: style.resolvedWidthRatio)
 
         for (index, item) in geometry.profiles.enumerated() {
             let centerX = geometry.centerX(at: index)
-            let domain = item.valueDomain
             let vertical = { (value: Double) in
-                mapped(value, from: domain, to: (geometry.bodyBottom, geometry.plot.minY))
+                mapped(
+                    value, from: geometry.valueDomain,
+                    to: (geometry.bodyBottom, geometry.plot.minY))
             }
             let color = advancedColor(index: index, colors: style.colors, palette: palette)
             if drawMarks {
@@ -243,13 +247,14 @@ extension LivelineRenderer {
         style: LivelineRidgelineStyle,
         layout: LivelineLayout,
         palette: LivelinePalette,
+        profiles: [LivelineDistributionProfile],
         reveal: Double,
         textScale: LivelineTextScale,
         drawMarks: Bool,
         drawLabels: Bool
     ) {
         let geometry = LivelineAdvancedLayout.ridgeline(
-            series: series, style: style, layout: layout, textScale: textScale)
+            series: series, style: style, layout: layout, textScale: textScale, profiles: profiles)
         guard !geometry.profiles.isEmpty else { return }
         let body = geometry.body
         let ridgeHeight = geometry.ridgeHeight
@@ -413,8 +418,10 @@ extension LivelineRenderer {
                 context.fill(
                     Path(roundedRect: rect, cornerRadius: radius), with: .color(color.opacity(0.24)))
                 if style.showsProgress, task.progress > 0 {
+                    let progressWidth = rect.width * CGFloat(task.progress)
                     let progress = CGRect(
-                        x: rect.minX, y: rect.minY, width: rect.width * CGFloat(task.progress),
+                        x: layout.isRTL ? rect.maxX - progressWidth : rect.minX,
+                        y: rect.minY, width: progressWidth,
                         height: rect.height)
                     var clipped = context
                     clipped.clip(to: Path(roundedRect: rect, cornerRadius: radius))
@@ -453,12 +460,18 @@ extension LivelineRenderer {
         let body = geometry.body
         for (index, entry) in series.enumerated() where !entry.points.isEmpty {
             let color = advancedColor(index: index, colors: style.colors, palette: palette)
+            guard
+                let lineRange = geometry.visibleIndexRange(
+                    in: entry.points, includingBoundaryPoints: true)
+            else {
+                continue
+            }
             var path = Path()
-            for (pointIndex, point) in entry.points.enumerated() {
+            for (pointIndex, point) in entry.points[lineRange].enumerated() {
                 let x = geometry.x(time: point.time)
                 let y = geometry.y(rank: point.rank)
                 pointIndex == 0 ? path.move(to: CGPoint(x: x, y: y)) : path.addLine(to: CGPoint(x: x, y: y))
-                if drawMarks, style.showsPoints {
+                if drawMarks, style.showsPoints, geometry.timeDomain.contains(point.time) {
                     let size = style.resolvedPointSize * CGFloat(reveal)
                     context.fill(
                         Path(ellipseIn: CGRect(x: x - size / 2, y: y - size / 2, width: size, height: size)),
@@ -467,6 +480,7 @@ extension LivelineRenderer {
             }
             if drawMarks {
                 var layer = context
+                layer.clip(to: Path(body))
                 layer.opacity *= reveal
                 layer.stroke(
                     path, with: .color(color),
@@ -476,7 +490,13 @@ extension LivelineRenderer {
         if drawLabels, style.showsEndLabels {
             let spacing = textScale.scaled(13)
             let labels = series.enumerated().compactMap { index, entry -> (String, Color, CGFloat)? in
-                guard let last = entry.points.last else { return nil }
+                guard
+                    let visible = geometry.visibleIndexRange(
+                        in: entry.points, includingBoundaryPoints: false)
+                else {
+                    return nil
+                }
+                let last = entry.points[visible.upperBound]
                 return (
                     entry.label, advancedColor(index: index, colors: style.colors, palette: palette),
                     geometry.y(rank: last.rank)
@@ -489,9 +509,13 @@ extension LivelineRenderer {
                 spacing: spacing
             )
             for (label, y) in zip(labels, positions) {
+                let labelX = geometry.isRTL
+                    ? body.minX - textScale.scaled(7)
+                    : body.maxX + textScale.scaled(7)
                 drawText(
-                    label.0, context: &context, at: CGPoint(x: body.maxX + textScale.scaled(7), y: y),
-                    anchor: .leading, color: label.1, font: textScale.font(9, weight: .semibold))
+                    label.0, context: &context, at: CGPoint(x: labelX, y: y),
+                    anchor: geometry.isRTL ? .trailing : .leading,
+                    color: label.1, font: textScale.font(9, weight: .semibold))
             }
         }
     }

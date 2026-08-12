@@ -29,11 +29,6 @@ struct LivelineContourGeometry {
 }
 
 enum LivelineVisualGeometry {
-    private struct ContourCoordinate: Hashable {
-        var x: Double
-        var y: Double
-    }
-
     private struct ContourSegment {
         var start: CGPoint
         var end: CGPoint
@@ -244,21 +239,22 @@ enum LivelineVisualGeometry {
 
         let levels = min(max(levelCount, 2), 16)
         let subdivisions = min(max(subdivisions, 2), 16)
-        let minimum = samples.map(\.value).min() ?? 0
-        let maximum = samples.map(\.value).max() ?? minimum
+        let collapsed = LivelineAdvancedLayout.contourSamplesByCoordinate(samples)
+        guard collapsed.count == xs.count * ys.count else {
+            return LivelineContourGeometry(fillCells: [], lines: [])
+        }
+        let minimum = collapsed.map(\.value).min() ?? 0
+        let maximum = collapsed.map(\.value).max() ?? minimum
         let span = max(maximum - minimum, 0.000_001)
 
         // Duplicate coordinates are legal input. Average them deterministically
         // instead of relying on Dictionary(uniqueKeysWithValues:), which traps.
-        var grouped: [ContourCoordinate: (sum: Double, count: Int)] = [:]
-        for sample in samples {
-            let key = ContourCoordinate(x: sample.x, y: sample.y)
-            let prior = grouped[key] ?? (0, 0)
-            grouped[key] = (prior.sum + sample.value, prior.count + 1)
-        }
-        let values = grouped.mapValues { $0.sum / Double($0.count) }
+        let values = Dictionary(
+            uniqueKeysWithValues: collapsed.map {
+                (LivelineContourCoordinate(x: $0.x, y: $0.y), $0.value)
+            })
         func coarseValue(x: Int, y: Int) -> Double {
-            values[ContourCoordinate(x: xs[x], y: ys[y])] ?? minimum
+            values[LivelineContourCoordinate(x: xs[x], y: ys[y])] ?? minimum
         }
         func clampedCoarseValue(x: Int, y: Int) -> Double {
             coarseValue(

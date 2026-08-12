@@ -13,7 +13,8 @@ enum LivelineInteractionBuilder {
         includeTargets: Bool = true,
         targetLocation: CGPoint? = nil,
         textScale: LivelineTextScale = .standard,
-        displayScale: CGFloat? = nil
+        displayScale: CGFloat? = nil,
+        state: LivelineRenderState? = nil
     ) -> LivelineInteractionSnapshot {
         LivelineInteractionSnapshot(
             layout: layout,
@@ -29,7 +30,8 @@ enum LivelineInteractionBuilder {
                 hiddenSeries: hiddenSeries,
                 targetLocation: targetLocation,
                 textScale: textScale,
-                displayScale: displayScale
+                displayScale: displayScale,
+                state: state
             ) : []
         )
     }
@@ -43,7 +45,8 @@ enum LivelineInteractionBuilder {
         hiddenSeries: Set<String>,
         targetLocation: CGPoint?,
         textScale: LivelineTextScale,
-        displayScale: CGFloat?
+        displayScale: CGFloat?,
+        state: LivelineRenderState?
     ) -> [LivelineInteractionTarget] {
         let value = configuration.formatValue
         let time = configuration.formatTime
@@ -503,7 +506,8 @@ enum LivelineInteractionBuilder {
                 configuration: configuration,
                 targetLocation: targetLocation,
                 textScale: textScale,
-                displayScale: displayScale
+                displayScale: displayScale,
+                state: state
             )
 
         case let .candle(_, _, candles, candleWidth, liveCandle, lineData, _):

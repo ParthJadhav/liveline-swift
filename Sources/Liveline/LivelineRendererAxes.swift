@@ -238,7 +238,7 @@ extension LivelineRenderer {
             }
         }
 
-        var labels: [(x: CGFloat, text: String, alpha: Double, width: CGFloat)] = []
+        var labels: [(x: CGFloat, tickX: CGFloat, text: String, alpha: Double, width: CGFloat)] = []
         for (key, label) in state.timeAxisLabels {
             guard label.alpha > 0.02 else { continue }
             let time = key
@@ -263,10 +263,16 @@ extension LivelineRenderer {
                 width = measureText(label.text, context: layer, font: font).width
                 state.timeAxisLabels[key]?.measuredWidth = width
             }
-            labels.append((x, label.text, label.alpha, width))
+            let halfWidth = width / 2
+            let lowerBound = layout.plotLeftX + halfWidth
+            let upperBound = layout.rightX - halfWidth
+            let clampedX = lowerBound > upperBound
+                ? (layout.plotLeftX + layout.rightX) / 2
+                : min(max(x, lowerBound), upperBound)
+            labels.append((clampedX, x, label.text, label.alpha, width))
         }
 
-        var drawn: [(x: CGFloat, text: String, alpha: Double, width: CGFloat)] = []
+        var drawn: [(x: CGFloat, tickX: CGFloat, text: String, alpha: Double, width: CGFloat)] = []
         for label in labels.sorted(by: { $0.x < $1.x }) {
             if let previous = drawn.last {
                 let left = label.x - label.width / 2
@@ -285,28 +291,15 @@ extension LivelineRenderer {
             var tickLayer = layer
             tickLayer.opacity *= label.alpha
 
-            // Keep the complete label inside the plot. The tick may sit at an
-            // edge while its centered text is wider than the small scroll-off
-            // allowance used above, particularly with monospaced timestamps or
-            // larger Dynamic Type sizes. A label wider than the plot cannot be
-            // satisfied at both edges, so centre it rather than letting the
-            // clamp bounds cross and push it off the leading edge.
-            let halfWidth = label.width / 2
-            let lowerBound = layout.plotLeftX + halfWidth
-            let upperBound = layout.rightX - halfWidth
-            let labelX = lowerBound > upperBound
-                ? (layout.plotLeftX + layout.rightX) / 2
-                : min(max(label.x, lowerBound), upperBound)
-
             var tick = Path()
-            tick.move(to: CGPoint(x: label.x, y: layout.bottomY))
-            tick.addLine(to: CGPoint(x: label.x, y: layout.bottomY + 5))
+            tick.move(to: CGPoint(x: label.tickX, y: layout.bottomY))
+            tick.addLine(to: CGPoint(x: label.tickX, y: layout.bottomY + 5))
             tickLayer.stroke(tick, with: .color(palette.gridLine), lineWidth: 1)
 
             drawText(
                 label.text,
                 context: &tickLayer,
-                at: CGPoint(x: labelX, y: layout.bottomY + 15),
+                at: CGPoint(x: label.x, y: layout.bottomY + 15),
                 anchor: .center,
                 color: palette.timeLabel,
                 font: textScale.font(11, weight: .regular, design: .monospaced)

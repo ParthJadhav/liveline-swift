@@ -13,12 +13,15 @@ enum LivelineAdvancedInteractionBuilder {
         configuration: LivelineChartConfiguration,
         targetLocation: CGPoint?,
         textScale: LivelineTextScale,
-        displayScale: CGFloat? = nil
+        displayScale: CGFloat? = nil,
+        state: LivelineRenderState? = nil
     ) -> [LivelineInteractionTarget] {
         switch content {
         case .violin(let series, let style):
+            let profiles = state?.distributionProfiles(series: series, bandwidth: style.bandwidth)
             let geometry = LivelineAdvancedLayout.violin(
-                series: series, style: style, layout: layout, textScale: textScale)
+                series: series, style: style, layout: layout, textScale: textScale,
+                profiles: profiles)
             return geometry.profiles.enumerated().map { index, item in
                 let rect = geometry.slotRect(at: index)
                 let color = LivelineRenderer.advancedColor(
@@ -40,8 +43,10 @@ enum LivelineAdvancedInteractionBuilder {
             }
 
         case .ridgeline(let series, let style):
+            let profiles = state?.distributionProfiles(series: series, bandwidth: style.bandwidth)
             let geometry = LivelineAdvancedLayout.ridgeline(
-                series: series, style: style, layout: layout, textScale: textScale)
+                series: series, style: style, layout: layout, textScale: textScale,
+                profiles: profiles)
             return geometry.profiles.enumerated().map { index, item in
                 let rect = geometry.rowRect(at: index)
                 let color = LivelineRenderer.advancedColor(
@@ -61,7 +66,9 @@ enum LivelineAdvancedInteractionBuilder {
                 let geometry = LivelineAdvancedLayout.calendar(
                     values: values, style: style, layout: layout, textScale: textScale)
             else { return [] }
-            return values.compactMap { entry in
+            let collapsed = LivelineAdvancedLayout.calendarValuesByDay(
+                values, calendar: geometry.calendar).values.sorted { $0.date < $1.date }
+            return collapsed.compactMap { entry in
                 let date = geometry.calendar.startOfDay(for: entry.date)
                 guard
                     let day = geometry.calendar.dateComponents([.day], from: geometry.firstDay, to: date).day,
@@ -105,18 +112,27 @@ enum LivelineAdvancedInteractionBuilder {
                 let geometry = LivelineAdvancedLayout.bump(
                     series: series, style: style, layout: layout, textScale: textScale)
             else { return [] }
-            return series.enumerated().flatMap { index, entry in
+            return series.enumerated().flatMap { index, entry -> [LivelineInteractionTarget] in
                 let color = LivelineRenderer.advancedColor(
                     index: index, colors: style.colors, palette: palette)
-                return entry.points.map { point in
+                guard
+                    let visible = geometry.visibleIndexRange(
+                        in: entry.points, includingBoundaryPoints: false)
+                else { return [] }
+                return entry.points[visible].map { point in
                     let center = CGPoint(
                         x: geometry.x(time: point.time), y: geometry.y(rank: point.rank))
                     return target(
                         time: point.time,
                         value: point.rank,
                         anchor: center,
-                        heading: configuration.formatTime(point.time),
-                        rows: [row(LivelineStrings.labelRank, configuration.formatValue(point.rank), color)],
+                        heading: entry.label,
+                        rows: [
+                            row(
+                                LivelineStrings.labelTime, configuration.formatTime(point.time),
+                                palette.gridLabel),
+                            row(LivelineStrings.labelRank, configuration.formatValue(point.rank), color),
+                        ],
                         region: .circle(center: center, radius: max(style.resolvedPointSize / 2, 5))
                     )
                 }
@@ -138,7 +154,26 @@ enum LivelineAdvancedInteractionBuilder {
         case .chord(let links, let style):
             let geometry = LivelineAdvancedLayout.chord(
                 links: links, style: style, layout: layout, textScale: textScale)
-            return geometry.arcs.map { arc in
+            let ribbonTargets = geometry.ribbons.map { ribbon in
+                let path = ribbon.path(center: geometry.center, radius: geometry.innerRadius - 1)
+                let bounds = path.boundingRect
+                let anchor = CGPoint(x: bounds.midX, y: bounds.midY)
+                let colorIndex = geometry.arcs.first { $0.label == ribbon.link.source }?.index ?? 0
+                return target(
+                    time: Double(ribbon.index), value: ribbon.link.value, anchor: anchor,
+                    heading: String(
+                        format: LivelineStrings.labelFlowRouteFormat,
+                        ribbon.link.source, ribbon.link.target),
+                    rows: [
+                        row(
+                            LivelineStrings.labelValue,
+                            configuration.formatValue(ribbon.link.value),
+                            LivelineRenderer.advancedColor(
+                                index: colorIndex, colors: style.colors, palette: palette))
+                    ],
+                    region: .path(path))
+            }
+            let nodeTargets = geometry.arcs.map { arc in
                 let anchor = LivelineMath.polarPoint(
                     center: geometry.center,
                     radius: (geometry.innerRadius + geometry.outerRadius) / 2,
@@ -155,6 +190,7 @@ enum LivelineAdvancedInteractionBuilder {
                         center: geometry.center, innerRadius: geometry.innerRadius,
                         outerRadius: geometry.outerRadius, startAngle: arc.start, endAngle: arc.end))
             }
+            return ribbonTargets + nodeTargets
 
         case .parallelCoordinates(let records, let style):
             guard
@@ -170,8 +206,9 @@ enum LivelineAdvancedInteractionBuilder {
                         LivelineAdvancedLayout.axisLabel(style.axisLabels, at: axis),
                         configuration.formatValue(value), color)
                 }
+                let finalAxis = record.values.count - 1
                 let anchor = CGPoint(
-                    x: geometry.body.maxX, y: geometry.y(last, axis: record.values.count - 1))
+                    x: geometry.x(axis: finalAxis), y: geometry.y(last, axis: finalAxis))
                 return target(
                     time: Double(index), value: last, anchor: anchor, heading: record.label, rows: rows,
                     region: .circle(center: anchor, radius: 9))
@@ -271,7 +308,7 @@ enum LivelineAdvancedInteractionBuilder {
                 let geometry = LivelineAdvancedLayout.contour(
                     samples: samples, layout: layout, textScale: textScale)
             else { return [] }
-            return samples.map { sample in
+            return LivelineAdvancedLayout.contourSamplesByCoordinate(samples).map { sample in
                 let point = geometry.point(x: sample.x, y: sample.y)
                 return target(
                     time: sample.x, value: sample.value, anchor: point,
@@ -305,7 +342,8 @@ enum LivelineAdvancedInteractionBuilder {
             guard !geometry.values.isEmpty else { return [] }
             let total = geometry.values.reduce(0) { $0 + $1.value }
             let starts = geometry.categoryStartIndices
-            return geometry.values.enumerated().map { index, value in
+            return geometry.values.enumerated().compactMap { index, value in
+                guard geometry.allocations[index] > 0 else { return nil }
                 let cellIndex = min(
                     starts[index] + max(geometry.allocations[index] / 2, 0), geometry.cellCount - 1)
                 let rect = geometry.rect(cellIndex: cellIndex)
@@ -375,8 +413,13 @@ enum LivelineAdvancedInteractionBuilder {
             let geometry = LivelineAdvancedLayout.pointAndFigure(
                 columns: columns, style: style, layout: layout, textScale: textScale)
             return columns.map { column in
-                let center = CGPoint(
-                    x: geometry.x(column: column), y: geometry.y((column.low + column.high) / 2))
+                let top = geometry.y(column.high)
+                let bottom = geometry.y(column.low)
+                let rect = CGRect(
+                    x: geometry.x(column: column) - geometry.slot / 2,
+                    y: min(top, bottom), width: geometry.slot,
+                    height: max(abs(bottom - top), geometry.box))
+                let center = CGPoint(x: rect.midX, y: rect.midY)
                 let color = column.isRising ? (style.risingColor ?? palette.line) : style.fallingColor
                 return target(
                     time: Double(column.index), value: column.high, anchor: center,
@@ -385,7 +428,7 @@ enum LivelineAdvancedInteractionBuilder {
                         row(LivelineStrings.labelLow, configuration.formatValue(column.low), color),
                         row(LivelineStrings.labelHigh, configuration.formatValue(column.high), color),
                         row(LivelineStrings.labelBoxes, "\(column.boxCount)", color),
-                    ], region: .circle(center: center, radius: max(geometry.slot / 2, 8)))
+                    ], region: .rect(rect))
             }
 
         case .heikinAshi(let series, _):

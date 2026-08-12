@@ -67,14 +67,17 @@ extension LivelineAdvancedChartContent {
         case .polarArea(let data, _), .waffle(let data, _): return !data.contains { $0.value > 0 }
         case .network(let nodes, _, _): return nodes.isEmpty
         case .contour(let data, _):
-            return data.count < 4 || Set(data.map(\.x)).count < 2 || Set(data.map(\.y)).count < 2
+            let xCount = Set(data.map(\.x)).count
+            let yCount = Set(data.map(\.y)).count
+            let coordinateCount = LivelineAdvancedLayout.contourSamplesByCoordinate(data).count
+            return xCount < 2 || yCount < 2 || coordinateCount != xCount * yCount
         case .ternary(let data, _): return !data.contains { $0.total > 0 }
         case .volumeProfile(let data, _): return !data.contains { $0.volume > 0 }
-        case .renko(let data, _): return data.points.count < 2
+        case .renko(let data, _): return data.bricks.isEmpty
         case .heikinAshi(let data, _): return data.candles.isEmpty
         case .marketDepth(let data, _): return !data.contains { $0.bidSize > 0 || $0.askSize > 0 }
         case .ohlcVolume(let data, _): return data.isEmpty
-        case .pointAndFigure(let data, _): return data.points.count < 2
+        case .pointAndFigure(let data, _): return data.columns.isEmpty
         }
     }
 
@@ -139,7 +142,10 @@ extension LivelineAdvancedChartContent {
             let IDs = Set(normalizedNodes.map(\.id))
             let normalizedEdges =
                 edges
-                .filter { IDs.contains($0.source) && IDs.contains($0.target) && $0.source != $0.target }
+                .filter {
+                    IDs.contains($0.source) && IDs.contains($0.target)
+                        && $0.source != $0.target && $0.value > 0
+                }
                 .map { LivelineNetworkEdge(source: $0.source, target: $0.target, value: $0.value) }
             return .network(normalizedNodes, normalizedEdges, style)
         case .contour(let data, let style):
@@ -238,7 +244,7 @@ extension LivelineAdvancedChartContent {
                 latest: all.map(\.time).max(),
                 count: all.count,
                 seriesIDs: series.map(\.id),
-                capabilities: .advancedCartesian
+                capabilities: .advancedTimeline
             )
         case .horizon(let points, _):
             // Horizon bands fold magnitude into a shared compact baseline;
@@ -280,7 +286,7 @@ extension LivelineAdvancedChartContent {
         case .ohlcVolume(let values, _):
             let points = values.map { LivelinePoint(time: $0.time, value: $0.close) }
             return .timed(
-                value: values.last?.close ?? 0, points: points, capabilities: .advancedCartesian)
+                value: values.last?.close ?? 0, points: points, capabilities: .advancedTimeline)
         }
     }
 }
@@ -371,6 +377,10 @@ extension LivelineAdvancedChartContent {
         rightEdge: TimeInterval,
         configuration: LivelineChartConfiguration
     ) -> LivelinePreparedChart {
+        guard !isEmpty else {
+            return LivelinePreparedChart(
+                primaryVisible: [], rangePoints: [], rangeOverride: nil, primaryValue: 0)
+        }
         let visibleRange = (leftEdge - 2)...rightEdge
         switch self {
         case .violin(let series, _), .ridgeline(let series, _):
@@ -453,11 +463,15 @@ extension LivelineAdvancedChartContent {
             return untimedPrepared(
                 values: levels.map(\.volume), primaryValue: levels.reduce(0) { $0 + $1.volume })
 
-        case .renko(let series, _):
+        case .renko(let series, let style):
             let bricks = series.bricks
             let visible = bricks.filter { visibleRange.contains($0.time) }
             let source = visible.isEmpty ? bricks : visible
-            let range = source.flatMap { [$0.open, $0.close, $0.sourceHigh, $0.sourceLow] }
+            let range = source.flatMap { brick in
+                style.showsWicks
+                    ? [brick.open, brick.close, brick.sourceHigh, brick.sourceLow]
+                    : [brick.open, brick.close]
+            }
             return timedPrepared(
                 primary: visible.map { LivelinePoint(time: $0.time, value: $0.close) },
                 rangeValues: range,

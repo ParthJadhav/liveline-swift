@@ -61,6 +61,7 @@ final class LivelineRenderState: ObservableObject {
     var legendGutterMeasureCount = 0
     var accessibilityModelBuildCount = 0
     var contourGeometryBuildCount = 0
+    var distributionProfileBuildCount = 0
     /// Every cached text measurement was taken at this scale; a Dynamic Type
     /// change invalidates them all.
     private(set) var textScale: LivelineTextScale = .standard
@@ -76,6 +77,8 @@ final class LivelineRenderState: ObservableObject {
     private var sankeyCache: LivelineSankeyGraph?
     private var contourKey: LivelineContourKey?
     private var contourCache: LivelineContourGeometry?
+    private var distributionProfileKey: LivelineDistributionProfileKey?
+    private var distributionProfileCache: [LivelineDistributionProfile] = []
     private var paletteCache: [LivelinePaletteKey: LivelinePalette] = [:]
     private var legendGutterCache: [LivelineLegendGutterKey: CGFloat] = [:]
     private var accessibilityModelKey: LivelineAccessibilityModelKey?
@@ -266,6 +269,22 @@ final class LivelineRenderState: ObservableObject {
         contourKey = key
         contourCache = geometry
         return geometry
+    }
+
+    /// KDE sorts observations and scans them for every sample in the profile.
+    /// The mark, text, and active-interaction passes all read the same result,
+    /// so retain it until either the observations or bandwidth changes.
+    func distributionProfiles(
+        series: [LivelineDistributionSeries],
+        bandwidth: Double?
+    ) -> [LivelineDistributionProfile] {
+        let key = LivelineDistributionProfileKey(series: series, bandwidth: bandwidth)
+        if key == distributionProfileKey { return distributionProfileCache }
+        let profiles = LivelineAdvancedLayout.distributionProfiles(series, bandwidth: bandwidth)
+        distributionProfileBuildCount += 1
+        distributionProfileKey = key
+        distributionProfileCache = profiles
+        return profiles
     }
 
     func frame(for timestamp: TimeInterval, isPaused: Bool) -> LivelineAnimationFrame {
@@ -501,6 +520,11 @@ struct LivelineContourKey: Equatable {
     var levelCount: Int
     var plot: CGRect
     var subdivisions: Int
+}
+
+struct LivelineDistributionProfileKey: Hashable {
+    var series: [LivelineDistributionSeries]
+    var bandwidth: Double?
 }
 
 struct LivelineLegendGutterKey: Hashable {
