@@ -89,7 +89,10 @@ enum LivelineAdvancedInteractionBuilder {
         case .gantt(let tasks, let style):
             let geometry = LivelineAdvancedLayout.gantt(
                 tasks: tasks, style: style, layout: layout, textScale: textScale)
-            return tasks.map { task in
+            return LivelineAdvancedLayout.ganttTaskIndicesIntersectingViewport(
+                tasks, layout: layout
+            ).map { index in
+                let task = tasks[index]
                 let rect = geometry.rect(for: task, layout: layout)
                 return target(
                     time: task.start,

@@ -69,7 +69,7 @@ public struct LivelineRenkoStyle {
         self.showsWicks = showsWicks
     }
 
-    var resolvedBrickSize: Double { brickSize.livelineAtLeast(0.000_001, fallback: 1) }
+    var resolvedBrickSize: Double { brickSize.livelinePositive(atLeast: 0.000_001, fallback: 1) }
     var resolvedBrickSpacing: CGFloat { brickSpacing.livelineClamped(0, 12, fallback: 2) }
     var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 2) }
 }
@@ -240,7 +240,7 @@ public struct LivelinePointAndFigureStyle {
         self.fallingColor = fallingColor
     }
 
-    var resolvedBoxSize: Double { boxSize.livelineAtLeast(0.000_001, fallback: 1) }
+    var resolvedBoxSize: Double { boxSize.livelinePositive(atLeast: 0.000_001, fallback: 1) }
     var resolvedReversalBoxes: Int { min(max(reversalBoxes, 1), 10) }
     var resolvedColumnSpacing: CGFloat { columnSpacing.livelineClamped(0, 20, fallback: 4) }
     var resolvedSymbolLineWidth: CGFloat { symbolLineWidth.livelineAtLeast(0.5, fallback: 1.5) }

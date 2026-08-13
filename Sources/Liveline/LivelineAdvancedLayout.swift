@@ -36,15 +36,21 @@ struct LivelineViolinLayout {
     var bodyBottom: CGFloat
     var slot: CGFloat
     var valueDomain: ClosedRange<Double>
+    var isRTL: Bool
 
-    func centerX(at index: Int) -> CGFloat { plot.minX + slot * (CGFloat(index) + 0.5) }
+    func centerX(at index: Int) -> CGFloat {
+        let offset = slot * (CGFloat(index) + 0.5)
+        return isRTL ? plot.maxX - offset : plot.minX + offset
+    }
 
     func halfWidth(ratio: CGFloat) -> CGFloat { slot * ratio * 0.5 }
 
     /// The full-height column a violin occupies, used as its hit region.
     func slotRect(at index: Int) -> CGRect {
         CGRect(
-            x: plot.minX + CGFloat(index) * slot,
+            x: isRTL
+                ? plot.maxX - CGFloat(index + 1) * slot
+                : plot.minX + CGFloat(index) * slot,
             y: plot.minY,
             width: slot,
             height: max(bodyBottom - plot.minY, 1)
@@ -108,7 +114,8 @@ extension LivelineAdvancedLayout {
             plot: plot,
             bodyBottom: plot.maxY - labelHeight,
             slot: plot.width / CGFloat(max(profiles.count, 1)),
-            valueDomain: lower <= upper ? lower...upper : upper...lower
+            valueDomain: lower <= upper ? lower...upper : upper...lower,
+            isRTL: layout.isRTL
         )
     }
 

@@ -50,21 +50,50 @@ struct LivelineChordRibbon {
 }
 
 extension LivelineAdvancedLayout {
-    static func chordNodeTotals(
+    private static func normalizedChordWeights(
         _ links: [LivelineChordLink]
-    ) -> [(label: String, value: Double)] {
+    ) -> (weights: [Double], labels: [String], totals: [String: Double]) {
+        let scale = max(links.map(\.value).max() ?? 0, 0.000_001)
+        let weights = links.map { $0.value / scale }
         var labels: [String] = []
         var seenLabels: Set<String> = []
         var totals: [String: Double] = [:]
-        for link in links where link.value > 0 {
+        for (index, link) in links.enumerated() {
             if seenLabels.insert(link.source).inserted { labels.append(link.source) }
             if seenLabels.insert(link.target).inserted { labels.append(link.target) }
             for label in [link.source, link.target] {
-                let sum = totals[label, default: 0] + link.value
-                totals[label] = sum.isFinite ? sum : Double.greatestFiniteMagnitude
+                totals[label, default: 0] += weights[index]
             }
         }
-        return labels.map { ($0, totals[$0, default: 0]) }
+        return (weights, labels, totals)
+    }
+
+    static func chordNodeTotals(
+        _ links: [LivelineChordLink]
+    ) -> [(label: String, value: Double)] {
+        let positive = links.filter { $0.value > 0 }
+        let normalized = normalizedChordWeights(positive)
+        var totals: [String: Double] = [:]
+        var overflowed = false
+        for link in positive {
+            for label in [link.source, link.target] {
+                let sum = totals[label, default: 0] + link.value
+                if sum.isFinite {
+                    totals[label] = sum
+                } else {
+                    overflowed = true
+                }
+            }
+        }
+        guard overflowed else {
+            return normalized.labels.map { ($0, totals[$0, default: 0]) }
+        }
+        let maximumNormalizedTotal = max(normalized.totals.values.max() ?? 0, 0.000_001)
+        let valueScale = positive.map(\.value).max() ?? 1
+        return normalized.labels.map { label in
+            let ratio = normalized.totals[label, default: 0] / maximumNormalizedTotal
+            return (label, ratio * valueScale)
+        }
     }
 
     static func chord(
@@ -74,11 +103,11 @@ extension LivelineAdvancedLayout {
         textScale: LivelineTextScale
     ) -> LivelineChordLayout {
         let positive = links.filter { $0.value > 0 }
-        let nodeTotals = chordNodeTotals(positive)
-        let labels = nodeTotals.map(\.label)
-        let totals = Dictionary(uniqueKeysWithValues: nodeTotals.map { ($0.label, $0.value) })
-        let maximumNodeTotal = max(nodeTotals.map(\.value).max() ?? 0, 0.000_001)
-        let scaledTotal = max(nodeTotals.reduce(0) { $0 + $1.value / maximumNodeTotal }, 0.000_001)
+        let normalized = normalizedChordWeights(positive)
+        let labels = normalized.labels
+        let totals = normalized.totals
+        let maximumNodeTotal = max(totals.values.max() ?? 0, 0.000_001)
+        let scaledTotal = max(totals.values.reduce(0) { $0 + $1 / maximumNodeTotal }, 0.000_001)
         let basePlot = LivelineRenderer.advancedPlotRect(layout)
         let inset = min(
             textScale.scaled(18),
@@ -106,9 +135,10 @@ extension LivelineAdvancedLayout {
             guard let source = arcsByLabel[link.source], let target = arcsByLabel[link.target] else {
                 return nil
             }
+            let weight = normalized.weights[index]
             if link.source == link.target {
                 let start = source.start + offsets[link.source, default: 0]
-                let sweep = source.sweep * min(2 * link.value / max(source.value, 0.000_001), 1)
+                let sweep = source.sweep * min(2 * weight / max(source.value, 0.000_001), 1)
                 let midpoint = start + sweep / 2
                 offsets[link.source, default: 0] += sweep
                 return LivelineChordRibbon(
@@ -117,10 +147,10 @@ extension LivelineAdvancedLayout {
                     targetStart: midpoint, targetEnd: start + sweep)
             }
             let sourceStart = source.start + offsets[link.source, default: 0]
-            let sourceSweep = source.sweep * link.value / max(source.value, 0.000_001)
+            let sourceSweep = source.sweep * weight / max(source.value, 0.000_001)
             offsets[link.source, default: 0] += sourceSweep
             let targetStart = target.start + offsets[link.target, default: 0]
-            let targetSweep = target.sweep * link.value / max(target.value, 0.000_001)
+            let targetSweep = target.sweep * weight / max(target.value, 0.000_001)
             offsets[link.target, default: 0] += targetSweep
             return LivelineChordRibbon(
                 index: index, link: link,
@@ -156,11 +186,25 @@ struct LivelineParallelLayout {
     func y(_ value: Double, axis: Int) -> CGFloat {
         let index = min(max(axis, 0), max(ranges.count - 1, 0))
         guard ranges.indices.contains(index) else { return body.midY }
-        return LivelineRenderer.mapped(value, from: ranges[index], to: (body.maxY, body.minY))
+        return body.maxY - body.height * CGFloat(
+            LivelineScalar.unitPosition(value, in: ranges[index]))
     }
 }
 
 extension LivelineAdvancedLayout {
+    static func parallelCoordinateRanges(
+        records: [LivelineParallelRecord], axisCount: Int
+    ) -> [ClosedRange<Double>] {
+        (0..<axisCount).map { axis -> ClosedRange<Double> in
+            let values = records.compactMap {
+                $0.values.indices.contains(axis) ? $0.values[axis] : nil
+            }
+            let lower = values.min() ?? 0
+            let upper = values.max() ?? 1
+            return lower...max(upper, lower)
+        }
+    }
+
     static func parallelCoordinates(
         records: [LivelineParallelRecord],
         layout: LivelineLayout,
@@ -173,12 +217,7 @@ extension LivelineAdvancedLayout {
             records.count <= 8 ? min(textScale.scaled(52), layout.chartWidth * 0.18) : 0
         let plot = LivelineRenderer.advancedPlotRect(layout)
             .insetBy(dx: textScale.scaled(8), dy: textScale.scaled(8))
-        let ranges = (0..<axisCount).map { axis -> ClosedRange<Double> in
-            let values = records.compactMap { $0.values.indices.contains(axis) ? $0.values[axis] : nil }
-            let lower = values.min() ?? 0
-            let upper = values.max() ?? 1
-            return lower == upper ? (lower - 0.5)...(upper + 0.5) : lower...upper
-        }
+        let ranges = parallelCoordinateRanges(records: records, axisCount: axisCount)
         return LivelineParallelLayout(
             plot: plot,
             body: CGRect(
@@ -696,8 +735,12 @@ extension LivelineAdvancedLayout {
         textScale: LivelineTextScale
     ) -> LivelineTernaryLayout {
         let labels = ternaryAxisLabels(style.axisLabels)
-        let plotBounds = LivelineRenderer.advancedPlotRect(layout)
-            .insetBy(dx: textScale.scaled(8), dy: textScale.scaled(22))
+        let basePlot = LivelineRenderer.advancedPlotRect(layout)
+        let horizontalInset = min(
+            textScale.scaled(8), max(basePlot.width / 2 - 0.5, 0))
+        let verticalInset = min(
+            textScale.scaled(22), max(basePlot.height / 2 - 0.5, 0))
+        let plotBounds = basePlot.insetBy(dx: horizontalInset, dy: verticalInset)
         let maximumReserve = plotBounds.width * 0.28
         let leftReserve = min(
             estimatedLabelWidth(labels[1], textScale: textScale) + textScale.scaled(9),

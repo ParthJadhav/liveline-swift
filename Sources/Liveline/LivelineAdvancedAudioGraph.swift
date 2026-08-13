@@ -116,15 +116,22 @@ enum LivelineAdvancedAudioGraph {
                 order: nodeSamples.map(\.0) + linkSamples.map(\.0))
         case .parallelCoordinates(let records, let style):
             let axisCount = records.map(\.values.count).max() ?? 0
+            let ranges = LivelineAdvancedLayout.parallelCoordinateRanges(
+                records: records, axisCount: axisCount)
             let order = records.map(\.label)
             let series = (0..<axisCount).map { axis in
                 categorical(
                     LivelineAdvancedLayout.axisLabel(style.axisLabels, at: axis),
                     records.compactMap {
-                        $0.values.indices.contains(axis) ? ($0.label, $0.values[axis]) : nil
+                        guard $0.values.indices.contains(axis), ranges.indices.contains(axis) else {
+                            return nil
+                        }
+                        return (
+                            $0.label,
+                            LivelineScalar.unitPosition($0.values[axis], in: ranges[axis]))
                     })
             }
-            return categories(series, order: order)
+            return categories(series, order: order, range: 0...1)
         case .hexbin(let points, let style):
             let cells = LivelineAdvancedLayout.hexbinCellsForInspection(
                 points: points, style: style)

@@ -147,7 +147,7 @@ enum LivelineAdvancedMath {
     static func renkoBricks(points: [LivelinePoint], brickSize: Double) -> [LivelineRenkoBrick] {
         let points = LivelineInputNormalizer.points(points)
         guard let first = points.first else { return [] }
-        let size = brickSize.livelineAtLeast(0.000_001, fallback: 1)
+        let size = brickSize.livelinePositive(atLeast: 0.000_001, fallback: 1)
         var anchor = (first.value / size).rounded(.down) * size
         var result: [LivelineRenkoBrick] = []
         result.reserveCapacity(points.count)
@@ -229,7 +229,7 @@ enum LivelineAdvancedMath {
     ) -> [LivelinePointFigureColumn] {
         let points = LivelineInputNormalizer.points(points)
         guard points.count >= 2, let first = points.first else { return [] }
-        let size = boxSize.livelineAtLeast(0.000_001, fallback: 1)
+        let size = boxSize.livelinePositive(atLeast: 0.000_001, fallback: 1)
         let reversal = max(reversalBoxes, 1)
         var anchor = (first.value / size).rounded() * size
         guard anchor.isFinite else { return [] }

@@ -2113,6 +2113,109 @@ final class LivelineAdvancedChartTests: XCTestCase {
             accuracy: 0.000_1)
     }
 
+    func testFinalReviewBatchKeepsExtremeAndCompactGeometryMeaningful() throws {
+        let maximum = Double.greatestFiniteMagnitude
+        let extremeTask = LivelineGanttTask(
+            id: "extreme", label: "Extreme", start: -maximum, end: maximum, lane: 0)
+        XCTAssertEqual(extremeTask.start, -LivelineScalar.maximumTimeMagnitude)
+        XCTAssertEqual(extremeTask.end, LivelineScalar.maximumTimeMagnitude)
+        XCTAssertTrue((extremeTask.end - extremeTask.start).isFinite)
+
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0, maxValue: 10, leftEdge: 4, rightEdge: 6)
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
+        let tasks = [
+            LivelineGanttTask(id: "before", label: "Before", start: 0, end: 3, lane: 0),
+            LivelineGanttTask(id: "visible", label: "Visible", start: 5, end: 7, lane: 1),
+            LivelineGanttTask(id: "after", label: "After", start: 8, end: 9, lane: 2),
+        ]
+        let ganttTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .gantt(tasks, .init()), layout: layout, palette: palette,
+            configuration: .init(), targetLocation: nil, textScale: .standard)
+        XCTAssertEqual(ganttTargets.map(\.selection.heading), ["Visible"])
+
+        let distributions = [
+            LivelineDistributionSeries(id: "first", label: "First", values: [0, 1, 2]),
+            LivelineDistributionSeries(id: "second", label: "Second", values: [2, 3, 4]),
+        ]
+        let ltrViolin = LivelineAdvancedLayout.violin(
+            series: distributions, style: .init(), layout: layout, textScale: .standard)
+        var rtlLayout = layout
+        rtlLayout.isRTL = true
+        let rtlViolin = LivelineAdvancedLayout.violin(
+            series: distributions, style: .init(), layout: rtlLayout, textScale: .standard)
+        XCTAssertLessThan(ltrViolin.centerX(at: 0), ltrViolin.centerX(at: 1))
+        XCTAssertGreaterThan(rtlViolin.centerX(at: 0), rtlViolin.centerX(at: 1))
+        XCTAssertEqual(
+            ltrViolin.centerX(at: 0) + rtlViolin.centerX(at: 0),
+            ltrViolin.plot.minX + ltrViolin.plot.maxX,
+            accuracy: 0.000_1)
+
+        let compactLayout = LivelineLayout(
+            size: CGSize(width: 24, height: 24),
+            padding: .init(top: 8, right: 8, bottom: 8, left: 8),
+            minValue: 0, maxValue: 1, leftEdge: 0, rightEdge: 1)
+        let ternary = LivelineAdvancedLayout.ternary(
+            style: .init(), layout: compactLayout, textScale: .init(factor: 3))
+        XCTAssertTrue([ternary.a, ternary.b, ternary.c].allSatisfy {
+            $0.x.isFinite && $0.y.isFinite
+        })
+
+        let extremeLinks = [
+            LivelineChordLink(source: "A", target: "B", value: maximum),
+            LivelineChordLink(source: "A", target: "C", value: maximum),
+        ]
+        let nodeTotals = Dictionary(
+            uniqueKeysWithValues: LivelineAdvancedLayout.chordNodeTotals(extremeLinks))
+        let totalA = try XCTUnwrap(nodeTotals["A"])
+        XCTAssertEqual(try XCTUnwrap(nodeTotals["B"]) / totalA, 0.5)
+        XCTAssertEqual(try XCTUnwrap(nodeTotals["C"]) / totalA, 0.5)
+        let chord = LivelineAdvancedLayout.chord(
+            links: extremeLinks, style: .init(), layout: layout, textScale: .standard)
+        let arcs = Dictionary(uniqueKeysWithValues: chord.arcs.map { ($0.label, $0.sweep) })
+        let arcA = try XCTUnwrap(arcs["A"])
+        XCTAssertEqual(try XCTUnwrap(arcs["B"]) / arcA, 0.5)
+        XCTAssertEqual(try XCTUnwrap(arcs["C"]) / arcA, 0.5)
+
+        let levels = LivelineAdvancedLayout.volumeProfileLevels([
+            .init(price: 100, volume: maximum),
+            .init(price: 100, volume: maximum),
+            .init(price: 101, volume: maximum),
+        ])
+        XCTAssertEqual(levels.count, 2)
+        XCTAssertEqual(levels[1].volume / levels[0].volume, 0.5)
+
+        let renkoStyle = LivelineRenkoStyle(brickSize: 0)
+        XCTAssertEqual(renkoStyle.resolvedBrickSize, 1)
+        XCTAssertEqual(
+            LivelineAdvancedMath.renkoBricks(
+                points: [.init(time: 0, value: 100), .init(time: 1, value: 101.1)],
+                brickSize: 0
+            ).count,
+            1)
+        let figureStyle = LivelinePointAndFigureStyle(boxSize: -1)
+        XCTAssertEqual(figureStyle.resolvedBoxSize, 1)
+        XCTAssertEqual(
+            LivelineAdvancedMath.pointFigureColumns(
+                points: [.init(time: 0, value: 100), .init(time: 1, value: 101.1)],
+                boxSize: -1, reversalBoxes: 3
+            ).count,
+            1)
+
+        let records = [
+            LivelineParallelRecord(id: "low", label: "Low", values: [0, 1_000]),
+            LivelineParallelRecord(id: "high", label: "High", values: [1, 2_000]),
+        ]
+        let audio = LivelineAdvancedAudioGraph.make(
+            content: .parallelCoordinates(records, .init()), visibleRange: nil)
+        XCTAssertEqual(audio.valueRange, 0...1)
+        XCTAssertEqual(audio.series[0].points.map(\.value), [0, 1])
+        XCTAssertEqual(audio.series[1].points.map(\.value), [0, 1])
+        XCTAssertEqual(LivelineScalar.unitPosition(0, in: -maximum...maximum), 0.5)
+    }
+
     private static func fixture(named name: String) -> LivelineAdvancedChartContent {
         fixtures.first { $0.name == name }!.content
     }

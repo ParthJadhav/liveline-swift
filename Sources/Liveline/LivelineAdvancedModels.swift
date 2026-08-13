@@ -151,8 +151,8 @@ public struct LivelineGanttTask: Identifiable, Hashable, Sendable {
         progress: Double = 0,
         dependencyIDs: [String] = []
     ) {
-        let start = start.isFinite ? start : 0
-        let end = end.isFinite ? end : start
+        let start = LivelineScalar.time(start) ?? 0
+        let end = LivelineScalar.time(end) ?? start
         self.id = id
         self.label = label
         self.start = min(start, end)

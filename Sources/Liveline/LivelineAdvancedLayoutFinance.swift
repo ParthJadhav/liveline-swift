@@ -26,10 +26,25 @@ struct LivelineVolumeProfileLayout {
 
 extension LivelineAdvancedLayout {
     static func volumeProfileLevels(_ levels: [LivelinePriceVolume]) -> [LivelinePriceVolume] {
+        let positive = levels.filter { $0.volume > 0 }
+        let scale = max(positive.map(\.volume).max() ?? 0, 0.000_001)
         var volumeByPrice: [Double: Double] = [:]
-        for level in levels where level.volume > 0 {
+        var normalizedVolumeByPrice: [Double: Double] = [:]
+        var overflowed = false
+        for level in positive {
             let total = volumeByPrice[level.price, default: 0] + level.volume
-            volumeByPrice[level.price] = total.isFinite ? total : Double.greatestFiniteMagnitude
+            if total.isFinite {
+                volumeByPrice[level.price] = total
+            } else {
+                overflowed = true
+            }
+            normalizedVolumeByPrice[level.price, default: 0] += level.volume / scale
+        }
+        if overflowed {
+            let maximumNormalized = max(normalizedVolumeByPrice.values.max() ?? 0, 0.000_001)
+            volumeByPrice = normalizedVolumeByPrice.mapValues { normalized in
+                normalized / maximumNormalized * scale
+            }
         }
         return volumeByPrice.map { LivelinePriceVolume(price: $0.key, volume: $0.value) }
             .sorted { $0.price < $1.price }
