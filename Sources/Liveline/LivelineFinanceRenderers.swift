@@ -307,7 +307,7 @@ extension LivelineRenderer {
                 context.fill(Path(volumeBar), with: .color(color.opacity(style.resolvedVolumeOpacity)))
             }
             if style.showsVolumeAverage, values.count >= 2 {
-                let average = values.map(\.volume).reduce(0, +) / Double(values.count)
+                let average = LivelineScalar.mean(values.map(\.volume))
                 let y = volumeRect.maxY - volumeRect.height * CGFloat(average / volumeMax)
                 var line = Path()
                 line.move(to: CGPoint(x: volumeRect.minX, y: y))

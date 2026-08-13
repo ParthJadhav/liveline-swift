@@ -28,6 +28,98 @@ struct LivelineContourGeometry {
     var lines: [LivelineContourLine]
 }
 
+/// One interpolation source for both rendered contours and inspected values.
+/// Values are normalized before Catmull-Rom interpolation so extreme finite
+/// inputs cannot overflow intermediate arithmetic.
+struct LivelineContourSampler {
+    let xs: [Double]
+    let ys: [Double]
+    let valueScale: Double
+    let minimumNormalizedValue: Double
+    let maximumNormalizedValue: Double
+
+    private let values: [LivelineContourCoordinate: Double]
+
+    init?(samples: [LivelineContourSample]) {
+        let collapsed = LivelineAdvancedLayout.contourSamplesByCoordinate(samples)
+        let xs = Array(Set(collapsed.map(\.x))).sorted()
+        let ys = Array(Set(collapsed.map(\.y))).sorted()
+        guard xs.count >= 2, ys.count >= 2, collapsed.count == xs.count * ys.count else {
+            return nil
+        }
+        let valueScale = max(collapsed.map { abs($0.value) }.max() ?? 0, 1)
+        let normalizedValues = collapsed.map { $0.value / valueScale }
+        self.xs = xs
+        self.ys = ys
+        self.valueScale = valueScale
+        self.minimumNormalizedValue = normalizedValues.min() ?? 0
+        self.maximumNormalizedValue = normalizedValues.max() ?? 0
+        self.values = Dictionary(
+            uniqueKeysWithValues: zip(collapsed, normalizedValues).map { sample, value in
+                (LivelineContourCoordinate(x: sample.x, y: sample.y), value)
+            })
+    }
+
+    func normalizedValue(x: Double, y: Double) -> Double? {
+        guard
+            x.isFinite, y.isFinite,
+            x >= xs[0], x <= xs[xs.count - 1],
+            y >= ys[0], y <= ys[ys.count - 1]
+        else { return nil }
+        let cellX = min(xs.lastIndex { $0 <= x } ?? 0, xs.count - 2)
+        let cellY = min(ys.lastIndex { $0 <= y } ?? 0, ys.count - 2)
+        let xSpan = xs[cellX + 1] - xs[cellX]
+        let ySpan = ys[cellY + 1] - ys[cellY]
+        let localX = xSpan > 0 ? (x - xs[cellX]) / xSpan : 0
+        let localY = ySpan > 0 ? (y - ys[cellY]) / ySpan : 0
+
+        func coarseValue(x: Int, y: Int) -> Double {
+            let clampedX = min(max(x, 0), xs.count - 1)
+            let clampedY = min(max(y, 0), ys.count - 1)
+            return values[
+                LivelineContourCoordinate(x: xs[clampedX], y: ys[clampedY])
+            ] ?? minimumNormalizedValue
+        }
+        func cubic(
+            _ p0: Double, _ p1: Double, _ p2: Double, _ p3: Double, _ t: Double
+        ) -> Double {
+            let t2 = t * t
+            let t3 = t2 * t
+            return 0.5
+                * ((2 * p1) + (-p0 + p2) * t
+                    + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
+                    + (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
+        }
+        func interpolatedRow(_ row: Int) -> Double {
+            cubic(
+                coarseValue(x: cellX - 1, y: cellY + row),
+                coarseValue(x: cellX, y: cellY + row),
+                coarseValue(x: cellX + 1, y: cellY + row),
+                coarseValue(x: cellX + 2, y: cellY + row),
+                localX)
+        }
+        let interpolated = cubic(
+            interpolatedRow(-1), interpolatedRow(0),
+            interpolatedRow(1), interpolatedRow(2), localY)
+        var localMinimum = Double.infinity
+        var localMaximum = -Double.infinity
+        for row in -1...2 {
+            for column in -1...2 {
+                let sample = coarseValue(x: cellX + column, y: cellY + row)
+                localMinimum = min(localMinimum, sample)
+                localMaximum = max(localMaximum, sample)
+            }
+        }
+        return min(max(interpolated, localMinimum), localMaximum)
+    }
+
+    func value(x: Double, y: Double) -> Double? {
+        guard let normalized = normalizedValue(x: x, y: y) else { return nil }
+        let value = normalized * valueScale
+        return value.isFinite ? value : nil
+    }
+}
+
 enum LivelineVisualGeometry {
     private struct ContourSegment {
         var start: CGPoint
@@ -241,53 +333,28 @@ enum LivelineVisualGeometry {
         subdivisions: Int,
         isRTL: Bool = false
     ) -> LivelineContourGeometry {
-        let xs = Array(Set(samples.map(\.x))).sorted()
-        let ys = Array(Set(samples.map(\.y))).sorted()
-        guard xs.count >= 2, ys.count >= 2, plot.width > 0, plot.height > 0 else {
+        guard
+            let sampler = LivelineContourSampler(samples: samples),
+            plot.width > 0, plot.height > 0
+        else {
             return LivelineContourGeometry(fillCells: [], lines: [])
         }
+        let xs = sampler.xs
+        let ys = sampler.ys
 
         let levels = min(max(levelCount, 2), 16)
         let subdivisions = min(max(subdivisions, 1), 16)
-        let collapsed = LivelineAdvancedLayout.contourSamplesByCoordinate(samples)
-        guard collapsed.count == xs.count * ys.count else {
-            return LivelineContourGeometry(fillCells: [], lines: [])
-        }
-        let valueScale = max(collapsed.map { abs($0.value) }.max() ?? 0, 1)
-        let normalizedValues = collapsed.map { $0.value / valueScale }
-        let minimum = normalizedValues.min() ?? 0
-        let maximum = normalizedValues.max() ?? minimum
+        let minimum = sampler.minimumNormalizedValue
+        let maximum = sampler.maximumNormalizedValue
         let span = max(maximum - minimum, 0.000_001)
-
-        // Duplicate coordinates are legal input. Average them deterministically
-        // instead of relying on Dictionary(uniqueKeysWithValues:), which traps.
-        let values = Dictionary(
-            uniqueKeysWithValues: zip(collapsed, normalizedValues).map { sample, value in
-                (LivelineContourCoordinate(x: sample.x, y: sample.y), value)
-            })
-        func coarseValue(x: Int, y: Int) -> Double {
-            values[LivelineContourCoordinate(x: xs[x], y: ys[y])] ?? minimum
-        }
-        func clampedCoarseValue(x: Int, y: Int) -> Double {
-            coarseValue(
-                x: min(max(x, 0), xs.count - 1),
-                y: min(max(y, 0), ys.count - 1)
-            )
-        }
-        func cubic(_ p0: Double, _ p1: Double, _ p2: Double, _ p3: Double, _ t: Double) -> Double {
-            let t2 = t * t
-            let t3 = t2 * t
-            return 0.5
-                * ((2 * p1) + (-p0 + p2) * t
-                    + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
-                    + (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
-        }
 
         let columnCount = (xs.count - 1) * subdivisions + 1
         let rowCount = (ys.count - 1) * subdivisions + 1
         var denseValues = Array(repeating: minimum, count: columnCount * rowCount)
         var screenXs = Array(repeating: CGFloat.zero, count: columnCount)
         var screenYs = Array(repeating: CGFloat.zero, count: rowCount)
+        var valueXs = Array(repeating: Double.zero, count: columnCount)
+        var valueYs = Array(repeating: Double.zero, count: rowCount)
         let xDomain = xs[0]...xs[xs.count - 1]
         let yDomain = ys[0]...ys[ys.count - 1]
 
@@ -295,6 +362,7 @@ enum LivelineVisualGeometry {
             let cellX = min(denseX / subdivisions, xs.count - 2)
             let localX = Double(denseX - cellX * subdivisions) / Double(subdivisions)
             let valueX = xs[cellX] + (xs[cellX + 1] - xs[cellX]) * localX
+            valueXs[denseX] = valueX
             screenXs[denseX] = LivelineRenderer.mapped(
                 valueX,
                 from: xDomain,
@@ -305,48 +373,15 @@ enum LivelineVisualGeometry {
             let cellY = min(denseY / subdivisions, ys.count - 2)
             let localY = Double(denseY - cellY * subdivisions) / Double(subdivisions)
             let valueY = ys[cellY] + (ys[cellY + 1] - ys[cellY]) * localY
+            valueYs[denseY] = valueY
             screenYs[denseY] = LivelineRenderer.mapped(
                 valueY, from: yDomain, to: (plot.maxY, plot.minY))
         }
 
         for denseY in 0..<rowCount {
-            let cellY = min(denseY / subdivisions, ys.count - 2)
-            let localY = Double(denseY - cellY * subdivisions) / Double(subdivisions)
             for denseX in 0..<columnCount {
-                let cellX = min(denseX / subdivisions, xs.count - 2)
-                let localX = Double(denseX - cellX * subdivisions) / Double(subdivisions)
-                func interpolatedRow(_ row: Int) -> Double {
-                    cubic(
-                        clampedCoarseValue(x: cellX - 1, y: cellY + row),
-                        clampedCoarseValue(x: cellX, y: cellY + row),
-                        clampedCoarseValue(x: cellX + 1, y: cellY + row),
-                        clampedCoarseValue(x: cellX + 2, y: cellY + row),
-                        localX
-                    )
-                }
-                let interpolated = cubic(
-                    interpolatedRow(-1),
-                    interpolatedRow(0),
-                    interpolatedRow(1),
-                    interpolatedRow(2),
-                    localY
-                )
-                var localMinimum = Double.infinity
-                var localMaximum = -Double.infinity
-                for row in -1...2 {
-                    for column in -1...2 {
-                        let sample = clampedCoarseValue(
-                            x: cellX + column,
-                            y: cellY + row
-                        )
-                        localMinimum = min(localMinimum, sample)
-                        localMaximum = max(localMaximum, sample)
-                    }
-                }
-                denseValues[denseY * columnCount + denseX] = min(
-                    max(interpolated, localMinimum),
-                    localMaximum
-                )
+                denseValues[denseY * columnCount + denseX] = sampler.normalizedValue(
+                    x: valueXs[denseX], y: valueYs[denseY]) ?? minimum
             }
         }
 

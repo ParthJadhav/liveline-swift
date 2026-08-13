@@ -192,12 +192,13 @@ extension LivelineAdvancedChartContent {
 
         case .polarArea(let values, _):
             let positive = values.filter { $0.value > 0 }
-            let total = positive.reduce(0) { $0 + $1.value }
-            return positive.map {
-                LivelineAccessibilityEntry(
-                    id: $0.id,
-                    label: $0.label,
-                    value: shareDescription($0.value, total: total, formatValue: formatValue)
+            let shares = LivelineAdvancedMath.proportions(positive.map(\.value))
+            return positive.indices.map { index in
+                let value = positive[index]
+                return LivelineAccessibilityEntry(
+                    id: value.id,
+                    label: value.label,
+                    value: "\(formatValue(value.value)), \(percent(shares[index]))"
                 )
             }
 
@@ -296,18 +297,29 @@ extension LivelineAdvancedChartContent {
                 )
             }
 
-        case .renko(let series, _):
+        case .renko(let series, let style):
             return series.bricks
                 .enumerated().map { index, brick in
-                    LivelineAccessibilityEntry(
+                    var value = String(
+                        format: LivelineStrings.accessibilityBrickFormat,
+                        brick.isRising ? LivelineStrings.labelRising : LivelineStrings.labelFalling,
+                        formatValue(brick.open),
+                        formatValue(brick.close)
+                    )
+                    if style.showsWicks {
+                        value += ", " + [
+                            String(
+                                format: LivelineStrings.accessibilityNamedValueFormat,
+                                LivelineStrings.labelHigh, formatValue(brick.sourceHigh)),
+                            String(
+                                format: LivelineStrings.accessibilityNamedValueFormat,
+                                LivelineStrings.labelLow, formatValue(brick.sourceLow)),
+                        ].joined(separator: ", ")
+                    }
+                    return LivelineAccessibilityEntry(
                         id: "renko-\(index)",
                         label: formatTime(brick.time),
-                        value: String(
-                            format: LivelineStrings.accessibilityBrickFormat,
-                            brick.isRising ? LivelineStrings.labelRising : LivelineStrings.labelFalling,
-                            formatValue(brick.open),
-                            formatValue(brick.close)
-                        )
+                        value: value
                     )
                 }
 
@@ -455,7 +467,8 @@ extension LivelineAdvancedChartContent {
             count = levels.count
         case .renko(let series, let style):
             identifiers = []
-            variants = [style.resolvedBrickSize] + series.points.flatMap { [$0.time, $0.value] }
+            variants = [style.resolvedBrickSize, style.showsWicks ? 1 : 0]
+                + series.points.flatMap { [$0.time, $0.value] }
             count = series.points.count
         case .heikinAshi(let series, _):
             identifiers = []
@@ -499,15 +512,6 @@ extension LivelineAdvancedChartContent {
         style: LivelineHexbinStyle
     ) -> [LivelineHexbinCell] {
         LivelineAdvancedLayout.hexbinCellsForInspection(points: points, style: style)
-    }
-
-    private func shareDescription(
-        _ value: Double,
-        total: Double,
-        formatValue: (Double) -> String
-    ) -> String {
-        guard total > 0 else { return formatValue(value) }
-        return "\(formatValue(value)), \(percent(value / total))"
     }
 
     private func ohlcDescription(_ candle: LivelineCandle, formatValue: (Double) -> String) -> String {

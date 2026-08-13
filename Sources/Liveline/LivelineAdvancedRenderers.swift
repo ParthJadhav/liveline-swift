@@ -281,7 +281,7 @@ extension LivelineRenderer {
             if drawMarks {
                 let profile = item.profile
                 let ridgePoints = profile.samples.map { sample in
-                    let x = mapped(sample.value, from: geometry.valueDomain, to: body.minX...body.maxX)
+                    let x = geometry.x(value: sample.value, isRTL: layout.isRTL)
                     let y =
                         baseline - ridgeHeight * CGFloat(sample.density / profile.peakDensity)
                     return CGPoint(x: x, y: y)
@@ -303,8 +303,13 @@ extension LivelineRenderer {
             if drawLabels, style.showsLabels {
                 drawText(
                     item.series.label, context: &context,
-                    at: CGPoint(x: body.minX - textScale.scaled(7), y: baseline - textScale.scaled(2)),
-                    anchor: .trailing, color: palette.gridLabel, font: textScale.font(10, weight: .medium))
+                    at: CGPoint(
+                        x: layout.isRTL
+                            ? body.maxX + textScale.scaled(7)
+                            : body.minX - textScale.scaled(7),
+                        y: baseline - textScale.scaled(2)),
+                    anchor: layout.isRTL ? .leading : .trailing,
+                    color: palette.gridLabel, font: textScale.font(10, weight: .medium))
             }
         }
     }

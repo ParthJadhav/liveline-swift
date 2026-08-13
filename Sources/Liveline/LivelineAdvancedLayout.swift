@@ -61,6 +61,13 @@ struct LivelineRidgelineLayout {
 
     func baseline(at index: Int) -> CGFloat { body.minY + ridgeHeight + rowStride * CGFloat(index) }
 
+    func x(value: Double, isRTL: Bool) -> CGFloat {
+        LivelineRenderer.mapped(
+            value,
+            from: valueDomain,
+            to: isRTL ? (body.maxX, body.minX) : (body.minX, body.maxX))
+    }
+
     func rowRect(at index: Int) -> CGRect {
         let top = max(baseline(at: index) - ridgeHeight, body.minY)
         return CGRect(

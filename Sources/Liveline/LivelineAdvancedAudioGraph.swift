@@ -74,12 +74,12 @@ enum LivelineAdvancedAudioGraph {
                     LivelineStrings.labelValue, continuous: false,
                     values.map { ($0.date.timeIntervalSince1970, $0.value) })
             ])
-        case .gantt(let tasks, _):
+        case .gantt(let tasks, let style):
             let visible = tasks.filter { task in
                 guard let visibleRange else { return true }
                 return task.end >= visibleRange.lowerBound && task.start <= visibleRange.upperBound
             }
-            return time([
+            var series = [
                 LivelineAudioGraphSeries(
                     name: LivelineStrings.labelDuration,
                     isContinuous: false,
@@ -88,7 +88,19 @@ enum LivelineAdvancedAudioGraph {
                             time: max(task.start, visibleRange?.lowerBound ?? task.start),
                             category: nil, value: task.end - task.start)
                     })
-            ])
+            ]
+            if style.showsProgress {
+                series.append(
+                    LivelineAudioGraphSeries(
+                        name: LivelineStrings.labelProgress,
+                        isContinuous: false,
+                        points: visible.map { task in
+                            LivelineAudioGraphPoint(
+                                time: max(task.start, visibleRange?.lowerBound ?? task.start),
+                                category: nil, value: task.progress)
+                        }))
+            }
+            return time(series)
         case .chord(let links, _):
             let nodeSamples = LivelineAdvancedLayout.chordNodeTotals(links).map {
                 ($0.label, $0.value)
@@ -222,13 +234,26 @@ enum LivelineAdvancedAudioGraph {
             return categories(
                 [categorical(LivelineStrings.labelVolume, zip(order, levels).map { ($0, $1.volume) })],
                 order: order)
-        case .renko(let series, _):
+        case .renko(let series, let style):
             let bricks = series.bricks
             let order = bricks.indices.map {
                 String(format: LivelineStrings.labelColumnFormat, $0 + 1)
             }
+            var audioSeries = [
+                categorical(LivelineStrings.labelClose, zip(order, bricks).map { ($0, $1.close) })
+            ]
+            if style.showsWicks {
+                audioSeries.append(
+                    categorical(
+                        LivelineStrings.labelHigh,
+                        zip(order, bricks).map { ($0, $1.sourceHigh) }))
+                audioSeries.append(
+                    categorical(
+                        LivelineStrings.labelLow,
+                        zip(order, bricks).map { ($0, $1.sourceLow) }))
+            }
             return categories(
-                [categorical(LivelineStrings.labelClose, zip(order, bricks).map { ($0, $1.close) })],
+                audioSeries,
                 order: order)
         case .heikinAshi(let series, _):
             return time(candleSeries(series.candles, timed: timed))

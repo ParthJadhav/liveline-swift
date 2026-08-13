@@ -598,35 +598,14 @@ struct LivelineContourLayout {
         samples: [LivelineContourSample]
     ) -> (x: Double, y: Double, value: Double)? {
         guard plot.contains(location), plot.width > 0, plot.height > 0 else { return nil }
-        let xs = Array(Set(samples.map(\.x))).sorted()
-        let ys = Array(Set(samples.map(\.y))).sorted()
-        guard xs.count >= 2, ys.count >= 2 else { return nil }
+        guard let sampler = LivelineContourSampler(samples: samples) else { return nil }
         let screenProgress = Double((location.x - plot.minX) / plot.width)
         let xProgress = isRTL ? 1 - screenProgress : screenProgress
         let yProgress = Double((plot.maxY - location.y) / plot.height)
         let x = xDomain.lowerBound + xProgress * (xDomain.upperBound - xDomain.lowerBound)
         let y = yDomain.lowerBound + yProgress * (yDomain.upperBound - yDomain.lowerBound)
-        let upperX = xs.firstIndex { $0 >= x } ?? xs.count - 1
-        let upperY = ys.firstIndex { $0 >= y } ?? ys.count - 1
-        let lowerX = max(upperX - 1, 0)
-        let lowerY = max(upperY - 1, 0)
-        let values = Dictionary(
-            uniqueKeysWithValues: samples.map {
-                (LivelineContourCoordinate(x: $0.x, y: $0.y), $0.value)
-            })
-        guard
-            let lowerLeft = values[LivelineContourCoordinate(x: xs[lowerX], y: ys[lowerY])],
-            let lowerRight = values[LivelineContourCoordinate(x: xs[upperX], y: ys[lowerY])],
-            let upperLeft = values[LivelineContourCoordinate(x: xs[lowerX], y: ys[upperY])],
-            let upperRight = values[LivelineContourCoordinate(x: xs[upperX], y: ys[upperY])]
-        else { return nil }
-        let xSpan = xs[upperX] - xs[lowerX]
-        let ySpan = ys[upperY] - ys[lowerY]
-        let tx = xSpan > 0 ? (x - xs[lowerX]) / xSpan : 0
-        let ty = ySpan > 0 ? (y - ys[lowerY]) / ySpan : 0
-        let lower = lowerLeft + (lowerRight - lowerLeft) * tx
-        let upper = upperLeft + (upperRight - upperLeft) * tx
-        return (x, y, lower + (upper - lower) * ty)
+        guard let value = sampler.value(x: x, y: y) else { return nil }
+        return (x, y, value)
     }
 }
 

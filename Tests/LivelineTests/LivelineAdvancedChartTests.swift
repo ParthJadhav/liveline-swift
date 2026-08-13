@@ -1989,6 +1989,130 @@ final class LivelineAdvancedChartTests: XCTestCase {
         XCTAssertEqual(midpoint / maximum, 0.75, accuracy: 0.000_001)
     }
 
+    func testPostMediaReviewFindingsKeepRenderingAndInspectionInSync() throws {
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 90, maxValue: 110, leftEdge: 0, rightEdge: 10)
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
+
+        let ridgeline = LivelineAdvancedLayout.ridgeline(
+            series: [.init(id: "ridge", label: "Ridge", values: [0, 5, 10])],
+            style: .init(), layout: layout, textScale: .standard)
+        XCTAssertEqual(
+            ridgeline.x(value: 0, isRTL: false) + ridgeline.x(value: 0, isRTL: true),
+            ridgeline.body.minX + ridgeline.body.maxX,
+            accuracy: 0.000_1)
+
+        let maximum = Double.greatestFiniteMagnitude
+        XCTAssertEqual(LivelineScalar.mean([maximum, maximum]), maximum)
+        let polarEntries = LivelineAdvancedChartContent.polarArea(
+            [
+                .init(id: "a", label: "A", value: maximum),
+                .init(id: "b", label: "B", value: maximum),
+            ], .init()
+        ).accessibilityEntries(formatValue: { _ in "max" }, formatTime: { String($0) })
+        XCTAssertEqual(polarEntries.count, 2)
+        XCTAssertEqual(LivelineAdvancedMath.proportions([maximum, maximum]), [0.5, 0.5])
+        XCTAssertTrue(polarEntries.allSatisfy {
+            $0.value.contains("max") && !$0.value.lowercased().contains("nan")
+                && !$0.value.lowercased().contains("inf")
+        })
+
+        var contourSamples: [LivelineContourSample] = []
+        for y in 0..<4 {
+            for x in 0..<4 {
+                let spike = x == 2 && y == 1 ? 12 : 0
+                contourSamples.append(
+                    LivelineContourSample(
+                        id: "\(x)-\(y)", x: Double(x), y: Double(y),
+                        value: Double(x * x + y * 3 + spike)))
+            }
+        }
+        let contourLayout = try XCTUnwrap(
+            LivelineAdvancedLayout.contour(
+                samples: contourSamples, layout: layout, textScale: .standard))
+        let contourSampler = try XCTUnwrap(LivelineContourSampler(samples: contourSamples))
+        let inspected = try XCTUnwrap(
+            contourLayout.interpolatedSample(
+                at: contourLayout.point(x: 1.35, y: 1.6), samples: contourSamples))
+        XCTAssertEqual(
+            inspected.value,
+            try XCTUnwrap(contourSampler.value(x: 1.35, y: 1.6)),
+            accuracy: 0.000_001)
+
+        let tasks = [
+            LivelineGanttTask(
+                id: "task", label: "Task", start: 0, end: 4, lane: 0, progress: 0.75)
+        ]
+        let progressAudio = LivelineAdvancedAudioGraph.make(
+            content: .gantt(tasks, .init(showsProgress: true)), visibleRange: nil)
+        let noProgressAudio = LivelineAdvancedAudioGraph.make(
+            content: .gantt(tasks, .init(showsProgress: false)), visibleRange: nil)
+        XCTAssertTrue(progressAudio.series.contains { $0.name == LivelineStrings.labelProgress })
+        XCTAssertFalse(noProgressAudio.series.contains { $0.name == LivelineStrings.labelProgress })
+
+        let wickStyle = LivelineRenkoStyle(brickSize: 1, showsWicks: true)
+        let wickSeries = LivelineRenkoSeries(
+            points: [.init(time: 0, value: 100), .init(time: 1, value: 101.9)],
+            style: wickStyle)
+        let wickContent = LivelineAdvancedChartContent.renko(wickSeries, wickStyle)
+        let wickTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: wickContent, layout: layout, palette: palette,
+            configuration: .init(), targetLocation: nil, textScale: .standard)
+        XCTAssertEqual(wickTargets.first?.selection.rows.map(\.label), [
+            LivelineStrings.labelOpen, LivelineStrings.labelClose,
+            LivelineStrings.labelHigh, LivelineStrings.labelLow,
+        ])
+        let wickAudio = LivelineAdvancedAudioGraph.make(content: wickContent, visibleRange: nil)
+        XCTAssertEqual(wickAudio.series.map(\.name), [
+            LivelineStrings.labelClose, LivelineStrings.labelHigh, LivelineStrings.labelLow,
+        ])
+        XCTAssertTrue(
+            wickContent.accessibilityEntries(
+                formatValue: { String($0) }, formatTime: { String($0) }
+            ).first?.value.contains(LivelineStrings.labelHigh) == true)
+        let hiddenWickKey = LivelineAdvancedChartContent.renko(
+            wickSeries, .init(brickSize: 1, showsWicks: false)).accessibilityCacheDescriptor
+        XCTAssertNotEqual(wickContent.accessibilityCacheDescriptor.variants, hiddenWickKey.variants)
+
+        let bumpSeries = LivelineRankSeries(
+            id: "rank", label: "Rank",
+            points: [.init(time: 0, rank: 1), .init(time: 10, rank: 2)])
+        let bumpTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .bump([bumpSeries], .init(showsPoints: false)),
+            layout: layout, palette: palette, configuration: .init(),
+            targetLocation: nil, textScale: .standard)
+        XCTAssertTrue(bumpTargets.allSatisfy {
+            if case .path = $0.region { return true }
+            return false
+        })
+
+        let figureStyle = LivelinePointAndFigureStyle(boxSize: 1)
+        let figureSeries = LivelinePointFigureSeries(
+            points: [.init(time: 0, value: 100), .init(time: 1, value: 104)],
+            style: figureStyle)
+        let figureLayout = LivelineAdvancedLayout.pointAndFigure(
+            columns: figureSeries.columns, style: figureStyle,
+            layout: layout, textScale: .standard)
+        let figureTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .pointAndFigure(figureSeries, figureStyle),
+            layout: layout, palette: palette, configuration: .init(),
+            targetLocation: nil, textScale: .standard)
+        guard case .rect(let figureRegion) = try XCTUnwrap(figureTargets.first).region else {
+            return XCTFail("Expected a rectangular point-and-figure target")
+        }
+        let column = try XCTUnwrap(figureSeries.columns.first)
+        XCTAssertEqual(
+            figureRegion.minY,
+            min(figureLayout.y(column.high), figureLayout.y(column.low)) - figureLayout.box / 2,
+            accuracy: 0.000_1)
+        XCTAssertEqual(
+            figureRegion.maxY,
+            max(figureLayout.y(column.high), figureLayout.y(column.low)) + figureLayout.box / 2,
+            accuracy: 0.000_1)
+    }
+
     private static func fixture(named name: String) -> LivelineAdvancedChartContent {
         fixtures.first { $0.name == name }!.content
     }

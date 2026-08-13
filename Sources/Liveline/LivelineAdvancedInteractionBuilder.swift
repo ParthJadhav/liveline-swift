@@ -122,6 +122,11 @@ enum LivelineAdvancedInteractionBuilder {
                         in: entry.points, includingBoundaryPoints: false)
                 else { return [] }
                 let visiblePoints = Array(entry.points[visible])
+                let lineRegion = polylineRegion(
+                    visiblePoints.map {
+                        CGPoint(x: geometry.x(time: $0.time), y: geometry.y(rank: $0.rank))
+                    },
+                    hitWidth: max(style.resolvedLineWidth, 12))
                 return nearestTimed(
                     visiblePoints, targetLocation: targetLocation, layout: layout, time: \.time
                 ).map { point in
@@ -138,7 +143,9 @@ enum LivelineAdvancedInteractionBuilder {
                                 palette.gridLabel),
                             row(LivelineStrings.labelRank, configuration.formatValue(point.rank), color),
                         ],
-                        region: .circle(center: center, radius: max(style.resolvedPointSize / 2, 5))
+                        region: style.showsPoints
+                            ? .circle(center: center, radius: max(style.resolvedPointSize / 2, 5))
+                            : lineRegion
                     )
                 }
             }
@@ -437,13 +444,24 @@ enum LivelineAdvancedInteractionBuilder {
             return bricks.enumerated().map { index, brick in
                 let rect = geometry.rect(at: index, layout: layout)
                 let color = brick.isRising ? (style.upColor ?? palette.line) : style.downColor
+                var rows = [
+                    row(LivelineStrings.labelOpen, configuration.formatValue(brick.open), color),
+                    row(LivelineStrings.labelClose, configuration.formatValue(brick.close), color),
+                ]
+                if style.showsWicks {
+                    rows.append(
+                        row(
+                            LivelineStrings.labelHigh,
+                            configuration.formatValue(brick.sourceHigh), color))
+                    rows.append(
+                        row(
+                            LivelineStrings.labelLow,
+                            configuration.formatValue(brick.sourceLow), color))
+                }
                 return target(
                     time: Double(index), value: brick.close, anchor: CGPoint(x: rect.midX, y: rect.midY),
                     heading: configuration.formatTime(brick.time),
-                    rows: [
-                        row(LivelineStrings.labelOpen, configuration.formatValue(brick.open), color),
-                        row(LivelineStrings.labelClose, configuration.formatValue(brick.close), color),
-                    ], region: .rect(rect))
+                    rows: rows, region: .rect(rect))
             }
 
         case .marketDepth(let levels, let style):
@@ -481,10 +499,12 @@ enum LivelineAdvancedInteractionBuilder {
             return columns.map { column in
                 let top = geometry.y(column.high)
                 let bottom = geometry.y(column.low)
+                let minY = min(top, bottom) - geometry.box / 2
+                let maxY = max(top, bottom) + geometry.box / 2
                 let rect = CGRect(
                     x: geometry.x(column: column) - geometry.slot / 2,
-                    y: min(top, bottom), width: geometry.slot,
-                    height: max(abs(bottom - top), geometry.box))
+                    y: minY, width: geometry.slot,
+                    height: max(maxY - minY, geometry.box))
                 let center = CGPoint(x: rect.midX, y: rect.midY)
                 let color = column.isRising ? (style.risingColor ?? palette.line) : style.fallingColor
                 return target(
