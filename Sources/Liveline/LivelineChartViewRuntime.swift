@@ -844,7 +844,8 @@ extension LivelineChart {
             behavior: current.behavior,
             targetLocation: targetLocation,
             textScale: textScale,
-            displayScale: displayScale
+            displayScale: displayScale,
+            state: renderState
         )
     }
 

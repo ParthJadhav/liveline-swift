@@ -162,7 +162,13 @@ enum LivelineAdvancedMath {
             // with the processed price.
             guard rawCount.isFinite, rawCount <= 10_000 else { return [] }
             let count = Int(rawCount)
-            guard count > 0 else { continue }
+            guard count > 0 else {
+                if let lastIndex = result.indices.last {
+                    result[lastIndex].sourceHigh = max(result[lastIndex].sourceHigh, point.value)
+                    result[lastIndex].sourceLow = min(result[lastIndex].sourceLow, point.value)
+                }
+                continue
+            }
             guard result.count <= 10_000 - count else { return [] }
             for brickIndex in 0..<count {
                 let next = anchor + direction * size

@@ -2358,6 +2358,77 @@ final class LivelineAdvancedChartTests: XCTestCase {
             sharedTimes.count)
     }
 
+    func testFinalReviewBatchPreservesDerivedExtremaAudioRangesAndCachedInspection() throws {
+        let trailingWick = try XCTUnwrap(
+            LivelineAdvancedMath.renkoBricks(
+                points: [
+                    .init(time: 0, value: 100),
+                    .init(time: 1, value: 101),
+                    .init(time: 2, value: 101.8),
+                ],
+                brickSize: 1
+            ).last)
+        XCTAssertEqual(trailingWick.sourceHigh, 101.8)
+        XCTAssertEqual(trailingWick.sourceLow, 100)
+
+        let clampedRank = LivelineRankPoint(
+            time: Double.greatestFiniteMagnitude,
+            rank: 1)
+        XCTAssertEqual(clampedRank.time, LivelineScalar.maximumTimeMagnitude)
+
+        let audio = LivelineAdvancedAudioGraph.make(
+            content: .ohlcVolume(
+                [
+                    .init(time: 0, open: 100, high: 110, low: 90, close: 105, volume: 1_000_000),
+                    .init(time: 1, open: 110, high: 120, low: 100, close: 115, volume: 2_000_000),
+                ],
+                .init()),
+            visibleRange: nil)
+        XCTAssertEqual(audio.valueRange, 0...1)
+        XCTAssertTrue(audio.series.flatMap(\.points).allSatisfy { (0...1).contains($0.value) })
+        XCTAssertEqual(
+            try XCTUnwrap(audio.series.first { $0.name == LivelineStrings.labelVolume })
+                .points.map(\.value),
+            [0.5, 1])
+
+        let distributions = [
+            LivelineDistributionSeries(
+                id: "distribution",
+                label: "Distribution",
+                values: Array(0..<1_000).map(Double.init))
+        ]
+        let state = LivelineRenderState()
+        _ = state.distributionProfiles(series: distributions, bandwidth: nil)
+        let content = LivelineChartContent.advanced(
+            .violin(distributions, .init()))
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 1_000,
+            leftEdge: 0,
+            rightEdge: 1)
+        let configuration = LivelineChartConfiguration()
+        let prepared = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: layout.leftEdge,
+            rightEdge: layout.rightEdge,
+            config: configuration,
+            state: state)
+        _ = LivelineInteractionBuilder.snapshot(
+            content: content,
+            prepared: prepared,
+            layout: layout,
+            palette: LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2),
+            configuration: configuration,
+            hiddenSeries: [],
+            behavior: .none,
+            targetLocation: LivelineRenderer.plotCenter(layout),
+            state: state)
+        XCTAssertEqual(state.distributionProfileBuildCount, 1)
+    }
+
     private static func fixture(named name: String) -> LivelineAdvancedChartContent {
         fixtures.first { $0.name == name }!.content
     }

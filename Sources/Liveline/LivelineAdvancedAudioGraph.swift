@@ -277,12 +277,30 @@ enum LivelineAdvancedAudioGraph {
                     curve.asks.map { (formatValue($0.time), $0.value) }),
             ], order: order)
         case .ohlcVolume(let values, _):
-            let candles = values.map {
-                LivelineCandle(time: $0.time, open: $0.open, high: $0.high, low: $0.low, close: $0.close)
+            let visible = values.filter { visibleRange?.contains($0.time) ?? true }
+            let priceMinimum = visible.map(\.low).min() ?? 0
+            let priceMaximum = visible.map(\.high).max() ?? 1
+            let priceDomain = priceMinimum...priceMaximum
+            let volumeDomain = 0...max(visible.map(\.volume).max() ?? 0, 1)
+            let candles = visible.map {
+                LivelineCandle(
+                    time: $0.time,
+                    open: LivelineScalar.unitPosition($0.open, in: priceDomain),
+                    high: LivelineScalar.unitPosition($0.high, in: priceDomain),
+                    low: LivelineScalar.unitPosition($0.low, in: priceDomain),
+                    close: LivelineScalar.unitPosition($0.close, in: priceDomain))
             }
             return time(
                 candleSeries(candles, timed: timed)
-                    + [timed(LivelineStrings.labelVolume, continuous: false, values.map { ($0.time, $0.volume) })]
+                    + [
+                        timed(
+                            LivelineStrings.labelVolume,
+                            continuous: false,
+                            visible.map {
+                                ($0.time, LivelineScalar.unitPosition($0.volume, in: volumeDomain))
+                            })
+                    ],
+                range: 0...1
             )
         case .pointAndFigure(let series, _):
             let columns = series.columns

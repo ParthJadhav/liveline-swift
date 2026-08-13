@@ -200,7 +200,7 @@ public struct LivelineRankPoint: Identifiable, Hashable, Sendable {
     public var id: TimeInterval { time }
 
     public init(time: TimeInterval, rank: Double) {
-        self.time = time.isFinite ? time : 0
+        self.time = LivelineScalar.time(time) ?? 0
         self.rank = rank.isFinite ? rank : 0
     }
 }
