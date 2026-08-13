@@ -639,16 +639,21 @@ extension LivelineAdvancedLayout {
     static func contourSamplesByCoordinate(
         _ samples: [LivelineContourSample]
     ) -> [LivelineContourSample] {
-        var grouped: [LivelineContourCoordinate: (sum: Double, count: Int)] = [:]
+        var grouped: [LivelineContourCoordinate: (mean: Double, count: Int)] = [:]
         for sample in samples {
             let key = LivelineContourCoordinate(x: sample.x, y: sample.y)
             let previous = grouped[key] ?? (0, 0)
-            grouped[key] = (previous.sum + sample.value, previous.count + 1)
+            let nextCount = previous.count + 1
+            let weight = 1 / Double(nextCount)
+            grouped[key] = (
+                previous.mean * (1 - weight) + sample.value * weight,
+                nextCount
+            )
         }
         return grouped.map { key, aggregate in
             LivelineContourSample(
                 id: "\(key.x):\(key.y)", x: key.x, y: key.y,
-                value: aggregate.sum / Double(aggregate.count))
+                value: aggregate.mean)
         }.sorted { ($0.x, $0.y) < ($1.x, $1.y) }
     }
 

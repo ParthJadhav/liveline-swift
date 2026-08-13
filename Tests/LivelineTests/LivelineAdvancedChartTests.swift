@@ -1902,6 +1902,93 @@ final class LivelineAdvancedChartTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(geometry.valueDomain.upperBound, 110)
     }
 
+    func testNewestReviewFindingsPreserveCacheGeometryAndExtremeFiniteData() {
+        let tasks = [
+            LivelineGanttTask(id: "plan", label: "Plan", start: 0, end: 1, lane: 0),
+            LivelineGanttTask(
+                id: "ship", label: "Ship", start: 1, end: 2, lane: 1,
+                dependencyIDs: ["plan"]),
+        ]
+        let visibleDependencies = LivelineAdvancedChartContent.gantt(
+            tasks, .init(showsDependencies: true)).accessibilityCacheDescriptor
+        let hiddenDependencies = LivelineAdvancedChartContent.gantt(
+            tasks, .init(showsDependencies: false)).accessibilityCacheDescriptor
+        XCTAssertNotEqual(visibleDependencies.variants, hiddenDependencies.variants)
+
+        let waffleValues = [
+            LivelineCategoryValue(
+                id: "large", label: "Large", value: Double.greatestFiniteMagnitude),
+            LivelineCategoryValue(id: "small", label: "Small", value: 1),
+        ]
+        let smallGrid = LivelineAdvancedChartContent.waffle(
+            waffleValues, .init(columns: 1, rows: 1)).accessibilityCacheDescriptor
+        let largeGrid = LivelineAdvancedChartContent.waffle(
+            waffleValues, .init(columns: 10, rows: 10)).accessibilityCacheDescriptor
+        XCTAssertNotEqual(smallGrid.variants, largeGrid.variants)
+        XCTAssertEqual(
+            LivelineRenderer.waffleAllocations(values: waffleValues, cellCount: 100),
+            [100, 0])
+
+        let body = CGRect(x: 10, y: 20, width: 200, height: 80)
+        XCTAssertEqual(
+            LivelineRenderer.horizontalRevealClip(in: body, reveal: 0.25, isRTL: false),
+            CGRect(x: 10, y: 20, width: 50, height: 80))
+        XCTAssertEqual(
+            LivelineRenderer.horizontalRevealClip(in: body, reveal: 0.25, isRTL: true),
+            CGRect(x: 160, y: 20, width: 50, height: 80))
+
+        let emptyAdvanced: [LivelineAdvancedChartContent] = [
+            .horizon([.init(time: 0, value: 1)], .init()),
+            .parallelCoordinates(
+                [.init(id: "record", label: "Record", values: [1])], .init()),
+            .contour([
+                .init(id: "00", x: 0, y: 0, value: 1),
+                .init(id: "10", x: 1, y: 0, value: 2),
+                .init(id: "01", x: 0, y: 1, value: 3),
+            ], .init()),
+        ]
+        for advanced in emptyAdvanced {
+            let content = LivelineChartContent.advanced(advanced)
+            let model = LivelineChartAccessibilityModel.make(
+                content: content,
+                semantics: content.semantics(),
+                configuration: .init(),
+                hiddenSeries: [])
+            XCTAssertEqual(model.entryCount, 0)
+            XCTAssertTrue(model.entries.isEmpty)
+        }
+
+        let maximum = Double.greatestFiniteMagnitude
+        let collapsed = LivelineAdvancedLayout.contourSamplesByCoordinate([
+            .init(id: "first", x: 0, y: 0, value: maximum),
+            .init(id: "second", x: 0, y: 0, value: maximum),
+        ])
+        XCTAssertEqual(collapsed.first?.value, maximum)
+
+        let extremeContour = [
+            LivelineContourSample(id: "00", x: 0, y: 0, value: -maximum),
+            LivelineContourSample(id: "10", x: 1, y: 0, value: maximum),
+            LivelineContourSample(id: "01", x: 0, y: 1, value: maximum),
+            LivelineContourSample(id: "11", x: 1, y: 1, value: -maximum),
+        ]
+        let contourGeometry = LivelineVisualGeometry.contour(
+            samples: extremeContour,
+            levelCount: 7,
+            plot: CGRect(x: 0, y: 0, width: 240, height: 160),
+            subdivisions: 4)
+        XCTAssertFalse(contourGeometry.fillCells.isEmpty)
+        XCTAssertTrue(contourGeometry.fillCells.allSatisfy { (0..<7).contains($0.level) })
+
+        let depth = LivelineAdvancedChartContent.marketDepth([
+            .init(price: maximum / 2, bidSize: 1),
+            .init(price: maximum, askSize: 1),
+        ], .init())
+        let midpoint = depth.prepared(
+            leftEdge: 0, rightEdge: 1, configuration: .init()).primaryValue
+        XCTAssertTrue(midpoint.isFinite)
+        XCTAssertEqual(midpoint / maximum, 0.75, accuracy: 0.000_001)
+    }
+
     private static func fixture(named name: String) -> LivelineAdvancedChartContent {
         fixtures.first { $0.name == name }!.content
     }

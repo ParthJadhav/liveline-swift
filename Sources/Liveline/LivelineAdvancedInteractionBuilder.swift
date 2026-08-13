@@ -394,7 +394,7 @@ enum LivelineAdvancedInteractionBuilder {
             let geometry = LivelineAdvancedLayout.waffle(
                 values: values, style: style, layout: layout, textScale: textScale)
             guard !geometry.values.isEmpty else { return [] }
-            let total = geometry.values.reduce(0) { $0 + $1.value }
+            let shares = LivelineAdvancedMath.proportions(geometry.values.map(\.value))
             let starts = geometry.categoryStartIndices
             return geometry.values.enumerated().compactMap { index, value in
                 guard geometry.allocations[index] > 0 else { return nil }
@@ -412,7 +412,7 @@ enum LivelineAdvancedInteractionBuilder {
                         row(
                             LivelineStrings.labelValue, configuration.formatValue(value.value),
                             LivelineRenderer.advancedColor(index: index, colors: style.colors, palette: palette)),
-                        row(LivelineStrings.labelShare, percent(value.value / total), palette.gridLabel),
+                        row(LivelineStrings.labelShare, percent(shares[index]), palette.gridLabel),
                     ], region: .path(allocatedCells))
             }
 

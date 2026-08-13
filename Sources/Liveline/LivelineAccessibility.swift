@@ -379,10 +379,12 @@ struct LivelineChartAccessibilityModel: Equatable {
             }
 
         case let .advanced(content):
-            entries = content.accessibilityEntries(
-                formatValue: formatValue,
-                formatTime: formatTime
-            )
+            entries = content.isEmpty
+                ? []
+                : content.accessibilityEntries(
+                    formatValue: formatValue,
+                    formatTime: formatTime
+                )
 
         case let .candle(data, _, candles, _, liveCandle, lineData, _):
             if configuration.lineMode, !lineData.isEmpty {
@@ -563,7 +565,7 @@ struct LivelineChartAccessibilityModel: Equatable {
         case let .sankey(links, _):
             return LivelineMath.sankeyGraph(links: links).links.count
         case let .advanced(content):
-            return content.accessibilityEntryCount
+            return content.isEmpty ? 0 : content.accessibilityEntryCount
         case let .candle(data, _, candles, _, liveCandle, lineData, _):
             if configuration.lineMode, !lineData.isEmpty {
                 return lineData.count

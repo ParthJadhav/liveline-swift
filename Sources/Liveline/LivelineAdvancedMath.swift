@@ -47,6 +47,19 @@ struct LivelineMarketDepthCurve: Equatable {
 }
 
 enum LivelineAdvancedMath {
+    static func proportions(_ values: [Double]) -> [Double] {
+        let positive = values.map { $0.isFinite && $0 > 0 ? $0 : 0 }
+        guard let scale = positive.max(), scale > 0 else {
+            return Array(repeating: 0, count: values.count)
+        }
+        let scaled = positive.map { $0 / scale }
+        let total = scaled.reduce(0, +)
+        guard total.isFinite, total > 0 else {
+            return Array(repeating: 0, count: values.count)
+        }
+        return scaled.map { $0 / total }
+    }
+
     static func quantile(_ values: [Double], probability: Double) -> Double {
         let sorted = values.filter(\.isFinite).sorted()
         guard let first = sorted.first else { return 0 }

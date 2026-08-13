@@ -203,12 +203,18 @@ extension LivelineAdvancedChartContent {
 
         case .waffle(let values, let style):
             let positive = values.filter { $0.value > 0 }
-            let total = positive.reduce(0) { $0 + $1.value }
-            return LivelineAdvancedLayout.allocatedWaffleValues(values, style: style).map {
-                LivelineAccessibilityEntry(
-                    id: $0.id,
-                    label: $0.label,
-                    value: shareDescription($0.value, total: total, formatValue: formatValue)
+            let allocations = LivelineRenderer.waffleAllocations(
+                values: positive,
+                cellCount: style.resolvedColumns * style.resolvedRows
+            )
+            let shares = LivelineAdvancedMath.proportions(positive.map(\.value))
+            return positive.indices.compactMap { index in
+                guard allocations[index] > 0 else { return nil }
+                let value = positive[index]
+                return LivelineAccessibilityEntry(
+                    id: value.id,
+                    label: value.label,
+                    value: "\(formatValue(value.value)), \(percent(shares[index]))"
                 )
             }
 
@@ -389,9 +395,10 @@ extension LivelineAdvancedChartContent {
                 Double(style.calendar.minimumDaysInFirstWeek),
             ] + values.flatMap { [$0.date.timeIntervalSinceReferenceDate, $0.value] }
             count = values.count
-        case .gantt(let tasks, _):
+        case .gantt(let tasks, let style):
             identifiers = tasks.flatMap { [$0.id, $0.label] + $0.dependencyIDs }
-            variants = tasks.flatMap { [$0.start, $0.end, Double($0.lane), $0.progress] }
+            variants = [style.showsDependencies ? 1 : 0]
+                + tasks.flatMap { [$0.start, $0.end, Double($0.lane), $0.progress] }
             count = tasks.count
         case .chord(let links, _):
             identifiers = links.flatMap { [$0.source, $0.target] }
@@ -418,9 +425,14 @@ extension LivelineAdvancedChartContent {
             identifiers = columns.flatMap { [$0.id, $0.label] + $0.segments.map(\.label) }
             variants = columns.flatMap { [$0.width] + $0.segments.map(\.value) }
             count = columns.count
-        case .polarArea(let values, _), .waffle(let values, _):
+        case .polarArea(let values, _):
             identifiers = values.map(\.label)
             variants = values.map(\.value)
+            count = values.count
+        case .waffle(let values, let style):
+            identifiers = values.map(\.label)
+            variants = [Double(style.resolvedColumns), Double(style.resolvedRows)]
+                + values.map(\.value)
             count = values.count
         case .network(let nodes, let edges, let style):
             identifiers =

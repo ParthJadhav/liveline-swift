@@ -528,14 +528,14 @@ extension LivelineRenderer {
             }
         }
         if drawLabels, style.showsLegend {
-            let total = values.reduce(0) { $0 + $1.value }
+            let shares = LivelineAdvancedMath.proportions(values.map(\.value))
             var x = plot.minX
             for (index, value) in values.enumerated() {
                 let color = advancedColor(index: index, colors: style.colors, palette: palette)
                 context.fill(
                     Path(ellipseIn: CGRect(x: x, y: plot.maxY - textScale.scaled(13), width: 7, height: 7)),
                     with: .color(color))
-                let formattedShare = configuration.formatValue(value.value / total * 100)
+                let formattedShare = configuration.formatValue(shares[index] * 100)
                 let label =
                     "\(value.label) \(formattedShare.hasSuffix("%") ? formattedShare : formattedShare + "%")"
                 drawText(
@@ -553,8 +553,8 @@ extension LivelineRenderer {
     }
 
     static func waffleAllocations(values: [LivelineCategoryValue], cellCount: Int) -> [Int] {
-        let total = max(values.reduce(0) { $0 + $1.value }, 0.000_001)
-        let raw = values.map { $0.value / total * Double(cellCount) }
+        let raw = LivelineAdvancedMath.proportions(values.map(\.value))
+            .map { $0 * Double(cellCount) }
         var result = raw.map { Int($0.rounded(.down)) }
         var remaining = cellCount - result.reduce(0, +)
         let order = raw.enumerated().sorted { lhs, rhs in

@@ -165,6 +165,20 @@ extension LivelineRenderer {
         return min(Int((Double(total) * reveal).rounded(.up)), total)
     }
 
+    static func horizontalRevealClip(
+        in rect: CGRect,
+        reveal: Double,
+        isRTL: Bool
+    ) -> CGRect {
+        let width = rect.width * CGFloat(reveal.livelineClamped(0, 1, fallback: 1))
+        return CGRect(
+            x: isRTL ? rect.maxX - width : rect.minX,
+            y: rect.minY,
+            width: width,
+            height: rect.height
+        )
+    }
+
     static func advancedColor(index: Int, colors: [Color], palette: LivelinePalette) -> Color {
         extendedSeriesColor(index: index, colors: colors, palette: palette)
     }
@@ -269,15 +283,18 @@ extension LivelineRenderer {
                 let ridgePoints = profile.samples.map { sample in
                     let x = mapped(sample.value, from: geometry.valueDomain, to: body.minX...body.maxX)
                     let y =
-                        baseline - ridgeHeight * CGFloat(sample.density / profile.peakDensity) * CGFloat(reveal)
+                        baseline - ridgeHeight * CGFloat(sample.density / profile.peakDensity)
                     return CGPoint(x: x, y: y)
                 }
                 var path = LivelineMath.monotoneSplinePath(points: ridgePoints)
                 path.addLine(to: CGPoint(x: body.maxX, y: baseline))
                 path.addLine(to: CGPoint(x: body.minX, y: baseline))
                 path.closeSubpath()
-                context.fill(path, with: .color(color.opacity(style.resolvedFillOpacity)))
-                context.stroke(
+                var markLayer = context
+                markLayer.clip(to: Path(horizontalRevealClip(
+                    in: body, reveal: reveal, isRTL: layout.isRTL)))
+                markLayer.fill(path, with: .color(color.opacity(style.resolvedFillOpacity)))
+                markLayer.stroke(
                     path,
                     with: .color(color),
                     style: StrokeStyle(
@@ -448,7 +465,13 @@ extension LivelineRenderer {
                 labelLayer.clip(to: Path(rect.insetBy(dx: 3, dy: 0)))
                 drawText(
                     task.label, context: &labelLayer,
-                    at: CGPoint(x: rect.minX + textScale.scaled(5), y: rect.midY), anchor: .leading,
+                    at: CGPoint(
+                        x: layout.isRTL
+                            ? rect.maxX - textScale.scaled(5)
+                            : rect.minX + textScale.scaled(5),
+                        y: rect.midY
+                    ),
+                    anchor: layout.isRTL ? .trailing : .leading,
                     color: palette.tooltipText, font: textScale.font(9, weight: .medium))
             }
         }

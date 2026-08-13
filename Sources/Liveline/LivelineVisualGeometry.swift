@@ -253,15 +253,17 @@ enum LivelineVisualGeometry {
         guard collapsed.count == xs.count * ys.count else {
             return LivelineContourGeometry(fillCells: [], lines: [])
         }
-        let minimum = collapsed.map(\.value).min() ?? 0
-        let maximum = collapsed.map(\.value).max() ?? minimum
+        let valueScale = max(collapsed.map { abs($0.value) }.max() ?? 0, 1)
+        let normalizedValues = collapsed.map { $0.value / valueScale }
+        let minimum = normalizedValues.min() ?? 0
+        let maximum = normalizedValues.max() ?? minimum
         let span = max(maximum - minimum, 0.000_001)
 
         // Duplicate coordinates are legal input. Average them deterministically
         // instead of relying on Dictionary(uniqueKeysWithValues:), which traps.
         let values = Dictionary(
-            uniqueKeysWithValues: collapsed.map {
-                (LivelineContourCoordinate(x: $0.x, y: $0.y), $0.value)
+            uniqueKeysWithValues: zip(collapsed, normalizedValues).map { sample, value in
+                (LivelineContourCoordinate(x: sample.x, y: sample.y), value)
             })
         func coarseValue(x: Int, y: Int) -> Double {
             values[LivelineContourCoordinate(x: xs[x], y: ys[y])] ?? minimum

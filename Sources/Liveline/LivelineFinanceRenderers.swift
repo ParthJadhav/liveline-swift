@@ -191,7 +191,7 @@ extension LivelineRenderer {
                     ), with: .color(palette.gridLabel.opacity(0.05)))
             }
             if style.showsMidPrice, let bid = curve.bestBid, let ask = curve.bestAsk {
-                let x = geometry.x(price: (bid + ask) / 2)
+                let x = geometry.x(price: LivelineScalar.mean([bid, ask]))
                 var line = Path()
                 line.move(to: CGPoint(x: x, y: plot.minY))
                 line.addLine(to: CGPoint(x: x, y: plot.maxY))

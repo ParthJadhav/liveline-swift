@@ -54,6 +54,18 @@ enum LivelineScalar {
         let scaled = value * scale
         return scaled.isFinite ? scaled.rounded() / scale : value
     }
+
+    /// A finite arithmetic mean that never forms an overflowing sum.
+    static func mean(_ values: [Double], fallback: Double = 0) -> Double {
+        let values = values.filter(\.isFinite)
+        guard let first = values.first else { return fallback }
+        var mean = first
+        for (offset, value) in values.dropFirst().enumerated() {
+            let count = Double(offset + 2)
+            mean = mean * ((count - 1) / count) + value / count
+        }
+        return mean.isFinite ? mean : fallback
+    }
 }
 
 extension BinaryFloatingPoint {

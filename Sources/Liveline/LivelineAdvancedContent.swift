@@ -285,7 +285,7 @@ extension LivelineAdvancedChartContent {
             let bestAsk = levels.filter { $0.askSize > 0 }.map(\.price).min()
             let inside = [bestBid, bestAsk].compactMap { $0 }
             return .untimed(
-                value: inside.reduce(0, +) / Double(inside.count.nonzero ?? 1), count: levels.count)
+                value: LivelineScalar.mean(inside), count: levels.count)
         case .ohlcVolume(let values, _):
             let points = values.map { LivelinePoint(time: $0.time, value: $0.close) }
             return .timed(
@@ -497,7 +497,7 @@ extension LivelineAdvancedChartContent {
             let inside = [curve.bestBid, curve.bestAsk].compactMap { $0 }
             return untimedPrepared(
                 values: (curve.bids + curve.asks).map(\.value),
-                primaryValue: inside.reduce(0, +) / Double(inside.count.nonzero ?? 1)
+                primaryValue: LivelineScalar.mean(inside)
             )
 
         case .ohlcVolume(let values, _):
