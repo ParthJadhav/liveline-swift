@@ -10,6 +10,7 @@ This file is the durable brief and production recipe for the advanced-chart pull
 - Give every chart a dedicated scene. Do not combine multiple chart families into one frame.
 - Use a light visual system for the video: warm-white canvas, pale blue surfaces, dark ink, and saturated Liveline accents.
 - Dither scenes must use advanced chart implementations introduced by this pull request. Do not use legacy line, bar, donut, or radar examples as evidence for the feature.
+- Dither is a treatment for solid fill interiors. Keep defining lines, outlines, wicks, connectors, and other thin geometry continuous and readable; never present a reel where the pattern punches holes through those strokes.
 - Use a bright, upbeat, kinetic technology music bed with no vocals. Avoid the previous ambient track.
 - Render in 16:9 at 1920×1080, 30 fps. Preserve generous video-safe margins.
 - Source chart visuals from Liveline's native SwiftUI renderer. Do not redraw chart geometry in React, SVG, or CSS.
@@ -41,6 +42,13 @@ The script builds the iOS Storybook app, captures all 21 charts with a forced li
 - `dither/*.mp4` — changing native chart data with animated Dither rendering.
 
 The app launch flag `--advanced-demo-live` selects `StorybookAdvancedLiveChart`, which updates each advanced model while preserving stable IDs. Liveline's own reveal, value-range, geometry, and Dither paths render the motion. These are the only acceptable chart-animation sources for this reel.
+
+When only the shared Dither renderer changed, rebuild and recapture the four
+Dither clips without replacing the 21 standard clips or settled stills:
+
+```bash
+scripts/capture-advanced-pr-demo-assets.sh --dither-only
+```
 
 Generate a fresh upbeat music bed only when the creative brief changes:
 

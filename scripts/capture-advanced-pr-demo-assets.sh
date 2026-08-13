@@ -7,6 +7,20 @@ LIGHT_ASSET_DIR="$ROOT_DIR/remotion/public/advanced-pr-light"
 LIVE_ASSET_DIR="$LIGHT_ASSET_DIR/live"
 DITHER_ASSET_DIR="$LIGHT_ASSET_DIR/dither"
 RAW_DIR="$ROOT_DIR/.build/advanced-pr-dither-recordings"
+DITHER_ONLY=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --dither-only)
+      DITHER_ONLY=true
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
 
 SCENARIOS=(
   violin-basic
@@ -32,10 +46,31 @@ SCENARIOS=(
   point-figure-basic
 )
 
+DITHER_SPECS=(
+  "violin-basic gradient"
+  "chord-basic dotted"
+  "contour-basic hatched"
+  "market-depth-basic solid"
+)
+
 mkdir -p "$LIGHT_ASSET_DIR" "$LIVE_ASSET_DIR" "$DITHER_ASSET_DIR" "$RAW_DIR"
 
-STORYBOOK_OUT_DIR="$LIGHT_ASSET_DIR" \
-STORYBOOK_SCENARIOS="${SCENARIOS[*]}" \
+capture_scenarios="${SCENARIOS[*]}"
+capture_output_dir="$LIGHT_ASSET_DIR"
+if [[ "$DITHER_ONLY" == true ]]; then
+  dither_scenarios=()
+  for spec in "${DITHER_SPECS[@]}"; do
+    read -r scenario _ <<< "$spec"
+    dither_scenarios+=("$scenario")
+  done
+  capture_scenarios="${dither_scenarios[*]}"
+  # This pass exists to rebuild and install the current native renderer. Keep
+  # its incidental stills out of the checked-in standard-light asset set.
+  capture_output_dir="$RAW_DIR/storybook-build"
+fi
+
+STORYBOOK_OUT_DIR="$capture_output_dir" \
+STORYBOOK_SCENARIOS="$capture_scenarios" \
 STORYBOOK_DEMO_LIGHT=true \
   "$ROOT_DIR/scripts/capture-storybook.sh" --chart-only
 
@@ -73,49 +108,44 @@ fi
 
 xcrun simctl install "$DEVICE_ID" "$APP_PATH"
 
-for scenario in "${SCENARIOS[@]}"; do
-  raw_video="$RAW_DIR/$scenario-live-raw.mp4"
-  output_video="$LIVE_ASSET_DIR/$scenario.mp4"
+if [[ "$DITHER_ONLY" != true ]]; then
+  for scenario in "${SCENARIOS[@]}"; do
+    raw_video="$RAW_DIR/$scenario-live-raw.mp4"
+    output_video="$LIVE_ASSET_DIR/$scenario.mp4"
 
-  xcrun simctl terminate "$DEVICE_ID" com.liveline.demo >/dev/null 2>&1 || true
-  rm -f "$raw_video" "$output_video"
-  xcrun simctl launch "$DEVICE_ID" com.liveline.demo \
-    --storybook-scenario "$scenario" \
-    --storybook-chart-only \
-    --advanced-demo-light \
-    --advanced-demo-live >/dev/null
-  # Let the foreground transition settle before recording. Starting recordVideo
-  # during app activation can capture SpringBoard or black frames instead of
-  # the native chart, especially after repeated scenario launches.
-  sleep 1.0
+    xcrun simctl terminate "$DEVICE_ID" com.liveline.demo >/dev/null 2>&1 || true
+    rm -f "$raw_video" "$output_video"
+    xcrun simctl launch "$DEVICE_ID" com.liveline.demo \
+      --storybook-scenario "$scenario" \
+      --storybook-chart-only \
+      --advanced-demo-light \
+      --advanced-demo-live >/dev/null
+    # Let the foreground transition settle before recording. Starting recordVideo
+    # during app activation can capture SpringBoard or black frames instead of
+    # the native chart, especially after repeated scenario launches.
+    sleep 1.0
 
-  xcrun simctl io "$DEVICE_ID" recordVideo --codec=h264 --mask=ignored --force "$raw_video" &
-  record_pid=$!
-  sleep 3.2
-  kill -INT "$record_pid" >/dev/null 2>&1 || true
-  wait "$record_pid" || true
+    xcrun simctl io "$DEVICE_ID" recordVideo --codec=h264 --mask=ignored --force "$raw_video" &
+    record_pid=$!
+    sleep 3.2
+    kill -INT "$record_pid" >/dev/null 2>&1 || true
+    wait "$record_pid" || true
 
-  ffmpeg \
-    -hide_banner \
-    -loglevel error \
-    -y \
-    -i "$raw_video" \
-    -vf "crop=trunc(iw*0.94/2)*2:trunc(ih*0.32/2)*2:trunc(iw*0.03/2)*2:trunc(ih*0.065/2)*2,fps=30" \
-    -an \
-    -c:v libx264 \
-    -crf 18 \
-    -pix_fmt yuv420p \
-    "$output_video"
+    ffmpeg \
+      -hide_banner \
+      -loglevel error \
+      -y \
+      -i "$raw_video" \
+      -vf "crop=trunc(iw*0.94/2)*2:trunc(ih*0.32/2)*2:trunc(iw*0.03/2)*2:trunc(ih*0.065/2)*2,fps=30" \
+      -an \
+      -c:v libx264 \
+      -crf 18 \
+      -pix_fmt yuv420p \
+      "$output_video"
 
-  echo "Recorded native live $scenario"
-done
-
-DITHER_SPECS=(
-  "violin-basic gradient"
-  "chord-basic dotted"
-  "contour-basic hatched"
-  "market-depth-basic solid"
-)
+    echo "Recorded native live $scenario"
+  done
+fi
 
 for spec in "${DITHER_SPECS[@]}"; do
   read -r scenario variant <<< "$spec"

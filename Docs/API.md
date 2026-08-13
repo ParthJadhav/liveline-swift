@@ -370,7 +370,7 @@ Important options:
 | Option | Default | Notes |
 | --- | --- | --- |
 | `theme` | `.dark` | Controls grid, label, tooltip, and badge colors. Use `.automatic` to follow the system `colorScheme`. |
-| `style` | `.standard` | Applies `.dither(LivelineDitherStyle)` universally to line, cartesian, radial, categorical, and financial chart marks. |
+| `style` | `.standard` | Applies `.dither(LivelineDitherStyle)` universally to filled regions in line, cartesian, radial, categorical, and financial charts while preserving continuous strokes and outlines. |
 | `window` | `30` | Visible time span in seconds. |
 | `windows` | `[]` | Adds built-in time horizon buttons. |
 | `grid` | `true` | Draws horizontal grid lines and value labels. |
@@ -406,7 +406,9 @@ Important options:
 The frame-rate limit accepts values from 1 through 120 and defaults to 30.
 Values are normalized at the rendering boundary. Bloom and sparkles opt static
 charts into frame scheduling only while animation is enabled; pausing or Reduce
-Motion keeps the pattern stable.
+Motion keeps the pattern stable. Ordered texture and sparkles are clipped to
+broad fill interiors; line-only series, outlines, wicks, and connectors remain
+solid so the chart's defining geometry stays legible.
 
 `snapshotElapsedTime` remains only as a deprecated source-compatibility
 property. Screenshot infrastructure uses the testing SPI environment modifier

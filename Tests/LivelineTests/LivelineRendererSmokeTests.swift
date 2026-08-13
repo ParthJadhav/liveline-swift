@@ -237,6 +237,105 @@ final class LivelineRendererSmokeTests: XCTestCase {
     }
 
     @MainActor
+    func testDitherTexturesBroadFillsWithoutCuttingThinStrokes() throws {
+        let size = CGSize(width: 96, height: 72)
+        let fillRect = CGRect(x: 8, y: 8, width: 34, height: 42)
+        var strokePath = Path()
+        strokePath.move(to: CGPoint(x: 52, y: 16))
+        strokePath.addLine(to: CGPoint(x: 88, y: 54))
+
+        func frame(dithered: Bool) throws -> [UInt8] {
+            let renderer = ImageRenderer(
+                content: Canvas { context, canvasSize in
+                    context.fill(Path(fillRect), with: .color(.blue))
+                    context.stroke(strokePath, with: .color(.blue), lineWidth: 2)
+
+                    guard dithered else { return }
+                    let layout = LivelineLayout(
+                        size: canvasSize,
+                        padding: LivelineResolvedPadding(top: 0, right: 0, bottom: 0, left: 0),
+                        minValue: 0,
+                        maxValue: 1,
+                        leftEdge: 0,
+                        rightEdge: 1
+                    )
+                    LivelineRenderer.drawDitherTexture(
+                        context: &context,
+                        state: LivelineRenderState(),
+                        layout: layout,
+                        color: .blue,
+                        style: LivelineDitherStyle(
+                            variant: .hatched,
+                            bloom: .off,
+                            cellSize: 2,
+                            sparkleDensity: 0,
+                            animated: false
+                        ),
+                        timestamp: 0
+                    ) { mask in
+                        mask.fill(Path(fillRect), with: .color(.white))
+                        mask.stroke(strokePath, with: .color(.white), lineWidth: 2)
+                    }
+                }
+                .frame(width: size.width, height: size.height)
+            )
+            renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+            renderer.scale = 1
+            let image: CGImage = try XCTUnwrap(renderer.cgImage)
+            var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+            let bitmap = try XCTUnwrap(CGContext(
+                data: &pixels,
+                width: image.width,
+                height: image.height,
+                bitsPerComponent: 8,
+                bytesPerRow: image.width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ))
+            bitmap.draw(image, in: CGRect(origin: .zero, size: size))
+            return pixels
+        }
+
+        func changedChannels(
+            from standard: [UInt8],
+            to dithered: [UInt8],
+            in region: CGRect
+        ) -> Int {
+            let minX = max(0, Int(region.minX))
+            let maxX = min(Int(size.width), Int(region.maxX))
+            let minY = max(0, Int(region.minY))
+            let maxY = min(Int(size.height), Int(region.maxY))
+            var count = 0
+            for y in minY..<maxY {
+                for x in minX..<maxX {
+                    let offset = (y * Int(size.width) + x) * 4
+                    for channel in 0..<4 where abs(Int(standard[offset + channel]) - Int(dithered[offset + channel])) > 16 {
+                        count += 1
+                    }
+                }
+            }
+            return count
+        }
+
+        let standard = try frame(dithered: false)
+        let dithered = try frame(dithered: true)
+        XCTAssertGreaterThan(
+            changedChannels(from: standard, to: dithered, in: fillRect.insetBy(dx: 5, dy: 5)),
+            400,
+            "Dither did not texture the broad fill interior"
+        )
+        XCTAssertEqual(
+            changedChannels(
+                from: standard,
+                to: dithered,
+                in: CGRect(x: 48, y: 12, width: 44, height: 46)
+            ),
+            0,
+            "Dither must not punch holes into readability-critical strokes"
+        )
+    }
+
+    @MainActor
     func testContainerStyleOverrideRendersNestedChart() throws {
         let chart = LivelineChart(
             bars: [

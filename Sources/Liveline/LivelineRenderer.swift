@@ -325,6 +325,16 @@ enum LivelineRenderer {
                     input: compositorInput,
                     drawText: false
                 )
+
+                var maskInput = compositorInput
+                // The mask redraw is purely geometric. It must not advance
+                // transitions, spawn decorations, or include the candle grid.
+                maskInput.deltaTime = 0
+                maskInput.configuration.grid = false
+                maskInput.configuration.badge = false
+                maskInput.configuration.pulse = false
+                maskInput.configuration.endpointDecorations = false
+                maskInput.configuration.degen = nil
                 drawDitherTexture(
                     context: &styledLayer,
                     state: state,
@@ -332,7 +342,15 @@ enum LivelineRenderer {
                     color: input.accent,
                     style: style,
                     timestamp: animationTimestamp
-                )
+                ) { mask in
+                    _ = drawContent(
+                        context: &mask,
+                        state: state,
+                        input: maskInput,
+                        drawText: false,
+                        drawDecorations: false
+                    )
+                }
             }
             drawContentText(
                 context: &layer, state: state, input: compositorInput, overlay: contentOverlay)

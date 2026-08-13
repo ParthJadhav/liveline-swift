@@ -57,7 +57,8 @@ extension LivelineRenderer {
         context: inout GraphicsContext,
         state: LivelineRenderState,
         input: LivelineCompositorInput,
-        drawText: Bool = true
+        drawText: Bool = true,
+        drawDecorations: Bool = true
     ) -> LivelineContentOverlay {
         let config = input.configuration
         let layout = input.layout
@@ -83,21 +84,23 @@ extension LivelineRenderer {
             )
             var decorationConfig = config
             if !drawText { decorationConfig.badge = false }
-            drawLineDecorations(
-                context: &context,
-                state: state,
-                layout: layout,
-                palette: palette,
-                points: points,
-                momentum: momentum,
-                config: decorationConfig,
-                scrubAmount: input.scrubAmount,
-                smoothValue: input.smoothValue,
-                swingMagnitude: input.swingMagnitude,
-                textScale: input.textScale,
-                timestamp: input.animationTimestamp,
-                deltaTime: input.deltaTime
-            )
+            if drawDecorations {
+                drawLineDecorations(
+                    context: &context,
+                    state: state,
+                    layout: layout,
+                    palette: palette,
+                    points: points,
+                    momentum: momentum,
+                    config: decorationConfig,
+                    scrubAmount: input.scrubAmount,
+                    smoothValue: input.smoothValue,
+                    swingMagnitude: input.swingMagnitude,
+                    textScale: input.textScale,
+                    timestamp: input.animationTimestamp,
+                    deltaTime: input.deltaTime
+                )
+            }
             return .line(livePoint: points.last)
 
         case let .bars(data, style):
@@ -437,7 +440,8 @@ extension LivelineRenderer {
                     timestamp: input.animationTimestamp,
                     deltaTime: input.deltaTime,
                     smoothValue: input.smoothValue,
-                    textScale: input.textScale
+                    textScale: input.textScale,
+                    drawDecorations: drawDecorations
                 )
             )
 
@@ -455,17 +459,19 @@ extension LivelineRenderer {
                 deltaTime: input.deltaTime,
                 alpha: reveal
             )
-            drawSeriesEndpoints(
-                context: &context,
-                layout: layout,
-                endpoints: endpoints,
-                alpha: reveal,
-                showPulse: config.pulse && reveal > 0.6 && state.pauseProgress < 0.5,
-                timestamp: input.animationTimestamp,
-                legendSide: config.seriesLegendSide.resolved(isRTL: layout.isRTL),
-                textScale: input.textScale,
-                drawsLabel: drawText
-            )
+            if drawDecorations {
+                drawSeriesEndpoints(
+                    context: &context,
+                    layout: layout,
+                    endpoints: endpoints,
+                    alpha: reveal,
+                    showPulse: config.pulse && reveal > 0.6 && state.pauseProgress < 0.5,
+                    timestamp: input.animationTimestamp,
+                    legendSide: config.seriesLegendSide.resolved(isRTL: layout.isRTL),
+                    textScale: input.textScale,
+                    drawsLabel: drawText
+                )
+            }
             return .series(entries: series, endpoints: endpoints)
         }
     }

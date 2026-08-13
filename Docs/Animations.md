@@ -46,11 +46,13 @@ Momentum is detected from recent points, not the total visible range. The live d
 ## Dither Style
 
 `LivelineChartConfiguration.style = .dither(...)` renders chart marks into an
-isolated Canvas layer, applies a shared 4×4 ordered Bayer texture, and adds
-colour bloom plus deterministic winking sparkles. Because the treatment happens
-at the compositor boundary, the same implementation covers every chart kind
-without softening axes, labels, crosshairs, or tooltips. Static charts request a
-timeline only when animated bloom or sparkles are enabled.
+isolated Canvas layer, derives a mask from broad fill interiors, applies a shared
+4×4 ordered Bayer texture within that mask, and adds colour bloom plus
+deterministic winking sparkles. Lines, outlines, wicks, connectors, axes, labels,
+crosshairs, and tooltips remain continuous and readable. Because the treatment
+happens at the compositor boundary, the same rule covers every chart kind.
+Static charts request a timeline only when animated bloom or sparkles are
+enabled.
 
 ## Candle Line Mode
 

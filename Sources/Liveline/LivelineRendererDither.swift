@@ -39,9 +39,29 @@ extension LivelineRenderer {
         layout: LivelineLayout,
         color: Color,
         style: LivelineDitherStyle,
-        timestamp: TimeInterval
+        timestamp: TimeInterval,
+        drawFillMask: (inout GraphicsContext) -> Void
     ) {
         let geometry = ditherGeometry(state: state, layout: layout, style: style)
+
+        // Dither belongs inside broad filled marks, never on the strokes that
+        // explain their shape. Turn every rendered mark into an opaque mask,
+        // blur it, then keep only the high-coverage interior. Thin lines,
+        // outlines, wicks, connectors, and marker borders disappear from this
+        // mask while the center of a bar, area, sector, cell, or ribbon remains.
+        // The ordered cutouts and sparkles below are therefore unable to break
+        // readability-critical strokes even though all chart families share
+        // this one renderer path.
+        let interiorRadius = max(2, min(4, style.cellSize * 1.25))
+        context.clipToLayer { mask in
+            // GraphicsContext evaluates stacked filters from the last added
+            // filter back to the first: normalize alpha, blur, then threshold.
+            mask.addFilter(.alphaThreshold(min: 0.72, color: .white))
+            mask.addFilter(.blur(radius: interiorRadius))
+            mask.addFilter(.alphaThreshold(min: 0.01, color: .white))
+            drawFillMask(&mask)
+        }
+
         if style.variant != .solid, style.intensity > 0 {
             context.blendMode = .destinationOut
             let removal: Double = style.variant == .gradient ? 0.6 * style.intensity : style.intensity

@@ -22,7 +22,8 @@ extension LivelineRenderer {
         timestamp: TimeInterval,
         deltaTime: TimeInterval,
         smoothValue: Double,
-        textScale: LivelineTextScale
+        textScale: LivelineTextScale,
+        drawDecorations: Bool = true
     ) -> LivelineCandleOverlay {
         let pausedDeltaTime = deltaTime * (1 - state.pauseProgress)
         let lineModeTarget = config.lineMode ? 1.0 : 0.0
@@ -142,7 +143,7 @@ extension LivelineRenderer {
 
         let closeAlpha = revealRamp(reveal, 0.40, 0.80)
         let closeSource = closePriceCandle(state: state, liveCandle: liveCandle)
-        if let closeSource, closeAlpha > 0.01 {
+        if drawDecorations, let closeSource, closeAlpha > 0.01 {
             if linePresence < 0.99 {
                 drawCurrentPriceLine(
                     context: &context,
@@ -192,7 +193,8 @@ extension LivelineRenderer {
             )
         }
 
-        if lineModeProgress > 0.5,
+        if drawDecorations,
+           lineModeProgress > 0.5,
            let lastPoint = linePoints.last,
            reveal > 0.3 {
             let lineFade = (lineModeProgress - 0.5) * 2
