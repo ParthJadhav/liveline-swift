@@ -162,11 +162,16 @@ enum LivelineAdvancedAudioGraph {
                 [categorical(LivelineStrings.labelColumnWidth, columns.map { ($0.label, $0.width) })]
                     + segmentSeries,
                 order: labels)
-        case .polarArea(let values, _), .waffle(let values, _):
+        case .polarArea(let values, _):
             let positive = values.filter { $0.value > 0 }
             return categories(
                 [categorical(LivelineStrings.labelValue, positive.map { ($0.label, $0.value) })],
                 order: positive.map(\.label))
+        case .waffle(let values, let style):
+            let allocated = LivelineAdvancedLayout.allocatedWaffleValues(values, style: style)
+            return categories(
+                [categorical(LivelineStrings.labelValue, allocated.map { ($0.label, $0.value) })],
+                order: allocated.map(\.label))
         case .network(let nodes, let edges, _):
             let nodeOrder = nodes.map(\.label)
             var seenNodeIDs: Set<String> = []

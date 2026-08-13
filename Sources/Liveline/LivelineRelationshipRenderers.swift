@@ -359,7 +359,8 @@ extension LivelineRenderer {
                 samples: samples,
                 levelCount: style.resolvedLevelCount,
                 plot: plot,
-                subdivisions: layoutGeometry.subdivisions
+                subdivisions: layoutGeometry.subdivisions,
+                isRTL: layoutGeometry.isRTL
             )
             var layer = context
             layer.clip(to: Path(plot))

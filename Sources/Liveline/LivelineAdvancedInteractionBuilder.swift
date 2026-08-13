@@ -402,6 +402,10 @@ enum LivelineAdvancedInteractionBuilder {
                     starts[index] + max(geometry.allocations[index] / 2, 0), geometry.cellCount - 1)
                 let rect = geometry.rect(cellIndex: cellIndex)
                 let center = CGPoint(x: rect.midX, y: rect.midY)
+                var allocatedCells = Path()
+                for allocatedIndex in starts[index]..<(starts[index] + geometry.allocations[index]) {
+                    allocatedCells.addRect(geometry.rect(cellIndex: allocatedIndex))
+                }
                 return target(
                     time: Double(index), value: value.value, anchor: center, heading: value.label,
                     rows: [
@@ -409,7 +413,7 @@ enum LivelineAdvancedInteractionBuilder {
                             LivelineStrings.labelValue, configuration.formatValue(value.value),
                             LivelineRenderer.advancedColor(index: index, colors: style.colors, palette: palette)),
                         row(LivelineStrings.labelShare, percent(value.value / total), palette.gridLabel),
-                    ], region: .circle(center: center, radius: max(geometry.cell / 2, 8)))
+                    ], region: .path(allocatedCells))
             }
 
         case .volumeProfile(let levels, let style):

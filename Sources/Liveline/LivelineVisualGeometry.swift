@@ -238,7 +238,8 @@ enum LivelineVisualGeometry {
         samples: [LivelineContourSample],
         levelCount: Int,
         plot: CGRect,
-        subdivisions: Int
+        subdivisions: Int,
+        isRTL: Bool = false
     ) -> LivelineContourGeometry {
         let xs = Array(Set(samples.map(\.x))).sorted()
         let ys = Array(Set(samples.map(\.y))).sorted()
@@ -293,7 +294,10 @@ enum LivelineVisualGeometry {
             let localX = Double(denseX - cellX * subdivisions) / Double(subdivisions)
             let valueX = xs[cellX] + (xs[cellX + 1] - xs[cellX]) * localX
             screenXs[denseX] = LivelineRenderer.mapped(
-                valueX, from: xDomain, to: plot.minX...plot.maxX)
+                valueX,
+                from: xDomain,
+                to: isRTL ? (plot.maxX, plot.minX) : (plot.minX, plot.maxX)
+            )
         }
         for denseY in 0..<rowCount {
             let cellY = min(denseY / subdivisions, ys.count - 2)
@@ -361,9 +365,9 @@ enum LivelineVisualGeometry {
                     LivelineContourFillCell(
                         level: level(for: average),
                         rect: CGRect(
-                            x: screenXs[x],
+                            x: min(screenXs[x], screenXs[x + 1]),
                             y: screenYs[y + 1],
-                            width: max(screenXs[x + 1] - screenXs[x], 0),
+                            width: abs(screenXs[x + 1] - screenXs[x]),
                             height: max(screenYs[y] - screenYs[y + 1], 0)
                         )
                     )

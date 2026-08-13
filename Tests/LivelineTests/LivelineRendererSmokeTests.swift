@@ -336,6 +336,89 @@ final class LivelineRendererSmokeTests: XCTestCase {
     }
 
     @MainActor
+    func testViolinRevealChangesOpacityWithoutNarrowingFinalGeometry() throws {
+        let size = CGSize(width: 180, height: 160)
+        let series = [
+            LivelineDistributionSeries(
+                id: "distribution", label: "Distribution",
+                values: [1, 1.5, 2, 2.1, 2.2, 3, 4, 4.5, 5])
+        ]
+        let style = LivelineViolinStyle(showsLabels: false)
+        let profiles = LivelineAdvancedLayout.distributionProfiles(series, bandwidth: style.bandwidth)
+        let layout = LivelineLayout(
+            size: size,
+            padding: .init(top: 10, right: 10, bottom: 10, left: 10),
+            minValue: 0,
+            maxValue: 6,
+            leftEdge: 0,
+            rightEdge: 1
+        )
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
+
+        func alphaBounds(reveal: Double) throws -> CGRect {
+            let renderer = ImageRenderer(
+                content: Canvas { context, _ in
+                    LivelineRenderer.drawViolins(
+                        context: &context,
+                        series: series,
+                        style: style,
+                        layout: layout,
+                        palette: palette,
+                        profiles: profiles,
+                        reveal: reveal,
+                        textScale: .standard,
+                        drawMarks: true,
+                        drawLabels: false
+                    )
+                }
+                .frame(width: size.width, height: size.height)
+            )
+            renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+            renderer.scale = 1
+            let image = try XCTUnwrap(renderer.cgImage)
+            var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+            let bitmap = try XCTUnwrap(CGContext(
+                data: &pixels,
+                width: image.width,
+                height: image.height,
+                bitsPerComponent: 8,
+                bytesPerRow: image.width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ))
+            bitmap.draw(image, in: CGRect(origin: .zero, size: size))
+
+            var minimumX = image.width
+            var maximumX = -1
+            var minimumY = image.height
+            var maximumY = -1
+            for y in 0..<image.height {
+                for x in 0..<image.width where pixels[(y * image.width + x) * 4 + 3] > 2 {
+                    minimumX = min(minimumX, x)
+                    maximumX = max(maximumX, x)
+                    minimumY = min(minimumY, y)
+                    maximumY = max(maximumY, y)
+                }
+            }
+            XCTAssertGreaterThanOrEqual(maximumX, minimumX)
+            XCTAssertGreaterThanOrEqual(maximumY, minimumY)
+            return CGRect(
+                x: minimumX,
+                y: minimumY,
+                width: maximumX - minimumX + 1,
+                height: maximumY - minimumY + 1
+            )
+        }
+
+        let partial = try alphaBounds(reveal: 0.4)
+        let settled = try alphaBounds(reveal: 1)
+        XCTAssertEqual(partial.minX, settled.minX, accuracy: 1)
+        XCTAssertEqual(partial.maxX, settled.maxX, accuracy: 1)
+        XCTAssertEqual(partial.minY, settled.minY, accuracy: 1)
+        XCTAssertEqual(partial.maxY, settled.maxY, accuracy: 1)
+    }
+
+    @MainActor
     func testContainerStyleOverrideRendersNestedChart() throws {
         let chart = LivelineChart(
             bars: [

@@ -149,12 +149,16 @@ struct LivelineCalendarLayout {
     var spacing: CGFloat
     var originX: CGFloat
     var maximumValue: Double
+    var weekCount: Int
+    var isRTL: Bool
 
     /// `dayOffset` counts civil days from `firstDay`.
     func rect(dayOffset: Int) -> CGRect {
         let index = dayOffset + leadingOffset
+        let logicalColumn = index / 7
+        let column = isRTL ? weekCount - 1 - logicalColumn : logicalColumn
         return CGRect(
-            x: originX + CGFloat(index / 7) * (cell + spacing),
+            x: originX + CGFloat(column) * (cell + spacing),
             y: body.minY + CGFloat(index % 7) * (cell + spacing),
             width: cell,
             height: cell
@@ -200,7 +204,7 @@ extension LivelineAdvancedLayout {
         let plot = LivelineRenderer.advancedPlotRect(layout)
             .insetBy(dx: textScale.scaled(4), dy: textScale.scaled(4))
         let body = CGRect(
-            x: plot.minX + weekdayGutter,
+            x: layout.isRTL ? plot.minX : plot.minX + weekdayGutter,
             y: plot.minY + monthGutter,
             width: max(plot.width - weekdayGutter, 1),
             height: max(plot.height - monthGutter, 1)
@@ -231,7 +235,9 @@ extension LivelineAdvancedLayout {
                 calendarValuesByDay(values, calendar: calendar).values
                     .map(\.value).filter { $0 > 0 }.max() ?? 0,
                 0.000_001
-            )
+            ),
+            weekCount: weeks,
+            isRTL: layout.isRTL
         )
     }
 
@@ -305,6 +311,15 @@ extension LivelineAdvancedLayout {
             result[task.id] = task
         }
         return result
+    }
+
+    static func ganttTaskIndicesIntersectingViewport(
+        _ tasks: [LivelineGanttTask],
+        layout: LivelineLayout
+    ) -> [Int] {
+        tasks.indices.filter {
+            tasks[$0].end >= layout.leftEdge && tasks[$0].start <= layout.rightEdge
+        }
     }
 }
 

@@ -513,13 +513,19 @@ extension LivelineAdvancedChartContent {
         case .pointAndFigure(let series, _):
             return untimedPrepared(
                 values: series.columns.flatMap { [$0.low, $0.high] },
-                primaryValue: series.points.last?.value ?? 0
+                primaryValue: series.points.last?.value ?? 0,
+                includeReference: configuration.referenceLine?.value
             )
         }
     }
 
-    private func untimedPrepared(values: [Double], primaryValue: Double) -> LivelinePreparedChart {
-        let finite = values.filter(\.isFinite)
+    private func untimedPrepared(
+        values: [Double],
+        primaryValue: Double,
+        includeReference: Double? = nil
+    ) -> LivelinePreparedChart {
+        var finite = values.filter(\.isFinite)
+        if let includeReference, includeReference.isFinite { finite.append(includeReference) }
         let range = resolvedRange(finite)
         return LivelinePreparedChart(
             primaryVisible: [],

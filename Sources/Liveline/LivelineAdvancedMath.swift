@@ -175,8 +175,12 @@ enum LivelineAdvancedMath {
         var result: [LivelineCandle] = []
         result.reserveCapacity(candles.count)
 
-        var previousOpen = (first.open + first.close) / 2
-        var previousClose = (first.open + first.high + first.low + first.close) / 4
+        func average(_ values: Double...) -> Double {
+            values.reduce(0) { $0 + $1 / Double(values.count) }
+        }
+
+        var previousOpen = average(first.open, first.close)
+        var previousClose = average(first.open, first.high, first.low, first.close)
         result.append(
             LivelineCandle(
                 time: first.time,
@@ -188,8 +192,8 @@ enum LivelineAdvancedMath {
         )
 
         for candle in candles.dropFirst() {
-            let close = (candle.open + candle.high + candle.low + candle.close) / 4
-            let open = (previousOpen + previousClose) / 2
+            let close = average(candle.open, candle.high, candle.low, candle.close)
+            let open = average(previousOpen, previousClose)
             result.append(
                 LivelineCandle(
                     time: candle.time,

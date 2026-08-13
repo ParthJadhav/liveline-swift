@@ -27,8 +27,10 @@ extension LivelineAdvancedChartContent {
         case .marimekko(let columns, _):
             return columns.filter { $0.width > 0 && $0.segments.contains { $0.value > 0 } }
                 .reduce(0) { $0 + $1.segments.filter { $0.value > 0 }.count }
-        case .polarArea(let values, _), .waffle(let values, _):
+        case .polarArea(let values, _):
             return values.filter { $0.value > 0 }.count
+        case .waffle(let values, let style):
+            return LivelineAdvancedLayout.allocatedWaffleValues(values, style: style).count
         case .network(let nodes, let edges, _):
             return nodes.count + edges.filter { $0.value > 0 }.count
         case .contour(let samples, _):
@@ -80,18 +82,29 @@ extension LivelineAdvancedChartContent {
                 )
             }
 
-        case .gantt(let tasks, _):
-            return tasks.map {
-                LivelineAccessibilityEntry(
-                    id: $0.id,
-                    label: $0.label,
-                    value: String(
-                        format: LivelineStrings.accessibilityGanttFormat,
-                        formatTime($0.start),
-                        formatTime($0.end),
-                        formatValue($0.end - $0.start),
-                        percent($0.progress)
-                    )
+        case .gantt(let tasks, let style):
+            let taskByID = LivelineAdvancedLayout.ganttTasksByID(tasks)
+            return tasks.map { task in
+                let schedule = String(
+                    format: LivelineStrings.accessibilityGanttFormat,
+                    formatTime(task.start),
+                    formatTime(task.end),
+                    formatValue(task.end - task.start),
+                    percent(task.progress)
+                )
+                let dependencies = style.showsDependencies
+                    ? task.dependencyIDs.compactMap { taskByID[$0]?.label }
+                    : []
+                return LivelineAccessibilityEntry(
+                    id: task.id,
+                    label: task.label,
+                    value: dependencies.isEmpty
+                        ? schedule
+                        : String(
+                            format: LivelineStrings.accessibilityGanttDependenciesFormat,
+                            schedule,
+                            dependencies.joined(separator: ", ")
+                        )
                 )
             }
 
@@ -177,10 +190,21 @@ extension LivelineAdvancedChartContent {
                 }
             }
 
-        case .polarArea(let values, _), .waffle(let values, _):
+        case .polarArea(let values, _):
             let positive = values.filter { $0.value > 0 }
             let total = positive.reduce(0) { $0 + $1.value }
             return positive.map {
+                LivelineAccessibilityEntry(
+                    id: $0.id,
+                    label: $0.label,
+                    value: shareDescription($0.value, total: total, formatValue: formatValue)
+                )
+            }
+
+        case .waffle(let values, let style):
+            let positive = values.filter { $0.value > 0 }
+            let total = positive.reduce(0) { $0 + $1.value }
+            return LivelineAdvancedLayout.allocatedWaffleValues(values, style: style).map {
                 LivelineAccessibilityEntry(
                     id: $0.id,
                     label: $0.label,

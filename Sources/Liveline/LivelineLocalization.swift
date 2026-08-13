@@ -231,6 +231,7 @@ enum LivelineStrings {
     static let accessibilityPercentFormat = localized("accessibility.percent.format", "%@ percent", "VoiceOver percentage phrase")
     static let accessibilityDistributionFormat = localized("accessibility.distribution.format", "%1$ld samples, median %2$@, interquartile range %3$@ to %4$@", "VoiceOver summary for one distribution series")
     static let accessibilityGanttFormat = localized("accessibility.gantt.format", "%1$@ to %2$@, duration %3$@, %4$@ complete", "VoiceOver value for a Gantt task")
+    static let accessibilityGanttDependenciesFormat = localized("accessibility.gantt.dependencies.format", "%1$@, depends on %2$@", "VoiceOver value appending Gantt dependency labels")
     static let accessibilityXYWeightFormat = localized("accessibility.xyWeight.format", "X %1$@, Y %2$@, weight %3$@", "VoiceOver value for a weighted two-dimensional point")
     static let accessibilityNetworkFormat = localized("accessibility.network.format", "Weight %1$@, %2$ld connections", "VoiceOver value for a network node")
     static let accessibilityTernaryFormat = localized("accessibility.ternary.format", "%1$@ %2$@, %3$@ %4$@, %5$@ %6$@", "VoiceOver value for a three-component ternary point")

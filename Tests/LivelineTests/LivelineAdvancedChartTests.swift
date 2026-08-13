@@ -1574,6 +1574,259 @@ final class LivelineAdvancedChartTests: XCTestCase {
         XCTAssertEqual(flow.points.first?.category, "Alpha to Beta")
     }
 
+    func testLatestReviewBatchMirrorsAdvancedGeometryAndKeepsCompactLayoutsReadable() throws {
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0, maxValue: 10, leftEdge: 0, rightEdge: 10)
+        var rtlLayout = layout
+        rtlLayout.isRTL = true
+
+        let hexbinPoints = [
+            LivelineXYPoint(id: "left", x: 0, y: 0),
+            LivelineXYPoint(id: "right", x: 10, y: 10),
+        ]
+        let ltrHexbin = try XCTUnwrap(
+            LivelineAdvancedLayout.hexbin(
+                points: hexbinPoints, style: .init(binsAcross: 8), layout: layout,
+                textScale: .standard))
+        let rtlHexbin = try XCTUnwrap(
+            LivelineAdvancedLayout.hexbin(
+                points: hexbinPoints, style: .init(binsAcross: 8), layout: rtlLayout,
+                textScale: .standard))
+        XCTAssertEqual(ltrHexbin.cells.count, rtlHexbin.cells.count)
+        for (ltr, rtl) in zip(ltrHexbin.cells, rtlHexbin.cells) {
+            XCTAssertEqual(ltr.column, rtl.column)
+            XCTAssertEqual(
+                ltr.center.x + rtl.center.x,
+                ltrHexbin.plot.minX + ltrHexbin.plot.maxX,
+                accuracy: 0.000_1)
+        }
+
+        let mekkoColumns = [
+            LivelineMarimekkoColumn(
+                id: "first", label: "First", width: 1,
+                segments: [.init(id: "one", label: "One", value: 1)]),
+            LivelineMarimekkoColumn(
+                id: "second", label: "Second", width: 2,
+                segments: [.init(id: "two", label: "Two", value: 2)]),
+        ]
+        let ltrMekko = LivelineAdvancedLayout.marimekko(
+            columns: mekkoColumns, style: .init(), layout: layout, textScale: .standard)
+        let rtlMekko = LivelineAdvancedLayout.marimekko(
+            columns: mekkoColumns, style: .init(), layout: rtlLayout, textScale: .standard)
+        for (ltr, rtl) in zip(ltrMekko.geometry, rtlMekko.geometry) {
+            XCTAssertEqual(ltr.rect.width, rtl.rect.width, accuracy: 0.000_1)
+            XCTAssertEqual(
+                ltr.rect.midX + rtl.rect.midX,
+                ltrMekko.body.minX + ltrMekko.body.maxX,
+                accuracy: 0.000_1)
+        }
+
+        let contourSamples = (0..<2).flatMap { y in
+            (0..<2).map { x in
+                LivelineContourSample(
+                    id: "\(x)-\(y)", x: Double(x), y: Double(y),
+                    value: Double(x + y))
+            }
+        }
+        let ltrContour = try XCTUnwrap(
+            LivelineAdvancedLayout.contour(
+                samples: contourSamples, layout: layout, textScale: .standard))
+        let rtlContour = try XCTUnwrap(
+            LivelineAdvancedLayout.contour(
+                samples: contourSamples, layout: rtlLayout, textScale: .standard))
+        XCTAssertEqual(
+            ltrContour.point(x: 0, y: 0).x + rtlContour.point(x: 0, y: 0).x,
+            ltrContour.plot.minX + ltrContour.plot.maxX,
+            accuracy: 0.000_1)
+        let rtlContourGeometry = LivelineVisualGeometry.contour(
+            samples: contourSamples, levelCount: 4, plot: rtlContour.plot,
+            subdivisions: rtlContour.subdivisions, isRTL: true)
+        XCTAssertTrue(rtlContourGeometry.fillCells.allSatisfy { $0.rect.width > 0 })
+        let contourState = LivelineRenderState()
+        _ = contourState.contourGeometry(
+            samples: contourSamples, levelCount: 4, plot: rtlContour.plot,
+            subdivisions: rtlContour.subdivisions, isRTL: false)
+        _ = contourState.contourGeometry(
+            samples: contourSamples, levelCount: 4, plot: rtlContour.plot,
+            subdivisions: rtlContour.subdivisions, isRTL: true)
+        XCTAssertEqual(contourState.contourGeometryBuildCount, 2)
+
+        let waffleValues = [
+            LivelineCategoryValue(id: "large", label: "Large", value: 3),
+            LivelineCategoryValue(id: "small", label: "Small", value: 1),
+        ]
+        let waffleStyle = LivelineWaffleStyle(
+            columns: 2, rows: 2, spacing: 0, showsLegend: false)
+        let ltrWaffle = LivelineAdvancedLayout.waffle(
+            values: waffleValues, style: waffleStyle, layout: layout, textScale: .standard)
+        let rtlWaffle = LivelineAdvancedLayout.waffle(
+            values: waffleValues, style: waffleStyle, layout: rtlLayout, textScale: .standard)
+        XCTAssertEqual(
+            ltrWaffle.rect(cellIndex: 0).midX + rtlWaffle.rect(cellIndex: 0).midX,
+            ltrWaffle.body.minX + ltrWaffle.body.maxX,
+            accuracy: 0.000_1)
+
+        let depthLevels = [
+            LivelineOrderBookLevel(price: 99, bidSize: 3),
+            LivelineOrderBookLevel(price: 101, askSize: 4),
+        ]
+        let ltrDepth = try XCTUnwrap(
+            LivelineAdvancedLayout.marketDepth(
+                levels: depthLevels, layout: layout, textScale: .standard))
+        let rtlDepth = try XCTUnwrap(
+            LivelineAdvancedLayout.marketDepth(
+                levels: depthLevels, layout: rtlLayout, textScale: .standard))
+        XCTAssertEqual(
+            ltrDepth.x(price: 99) + rtlDepth.x(price: 99),
+            ltrDepth.plot.minX + ltrDepth.plot.maxX,
+            accuracy: 0.000_1)
+        XCTAssertEqual(rtlDepth.bidBoundaryX, rtlDepth.plot.maxX)
+        XCTAssertEqual(rtlDepth.askBoundaryX, rtlDepth.plot.minX)
+
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let firstDay = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2026, month: 1, day: 1)))
+        let calendarValues = (0..<15).map { offset in
+            LivelineCalendarValue(
+                date: calendar.date(byAdding: .day, value: offset, to: firstDay)!,
+                value: Double(offset + 1))
+        }
+        let calendarStyle = LivelineCalendarHeatmapStyle(calendar: calendar)
+        let ltrCalendar = try XCTUnwrap(
+            LivelineAdvancedLayout.calendar(
+                values: calendarValues, style: calendarStyle, layout: layout,
+                textScale: .standard))
+        let rtlCalendar = try XCTUnwrap(
+            LivelineAdvancedLayout.calendar(
+                values: calendarValues, style: calendarStyle, layout: rtlLayout,
+                textScale: .standard))
+        XCTAssertEqual(
+            ltrCalendar.rect(dayOffset: 0).midX + rtlCalendar.rect(dayOffset: 0).midX,
+            rtlCalendar.body.minX + ltrCalendar.body.maxX,
+            accuracy: 0.000_1)
+        XCTAssertGreaterThan(ltrCalendar.body.minX, rtlCalendar.body.minX)
+
+        let tinyLayout = LivelineLayout(
+            size: CGSize(width: 24, height: 24),
+            padding: .init(top: 8, right: 8, bottom: 8, left: 8),
+            minValue: 0, maxValue: 1, leftEdge: 0, rightEdge: 1)
+        let compactNetwork = try XCTUnwrap(
+            LivelineAdvancedLayout.network(
+                nodes: [.init(id: "node", label: "Node")], edges: [], style: .init(),
+                layout: tinyLayout, textScale: .init(factor: 3)))
+        XCTAssertGreaterThanOrEqual(compactNetwork.plot.width, 1)
+        XCTAssertGreaterThanOrEqual(compactNetwork.plot.height, 1)
+        XCTAssertTrue(compactNetwork.placements.allSatisfy {
+            $0.center.x.isFinite && $0.center.y.isFinite
+        })
+    }
+
+    func testLatestReviewBatchKeepsDerivedDataAccessibleInteractiveAndInRange() throws {
+        let maximum = Double.greatestFiniteMagnitude
+        let transformed = LivelineAdvancedMath.heikinAshiCandles([
+            LivelineCandle(time: 0, open: maximum, high: maximum, low: maximum, close: maximum),
+            LivelineCandle(time: 1, open: maximum, high: maximum, low: maximum, close: maximum),
+        ])
+        XCTAssertEqual(transformed.count, 2)
+        XCTAssertTrue(transformed.allSatisfy {
+            $0.open.isFinite && $0.high.isFinite && $0.low.isFinite && $0.close.isFinite
+        })
+        XCTAssertGreaterThan(transformed[0].open, 0)
+        XCTAssertEqual(transformed[0].open, transformed[0].close)
+
+        let singleCellStyle = LivelineWaffleStyle(
+            columns: 1, rows: 1, spacing: 0, showsLegend: false)
+        let sparseWaffle = LivelineAdvancedChartContent.waffle([
+            .init(id: "allocated", label: "Allocated", value: 999),
+            .init(id: "unallocated", label: "Unallocated", value: 1),
+        ], singleCellStyle)
+        XCTAssertEqual(sparseWaffle.accessibilityEntryCount, 1)
+        XCTAssertEqual(
+            sparseWaffle.accessibilityEntries(
+                formatValue: { String($0) }, formatTime: { String($0) }).map(\.label),
+            ["Allocated"])
+        XCTAssertEqual(
+            LivelineAdvancedAudioGraph.make(content: sparseWaffle, visibleRange: nil).categoryOrder,
+            ["Allocated"])
+
+        let tasks = [
+            LivelineGanttTask(id: "plan", label: "Plan", start: 0, end: 2, lane: 0),
+            LivelineGanttTask(
+                id: "build", label: "Build", start: 2, end: 6, lane: 1,
+                dependencyIDs: ["plan"]),
+        ]
+        let ganttEntries = LivelineAdvancedChartContent.gantt(tasks, .init())
+            .accessibilityEntries(formatValue: { String($0) }, formatTime: { String($0) })
+        XCTAssertTrue(try XCTUnwrap(ganttEntries.first { $0.id == "build" }).value.contains("Plan"))
+        let hiddenDependencyEntries = LivelineAdvancedChartContent.gantt(
+            tasks, .init(showsDependencies: false)
+        ).accessibilityEntries(formatValue: { String($0) }, formatTime: { String($0) })
+        XCTAssertFalse(
+            try XCTUnwrap(hiddenDependencyEntries.first { $0.id == "build" }).value.contains("Plan"))
+
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0, maxValue: 10, leftEdge: 4, rightEdge: 6)
+        XCTAssertEqual(
+            LivelineAdvancedLayout.ganttTaskIndicesIntersectingViewport(
+                [
+                    .init(id: "before", label: "Before", start: 0, end: 3, lane: 0),
+                    .init(id: "visible", label: "Visible", start: 5, end: 7, lane: 1),
+                    .init(id: "after", label: "After", start: 8, end: 9, lane: 2),
+                ],
+                layout: layout),
+            [1])
+
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
+        let interactiveValues = [
+            LivelineCategoryValue(id: "large", label: "Large", value: 3),
+            LivelineCategoryValue(id: "small", label: "Small", value: 1),
+        ]
+        let interactiveStyle = LivelineWaffleStyle(
+            columns: 2, rows: 2, spacing: 0, showsLegend: false)
+        let interactiveGeometry = LivelineAdvancedLayout.waffle(
+            values: interactiveValues, style: interactiveStyle, layout: layout,
+            textScale: .standard)
+        let waffleTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .waffle(interactiveValues, interactiveStyle), layout: layout,
+            palette: palette, configuration: .init(), targetLocation: nil,
+            textScale: .standard)
+        guard case .path(let largeRegion) = try XCTUnwrap(waffleTargets.first).region else {
+            return XCTFail("Expected every allocated waffle cell to form the hit region")
+        }
+        for index in 0..<interactiveGeometry.allocations[0] {
+            let rect = interactiveGeometry.rect(cellIndex: index)
+            XCTAssertTrue(largeRegion.contains(CGPoint(x: rect.midX, y: rect.midY)))
+        }
+
+        let flatCandle = LivelineCandleVolume(
+            time: 5, open: 100, high: 100, low: 100, close: 100, volume: 10)
+        let flatGeometry = try XCTUnwrap(
+            LivelineAdvancedLayout.ohlcVolume(
+                values: [flatCandle], style: .init(), layout: layout))
+        XCTAssertEqual(flatGeometry.priceY(100), flatGeometry.priceRect.midY, accuracy: 0.000_1)
+
+        let pointFigureStyle = LivelinePointAndFigureStyle(boxSize: 1)
+        let pointFigure = LivelinePointFigureSeries(
+            points: [
+                .init(time: 0, value: 100),
+                .init(time: 1, value: 102),
+                .init(time: 2, value: 104),
+            ],
+            style: pointFigureStyle)
+        var configuration = LivelineChartConfiguration()
+        configuration.referenceLine = LivelineReferenceLine(value: 200)
+        let prepared = LivelineAdvancedChartContent.pointAndFigure(
+            pointFigure, pointFigureStyle
+        ).prepared(leftEdge: 0, rightEdge: 2, configuration: configuration)
+        XCTAssertTrue(prepared.rangePoints.contains { $0.value == 200 })
+        XCTAssertTrue(try XCTUnwrap(prepared.rangeOverride).contains(200))
+    }
+
     func testAccessibilityAndPreparationRejectInvisibleOrMisleadingData() throws {
         let nodes = [
             LivelineNetworkNode(id: "a", label: "Alpha"),

@@ -291,11 +291,14 @@ extension LivelineAdvancedLayout {
 
         let cells = bins
             .map {
-                LivelineHexbinCell(
+                let normalizedScreenX = layout.isRTL
+                    ? 1 - $0.value.center.x
+                    : $0.value.center.x
+                return LivelineHexbinCell(
                     column: $0.key.column,
                     row: $0.key.row,
                     center: CGPoint(
-                        x: plot.minX + $0.value.center.x * plot.width,
+                        x: plot.minX + normalizedScreenX * plot.width,
                         y: plot.minY + $0.value.center.y * plot.height),
                     count: $0.value.count,
                     weight: $0.value.weight,
@@ -368,9 +371,34 @@ extension LivelineAdvancedLayout {
             columnSpacing: style.resolvedColumnSpacing,
             segmentSpacing: style.resolvedSegmentSpacing
         )
+        let directionalGeometry = layout.isRTL
+            ? rawGeometry.map { column in
+                LivelineMarimekkoColumnGeometry(
+                    columnIndex: column.columnIndex,
+                    rect: CGRect(
+                        x: body.minX + body.maxX - column.rect.maxX,
+                        y: column.rect.minY,
+                        width: column.rect.width,
+                        height: column.rect.height
+                    ),
+                    segments: column.segments.map { segment in
+                        LivelineMarimekkoSegmentGeometry(
+                            columnIndex: segment.columnIndex,
+                            segmentIndex: segment.segmentIndex,
+                            rect: CGRect(
+                                x: body.minX + body.maxX - segment.rect.maxX,
+                                y: segment.rect.minY,
+                                width: segment.rect.width,
+                                height: segment.rect.height
+                            )
+                        )
+                    }
+                )
+            }
+            : rawGeometry
         let geometry = displayScale.map {
-            LivelineVisualGeometry.pixelAligned(rawGeometry, displayScale: $0)
-        } ?? rawGeometry
+            LivelineVisualGeometry.pixelAligned(directionalGeometry, displayScale: $0)
+        } ?? directionalGeometry
         var colorIndexBySegmentID: [String: Int] = [:]
         for columnGeometry in geometry {
             let column = valid[columnGeometry.columnIndex]
@@ -479,8 +507,12 @@ extension LivelineAdvancedLayout {
         textScale: LivelineTextScale
     ) -> LivelineNetworkGeometry? {
         guard !nodes.isEmpty else { return nil }
-        let plot = LivelineRenderer.advancedPlotRect(layout)
-            .insetBy(dx: textScale.scaled(28), dy: textScale.scaled(24))
+        let availablePlot = LivelineRenderer.advancedPlotRect(layout)
+        let horizontalInset = min(
+            textScale.scaled(28), max((availablePlot.width - 1) / 2, 0))
+        let verticalInset = min(
+            textScale.scaled(24), max((availablePlot.height - 1) / 2, 0))
+        let plot = availablePlot.insetBy(dx: horizontalInset, dy: verticalInset)
         let center = CGPoint(x: plot.midX, y: plot.midY)
         let radius = min(plot.width, plot.height) * 0.42
         let columns = max(Int(ceil(sqrt(Double(nodes.count)))), 1)
@@ -548,10 +580,15 @@ struct LivelineContourLayout {
     var yDomain: ClosedRange<Double>
     var valueRange: ClosedRange<Double>
     var subdivisions: Int
+    var isRTL: Bool
 
     func point(x: Double, y: Double) -> CGPoint {
         CGPoint(
-            x: LivelineRenderer.mapped(x, from: xDomain, to: plot.minX...plot.maxX),
+            x: LivelineRenderer.mapped(
+                x,
+                from: xDomain,
+                to: isRTL ? (plot.maxX, plot.minX) : (plot.minX, plot.maxX)
+            ),
             y: LivelineRenderer.mapped(y, from: yDomain, to: (plot.maxY, plot.minY))
         )
     }
@@ -564,7 +601,8 @@ struct LivelineContourLayout {
         let xs = Array(Set(samples.map(\.x))).sorted()
         let ys = Array(Set(samples.map(\.y))).sorted()
         guard xs.count >= 2, ys.count >= 2 else { return nil }
-        let xProgress = Double((location.x - plot.minX) / plot.width)
+        let screenProgress = Double((location.x - plot.minX) / plot.width)
+        let xProgress = isRTL ? 1 - screenProgress : screenProgress
         let yProgress = Double((plot.maxY - location.y) / plot.height)
         let x = xDomain.lowerBound + xProgress * (xDomain.upperBound - xDomain.lowerBound)
         let y = yDomain.lowerBound + yProgress * (yDomain.upperBound - yDomain.lowerBound)
@@ -636,7 +674,8 @@ extension LivelineAdvancedLayout {
             xDomain: xs[0]...xs[xs.count - 1],
             yDomain: ys[0]...ys[ys.count - 1],
             valueRange: minimum...max(maximum, minimum),
-            subdivisions: min(max(Int(ceil(max(coarseCellWidth, coarseCellHeight) / 4)), 1), 16)
+            subdivisions: min(max(Int(ceil(max(coarseCellWidth, coarseCellHeight) / 4)), 1), 16),
+            isRTL: layout.isRTL
         )
     }
 }
@@ -735,12 +774,14 @@ struct LivelineWaffleLayout {
     var spacing: CGFloat
     var columns: Int
     var rows: Int
+    var isRTL: Bool
 
     var cellCount: Int { columns * rows }
 
-    /// Cells fill bottom-up, left-to-right.
+    /// Cells fill bottom-up from the reading edge.
     func rect(cellIndex: Int) -> CGRect {
-        let column = cellIndex % columns
+        let logicalColumn = cellIndex % columns
+        let column = isRTL ? columns - 1 - logicalColumn : logicalColumn
         let row = rows - 1 - cellIndex / columns
         return CGRect(
             x: origin.x + CGFloat(column) * (cell + spacing),
@@ -761,6 +802,20 @@ struct LivelineWaffleLayout {
 }
 
 extension LivelineAdvancedLayout {
+    static func allocatedWaffleValues(
+        _ values: [LivelineCategoryValue],
+        style: LivelineWaffleStyle
+    ) -> [LivelineCategoryValue] {
+        let positive = values.filter { $0.value > 0 }
+        let allocations = LivelineRenderer.waffleAllocations(
+            values: positive,
+            cellCount: style.resolvedColumns * style.resolvedRows
+        )
+        return zip(positive, allocations).compactMap { value, allocation in
+            allocation > 0 ? value : nil
+        }
+    }
+
     static func waffle(
         values: [LivelineCategoryValue],
         style: LivelineWaffleStyle,
@@ -802,7 +857,8 @@ extension LivelineAdvancedLayout {
             cell: max(cell, 0.1),
             spacing: spacing,
             columns: columns,
-            rows: rows
+            rows: rows,
+            isRTL: layout.isRTL
         )
     }
 }

@@ -145,6 +145,7 @@
 "accessibility.percent.format" = "%@ por ciento";
 "accessibility.distribution.format" = "%1$ld muestras, mediana %2$@, rango intercuartílico de %3$@ a %4$@";
 "accessibility.gantt.format" = "%1$@ a %2$@, duración %3$@, %4$@ completado";
+"accessibility.gantt.dependencies.format" = "%1$@, depende de %2$@";
 "accessibility.xyWeight.format" = "X %1$@, Y %2$@, peso %3$@";
 "accessibility.network.format" = "Peso %1$@, %2$ld conexiones";
 "accessibility.ternary.format" = "%1$@ %2$@, %3$@ %4$@, %5$@ %6$@";

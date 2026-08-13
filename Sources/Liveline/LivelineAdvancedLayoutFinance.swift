@@ -185,9 +185,17 @@ struct LivelineMarketDepthLayout {
     var plot: CGRect
     var priceDomain: ClosedRange<Double>
     var maximumSize: Double
+    var isRTL: Bool
+
+    var bidBoundaryX: CGFloat { isRTL ? plot.maxX : plot.minX }
+    var askBoundaryX: CGFloat { isRTL ? plot.minX : plot.maxX }
 
     func x(price: Double) -> CGFloat {
-        LivelineRenderer.mapped(price, from: priceDomain, to: plot.minX...plot.maxX)
+        LivelineRenderer.mapped(
+            price,
+            from: priceDomain,
+            to: isRTL ? (plot.maxX, plot.minX) : (plot.minX, plot.maxX)
+        )
     }
 
     func point(_ value: LivelinePoint) -> CGPoint {
@@ -222,7 +230,8 @@ extension LivelineAdvancedLayout {
             curve: curve,
             plot: plot,
             priceDomain: priceDomain,
-            maximumSize: max(all.map(\.value).max() ?? 0, 0.000_001)
+            maximumSize: max(all.map(\.value).max() ?? 0, 0.000_001),
+            isRTL: layout.isRTL
         )
     }
 }
@@ -255,6 +264,13 @@ extension LivelineAdvancedLayout {
         let volumeHeight = plot.height * style.resolvedVolumeHeightRatio
         let low = visible.map(\.low).min() ?? 0
         let high = visible.map(\.high).max() ?? 1
+        let priceDomain: ClosedRange<Double>
+        if low == high {
+            let padding = max(abs(low) * 0.05, 0.5)
+            priceDomain = (low - padding)...(high + padding)
+        } else {
+            priceDomain = low...high
+        }
         return LivelineOHLCVolumeLayout(
             values: visible,
             plot: plot,
@@ -270,7 +286,7 @@ extension LivelineAdvancedLayout {
                 width: plot.width,
                 height: volumeHeight
             ),
-            priceDomain: low...(low == high ? high + 1 : high),
+            priceDomain: priceDomain,
             maximumVolume: max(visible.map(\.volume).max() ?? 0, 0.000_001),
             candleWidth: LivelineRenderer.bucketWidth(
                 sortedTimes: visible.lazy.map(\.time),

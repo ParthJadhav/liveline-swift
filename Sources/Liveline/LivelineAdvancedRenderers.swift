@@ -199,20 +199,22 @@ extension LivelineRenderer {
             }
             let color = advancedColor(index: index, colors: style.colors, palette: palette)
             if drawMarks {
+                var markLayer = context
+                markLayer.opacity *= reveal
                 let profile = item.profile
                 var outline: [CGPoint] = []
                 outline.reserveCapacity(profile.samples.count * 2)
                 for sample in profile.samples {
-                    let x = centerX - halfWidth * CGFloat(sample.density / profile.peakDensity) * CGFloat(reveal)
+                    let x = centerX - halfWidth * CGFloat(sample.density / profile.peakDensity)
                     outline.append(CGPoint(x: x, y: vertical(sample.value)))
                 }
                 for sample in profile.samples.reversed() {
-                    let x = centerX + halfWidth * CGFloat(sample.density / profile.peakDensity) * CGFloat(reveal)
+                    let x = centerX + halfWidth * CGFloat(sample.density / profile.peakDensity)
                     outline.append(CGPoint(x: x, y: vertical(sample.value)))
                 }
                 let path = LivelineVisualGeometry.smoothPath(points: outline, closed: true)
-                context.fill(path, with: .color(color.opacity(style.resolvedFillOpacity)))
-                context.stroke(
+                markLayer.fill(path, with: .color(color.opacity(style.resolvedFillOpacity)))
+                markLayer.stroke(
                     path,
                     with: .color(color),
                     style: StrokeStyle(
@@ -222,12 +224,12 @@ extension LivelineRenderer {
                     var quartile = Path()
                     quartile.move(to: CGPoint(x: centerX, y: vertical(profile.lowerQuartile)))
                     quartile.addLine(to: CGPoint(x: centerX, y: vertical(profile.upperQuartile)))
-                    context.stroke(
+                    markLayer.stroke(
                         quartile, with: .color(color.opacity(0.9)), lineWidth: max(style.resolvedLineWidth, 2))
                 }
                 if style.showsMedian {
                     let y = vertical(profile.median)
-                    context.fill(
+                    markLayer.fill(
                         Path(ellipseIn: CGRect(x: centerX - 3, y: y - 3, width: 6, height: 6)),
                         with: .color(color))
                 }
@@ -344,7 +346,11 @@ extension LivelineRenderer {
             if labelledMonths.insert(monthKey).inserted {
                 drawText(
                     monthFormatter.string(from: date), context: &context,
-                    at: CGPoint(x: rect.minX, y: body.minY - textScale.scaled(6)), anchor: .bottomLeading,
+                    at: CGPoint(
+                        x: geometry.isRTL ? rect.maxX : rect.minX,
+                        y: body.minY - textScale.scaled(6)
+                    ),
+                    anchor: geometry.isRTL ? .bottomTrailing : .bottomLeading,
                     color: palette.gridLabel, font: textScale.font(9, weight: .medium))
             }
         }
@@ -356,9 +362,11 @@ extension LivelineRenderer {
                 drawText(
                     labels[index], context: &context,
                     at: CGPoint(
-                        x: body.minX - textScale.scaled(5),
+                        x: geometry.isRTL
+                            ? body.maxX + textScale.scaled(5)
+                            : body.minX - textScale.scaled(5),
                         y: body.minY + CGFloat(row) * (geometry.cell + geometry.spacing) + geometry.cell / 2),
-                    anchor: .trailing,
+                    anchor: geometry.isRTL ? .leading : .trailing,
                     color: palette.gridLabel, font: textScale.font(8, weight: .regular))
             }
         }
@@ -389,9 +397,12 @@ extension LivelineRenderer {
         let geometry = LivelineAdvancedLayout.gantt(
             tasks: tasks, style: style, layout: layout, textScale: textScale)
         let taskByID = LivelineAdvancedLayout.ganttTasksByID(tasks)
+        let visibleTaskIndices = LivelineAdvancedLayout.ganttTaskIndicesIntersectingViewport(
+            tasks, layout: layout)
 
         if drawMarks, style.showsDependencies {
-            for task in tasks {
+            for index in visibleTaskIndices {
+                let task = tasks[index]
                 for dependencyID in task.dependencyIDs {
                     guard let dependency = taskByID[dependencyID] else { continue }
                     let start = CGPoint(
@@ -410,7 +421,8 @@ extension LivelineRenderer {
             }
         }
 
-        for (index, task) in tasks.enumerated() {
+        for index in visibleTaskIndices {
+            let task = tasks[index]
             let rect = geometry.rect(for: task, layout: layout, reveal: reveal)
             let color = advancedColor(index: index, colors: style.colors, palette: palette)
             if drawMarks {

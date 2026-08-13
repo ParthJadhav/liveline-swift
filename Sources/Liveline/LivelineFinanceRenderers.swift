@@ -178,10 +178,10 @@ extension LivelineRenderer {
         if drawMarks {
             drawDepthCurve(
                 context: &context, points: curve.bids, color: style.bidColor, plot: plot, point: point,
-                style: style, reveal: reveal, singletonBoundaryX: plot.minX)
+                style: style, reveal: reveal, singletonBoundaryX: geometry.bidBoundaryX)
             drawDepthCurve(
                 context: &context, points: curve.asks, color: style.askColor, plot: plot, point: point,
-                style: style, reveal: reveal, singletonBoundaryX: plot.maxX)
+                style: style, reveal: reveal, singletonBoundaryX: geometry.askBoundaryX)
             if style.showsSpread, let bid = curve.bestBid, let ask = curve.bestAsk {
                 let left = geometry.x(price: bid)
                 let right = geometry.x(price: ask)
@@ -204,13 +204,15 @@ extension LivelineRenderer {
                 String(
                     format: LivelineStrings.accessibilityNamedValueFormat, LivelineStrings.labelBid,
                     configuration.formatValue(bid)), context: &context,
-                at: CGPoint(x: plot.minX, y: plot.minY), anchor: .topLeading, color: style.bidColor,
+                at: CGPoint(x: geometry.isRTL ? plot.maxX : plot.minX, y: plot.minY),
+                anchor: geometry.isRTL ? .topTrailing : .topLeading, color: style.bidColor,
                 font: textScale.font(9, weight: .semibold, design: .monospaced))
             drawText(
                 String(
                     format: LivelineStrings.accessibilityNamedValueFormat, LivelineStrings.labelAsk,
                     configuration.formatValue(ask)), context: &context,
-                at: CGPoint(x: plot.maxX, y: plot.minY), anchor: .topTrailing, color: style.askColor,
+                at: CGPoint(x: geometry.isRTL ? plot.minX : plot.maxX, y: plot.minY),
+                anchor: geometry.isRTL ? .topLeading : .topTrailing, color: style.askColor,
                 font: textScale.font(9, weight: .semibold, design: .monospaced))
         }
     }

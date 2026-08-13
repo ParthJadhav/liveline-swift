@@ -242,7 +242,8 @@ final class LivelineRenderState: ObservableObject {
         samples: [LivelineContourSample],
         levelCount: Int,
         plot: CGRect,
-        subdivisions: Int
+        subdivisions: Int,
+        isRTL: Bool = false
     ) -> LivelineContourGeometry {
         var fingerprint: UInt64 = 0xcbf2_9ce4_8422_2325
         for sample in samples {
@@ -256,14 +257,16 @@ final class LivelineRenderState: ObservableObject {
             count: samples.count,
             levelCount: levelCount,
             plot: plot,
-            subdivisions: subdivisions
+            subdivisions: subdivisions,
+            isRTL: isRTL
         )
         if contourKey == key, let cached = contourCache { return cached }
         let geometry = LivelineVisualGeometry.contour(
             samples: samples,
             levelCount: levelCount,
             plot: plot,
-            subdivisions: subdivisions
+            subdivisions: subdivisions,
+            isRTL: isRTL
         )
         contourGeometryBuildCount += 1
         contourKey = key
@@ -520,6 +523,7 @@ struct LivelineContourKey: Equatable {
     var levelCount: Int
     var plot: CGRect
     var subdivisions: Int
+    var isRTL: Bool
 }
 
 struct LivelineDistributionProfileKey: Hashable {
