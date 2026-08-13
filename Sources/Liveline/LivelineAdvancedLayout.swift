@@ -86,6 +86,21 @@ struct LivelineRidgelineLayout {
 }
 
 extension LivelineAdvancedLayout {
+    static func horizonFoldedHeight(
+        value: Double,
+        band: Int,
+        bandHeight: Double,
+        plotHeight: CGFloat
+    ) -> CGFloat {
+        guard bandHeight.isFinite, bandHeight > 0, plotHeight.isFinite, plotHeight > 0 else {
+            return 0
+        }
+        let magnitude = min(
+            max(abs(value) - Double(max(band, 0)) * bandHeight, 0),
+            bandHeight)
+        return CGFloat(magnitude / bandHeight) * plotHeight
+    }
+
     static func distributionProfiles(
         _ series: [LivelineDistributionSeries],
         bandwidth: Double?

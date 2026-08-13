@@ -2216,6 +2216,87 @@ final class LivelineAdvancedChartTests: XCTestCase {
         XCTAssertEqual(LivelineScalar.unitPosition(0, in: -maximum...maximum), 0.5)
     }
 
+    func testLateReviewBatchPreservesMarkGeometryWeightsAndReadingDirection() throws {
+        let maximum = Double.greatestFiniteMagnitude
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 240),
+            padding: .init(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: -4, maxValue: 4, leftEdge: 0, rightEdge: 1)
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
+
+        let mappedMaximum = LivelineRenderer.mapped(
+            maximum, from: -maximum...maximum, to: CGFloat(0)...CGFloat(100))
+        XCTAssertTrue(mappedMaximum.isFinite)
+        XCTAssertEqual(mappedMaximum, 100, accuracy: 0.000_1)
+
+        let hexbin = try XCTUnwrap(
+            LivelineAdvancedLayout.hexbin(
+                points: [
+                    .init(id: "dense-1", x: 0, y: 0, weight: maximum),
+                    .init(id: "dense-2", x: 0, y: 0, weight: maximum),
+                    .init(id: "sparse", x: 10, y: 10, weight: maximum),
+                ],
+                style: .init(binsAcross: 8),
+                layout: layout,
+                textScale: .standard))
+        XCTAssertEqual(hexbin.cells.count, 2)
+        let hexbinWeights = hexbin.cells.map(\.weight).sorted()
+        XCTAssertEqual(hexbinWeights[1] / hexbinWeights[0], 2, accuracy: 0.000_1)
+
+        let depth = LivelineAdvancedMath.marketDepthCurve([
+            .init(price: 100, bidSize: maximum),
+            .init(price: 99, bidSize: maximum),
+            .init(price: 101, askSize: maximum),
+            .init(price: 102, askSize: maximum),
+        ])
+        XCTAssertEqual(depth.bids[0].value / depth.bids[1].value, 2, accuracy: 0.000_1)
+        XCTAssertEqual(depth.asks[1].value / depth.asks[0].value, 2, accuracy: 0.000_1)
+
+        let chordTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .chord([.init(source: "A", target: "B", value: 50)], .init()),
+            layout: layout,
+            palette: palette,
+            configuration: .init(formatValue: { String(Int($0)) }),
+            targetLocation: nil,
+            textScale: .standard)
+        let nodeA = try XCTUnwrap(chordTargets.first { $0.selection.heading == "A" })
+        XCTAssertEqual(nodeA.selection.rows.first?.value, "50")
+
+        let legendPlot = CGRect(x: 20, y: 0, width: 280, height: 200)
+        let ltrLegend = LivelineRenderer.waffleLegendHorizontalPlacement(
+            in: legendPlot, offset: 24, isRTL: false)
+        let rtlLegend = LivelineRenderer.waffleLegendHorizontalPlacement(
+            in: legendPlot, offset: 24, isRTL: true)
+        XCTAssertEqual(
+            ltrLegend.markerX + 3.5 + rtlLegend.markerX + 3.5,
+            legendPlot.minX + legendPlot.maxX,
+            accuracy: 0.000_1)
+        XCTAssertEqual(
+            ltrLegend.textX + rtlLegend.textX,
+            legendPlot.minX + legendPlot.maxX,
+            accuracy: 0.000_1)
+        XCTAssertEqual(ltrLegend.textAnchor.x, UnitPoint.leading.x)
+        XCTAssertEqual(rtlLegend.textAnchor.x, UnitPoint.trailing.x)
+
+        let horizonPoints = [
+            LivelinePoint(time: 0, value: 0.5),
+            LivelinePoint(time: 1, value: 4),
+        ]
+        let horizonTargets = LivelineAdvancedInteractionBuilder.targets(
+            content: .horizon(horizonPoints, .init(bandCount: 2)),
+            layout: layout,
+            palette: palette,
+            configuration: .init(),
+            targetLocation: CGPoint(x: layout.x(for: 0), y: 0),
+            textScale: .standard)
+        let horizonTarget = try XCTUnwrap(horizonTargets.first)
+        let horizonPlot = LivelineRenderer.advancedPlotRect(layout)
+        XCTAssertEqual(
+            horizonTarget.selection.anchor.y,
+            horizonPlot.maxY - horizonPlot.height * 0.25,
+            accuracy: 0.000_1)
+    }
+
     private static func fixture(named name: String) -> LivelineAdvancedChartContent {
         fixtures.first { $0.name == name }!.content
     }

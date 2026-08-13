@@ -153,15 +153,24 @@ enum LivelineAdvancedInteractionBuilder {
                 }
             }
 
-        case .horizon(let points, _):
+        case .horizon(let points, let style):
             let plot = LivelineRenderer.advancedPlotRect(layout)
             let visible = points.livelineVisibleIncludingBoundaryPoints(
                 in: layout.leftEdge...layout.rightEdge)
+            let maximum = max(visible.map { abs($0.value) }.max() ?? 0, 0.000_001)
+            let bandHeight = maximum / Double(style.resolvedBandCount)
             return nearestTimed(
                 visible, targetLocation: targetLocation, layout: layout, time: \.time
             ).map {
                 point in
-                let center = CGPoint(x: layout.x(for: point.time), y: plot.midY)
+                let foldedHeight = LivelineAdvancedLayout.horizonFoldedHeight(
+                    value: point.value,
+                    band: 0,
+                    bandHeight: bandHeight,
+                    plotHeight: plot.height)
+                let center = CGPoint(
+                    x: layout.x(for: point.time),
+                    y: plot.maxY - foldedHeight)
                 return target(
                     time: point.time, value: point.value, anchor: center,
                     heading: configuration.formatTime(point.time),
@@ -173,6 +182,8 @@ enum LivelineAdvancedInteractionBuilder {
         case .chord(let links, let style):
             let geometry = LivelineAdvancedLayout.chord(
                 links: links, style: style, layout: layout, textScale: textScale)
+            let nodeTotals = Dictionary(
+                uniqueKeysWithValues: LivelineAdvancedLayout.chordNodeTotals(links))
             let ribbonTargets = geometry.ribbons.map { ribbon in
                 let path = ribbon.path(
                     center: geometry.center, radius: max(geometry.innerRadius - 1, 0))
@@ -194,15 +205,16 @@ enum LivelineAdvancedInteractionBuilder {
                     region: .path(path))
             }
             let nodeTargets = geometry.arcs.map { arc in
+                let total = nodeTotals[arc.label] ?? arc.value
                 let anchor = LivelineMath.polarPoint(
                     center: geometry.center,
                     radius: (geometry.innerRadius + geometry.outerRadius) / 2,
                     angle: arc.middle)
                 return target(
-                    time: Double(arc.index), value: arc.value, anchor: anchor, heading: arc.label,
+                    time: Double(arc.index), value: total, anchor: anchor, heading: arc.label,
                     rows: [
                         row(
-                            LivelineStrings.labelTotal, configuration.formatValue(arc.value),
+                            LivelineStrings.labelTotal, configuration.formatValue(total),
                             LivelineRenderer.advancedColor(
                                 index: arc.index, colors: style.colors, palette: palette))
                     ],

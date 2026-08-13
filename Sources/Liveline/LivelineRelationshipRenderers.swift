@@ -529,27 +529,48 @@ extension LivelineRenderer {
         }
         if drawLabels, style.showsLegend {
             let shares = LivelineAdvancedMath.proportions(values.map(\.value))
-            var x = plot.minX
+            var offset: CGFloat = 0
             for (index, value) in values.enumerated() {
+                let placement = waffleLegendHorizontalPlacement(
+                    in: plot, offset: offset, isRTL: geometry.isRTL)
                 let color = advancedColor(index: index, colors: style.colors, palette: palette)
                 context.fill(
-                    Path(ellipseIn: CGRect(x: x, y: plot.maxY - textScale.scaled(13), width: 7, height: 7)),
+                    Path(ellipseIn: CGRect(
+                        x: placement.markerX,
+                        y: plot.maxY - textScale.scaled(13),
+                        width: 7,
+                        height: 7)),
                     with: .color(color))
                 let formattedShare = configuration.formatValue(shares[index] * 100)
                 let label =
                     "\(value.label) \(formattedShare.hasSuffix("%") ? formattedShare : formattedShare + "%")"
                 drawText(
-                    label, context: &context, at: CGPoint(x: x + 10, y: plot.maxY - textScale.scaled(9)),
-                    anchor: .leading, color: palette.gridLabel, font: textScale.font(8, weight: .medium))
+                    label,
+                    context: &context,
+                    at: CGPoint(x: placement.textX, y: plot.maxY - textScale.scaled(9)),
+                    anchor: placement.textAnchor,
+                    color: palette.gridLabel,
+                    font: textScale.font(8, weight: .medium))
                 // `label.count` is a grapheme count, which under-measures wide
                 // scripts and overlaps the next entry. Advance by the same
                 // character-class estimate the layout pass uses.
-                x +=
+                offset +=
                     LivelineAdvancedLayout.estimatedLabelWidth(label, textScale: textScale)
                     + textScale.scaled(20)
-                if x > plot.maxX - textScale.scaled(50) { break }
+                if offset > plot.width - textScale.scaled(50) { break }
             }
         }
+    }
+
+    static func waffleLegendHorizontalPlacement(
+        in plot: CGRect,
+        offset: CGFloat,
+        isRTL: Bool
+    ) -> (markerX: CGFloat, textX: CGFloat, textAnchor: UnitPoint) {
+        if isRTL {
+            return (plot.maxX - offset - 7, plot.maxX - offset - 10, .trailing)
+        }
+        return (plot.minX + offset, plot.minX + offset + 10, .leading)
     }
 
     static func waffleAllocations(values: [LivelineCategoryValue], cellCount: Int) -> [Int] {

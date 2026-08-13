@@ -305,9 +305,12 @@ extension LivelineAdvancedLayout {
             var center: CGPoint
             var count: Int
             var weight: Double
+            var normalizedWeight: Double
             var label: String?
         }
+        let weightScale = max(points.map(\.weight).max() ?? 0, 0.000_001)
         var bins: [LivelineHexbinCellKey: Aggregate] = [:]
+        var weightOverflowed = false
         for point in points {
             let normalizedX = CGFloat(normalizedProgress(point.x, minimum: xMin, maximum: xMax))
             let normalizedY = CGFloat(1 - normalizedProgress(point.y, minimum: yMin, maximum: yMax))
@@ -320,19 +323,27 @@ extension LivelineAdvancedLayout {
             let key = LivelineHexbinCellKey(column: column, row: row)
             let current = bins[key]
             let weight = (current?.weight ?? 0) + point.weight
+            if !weight.isFinite { weightOverflowed = true }
             bins[key] = Aggregate(
                 center: center,
                 count: (current?.count ?? 0) + 1,
                 weight: weight.isFinite ? weight : Double.greatestFiniteMagnitude,
+                normalizedWeight: (current?.normalizedWeight ?? 0) + point.weight / weightScale,
                 label: current?.label ?? point.label
             )
         }
+        let maximumNormalizedWeight = max(
+            bins.values.map(\.normalizedWeight).max() ?? 0,
+            0.000_001)
 
         let cells = bins
             .map {
                 let normalizedScreenX = layout.isRTL
                     ? 1 - $0.value.center.x
                     : $0.value.center.x
+                let weight = weightOverflowed
+                    ? $0.value.normalizedWeight / maximumNormalizedWeight * weightScale
+                    : $0.value.weight
                 return LivelineHexbinCell(
                     column: $0.key.column,
                     row: $0.key.row,
@@ -340,7 +351,7 @@ extension LivelineAdvancedLayout {
                         x: plot.minX + normalizedScreenX * plot.width,
                         y: plot.minY + $0.value.center.y * plot.height),
                     count: $0.value.count,
-                    weight: $0.value.weight,
+                    weight: weight,
                     label: $0.value.label
                 )
             }

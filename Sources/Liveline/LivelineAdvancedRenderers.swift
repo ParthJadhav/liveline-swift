@@ -580,11 +580,15 @@ extension LivelineRenderer {
         var layer = context
         layer.clip(to: Path(plot))
         for band in 0..<style.resolvedBandCount {
-            let opacity = (0.28 + 0.62 * Double(band + 1) / Double(style.resolvedBandCount)) * reveal
+            let opacity =
+                (0.28 + 0.62 * Double(band + 1) / Double(style.resolvedBandCount)) * reveal
             for sign in [1.0, -1.0] {
                 let folded = visible.map { point -> CGPoint in
-                    let magnitude = min(max(abs(point.value) - Double(band) * bandHeight, 0), bandHeight)
-                    let height = CGFloat(magnitude / bandHeight) * plot.height
+                    let height = LivelineAdvancedLayout.horizonFoldedHeight(
+                        value: point.value,
+                        band: band,
+                        bandHeight: bandHeight,
+                        plotHeight: plot.height)
                     let y = sign * point.value >= 0 ? plot.maxY - height : plot.maxY
                     return CGPoint(x: layout.x(for: point.time), y: y)
                 }
@@ -612,14 +616,18 @@ extension LivelineRenderer {
     static func mapped(
         _ value: Double, from domain: ClosedRange<Double>, to range: ClosedRange<CGFloat>
     ) -> CGFloat {
-        let t = (value - domain.lowerBound) / max(domain.upperBound - domain.lowerBound, 0.000_001)
+        let t = domain.lowerBound == domain.upperBound
+            ? 0
+            : LivelineScalar.unitPosition(value, in: domain)
         return range.lowerBound + CGFloat(t) * (range.upperBound - range.lowerBound)
     }
 
     static func mapped(
         _ value: Double, from domain: ClosedRange<Double>, to range: (CGFloat, CGFloat)
     ) -> CGFloat {
-        let t = (value - domain.lowerBound) / max(domain.upperBound - domain.lowerBound, 0.000_001)
+        let t = domain.lowerBound == domain.upperBound
+            ? 0
+            : LivelineScalar.unitPosition(value, in: domain)
         return range.0 + CGFloat(t) * (range.1 - range.0)
     }
 }
