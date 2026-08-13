@@ -278,6 +278,7 @@ struct StorybookScenarioScreen: View {
                     .background(Color(uiColor: .systemBackground))
             }
         }
+        .livelineChartStyle(StorybookLaunch.advancedDemoDitherStyleFromArguments())
         .statusBarHidden(chartOnly)
         .persistentSystemOverlays(chartOnly ? .hidden : .automatic)
         .onAppear {

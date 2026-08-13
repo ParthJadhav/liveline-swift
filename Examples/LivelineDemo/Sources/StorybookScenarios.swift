@@ -46,6 +46,21 @@ struct StorybookLaunch {
         }
     }
 
+    static func advancedDemoDitherStyleFromArguments() -> LivelineChartStyle? {
+        guard advancedDemoDitherFromArguments() else { return nil }
+        return .dither(
+            LivelineDitherStyle(
+                variant: advancedDemoDitherVariantFromArguments(),
+                bloom: .low,
+                cellSize: 2,
+                sparkleDensity: 0.028,
+                animationSpeed: 1.35,
+                maximumFramesPerSecond: 30,
+                animated: true
+            )
+        )
+    }
+
     static func scenarioLaunchFromArguments() -> StorybookScenarioLaunch {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: "--storybook-scenario") else {

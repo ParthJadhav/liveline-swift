@@ -26,6 +26,8 @@ scripts/verify-chart-visuals.sh
 scripts/build-chart-review-board.sh
 scripts/verify-advanced-charts.sh
 python3 scripts/build-readme-media.py
+scripts/capture-dither-chart-media.sh
+scripts/record-dither-showcase.sh
 scripts/capture-web-references.sh
 VISUAL_PARITY_EXCLUSIONS=line-show-value-windows,line-rounded-windows,line-text-windows,candle-mode-controls,multi-basic,multi-light,multi-compact,multi-two-series
 scripts/diff-storybook.sh --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12 --scenario-threshold line-orderbook:5.1:13
@@ -55,6 +57,11 @@ Anything newer than the floor belongs behind `@available` on the declaration or
 features currently gated that way.
 
 Use the chart-only capture plus web-reference diff when comparing the native renderer against the upstream React/canvas implementation. Native Storybook captures use deterministic snapshot timing and an iPhone 17 Pro simulator by default, README media is built from `Media/storybook-chart-only`, and diff panels are written to `Media/storybook-diff`. Set `STORYBOOK_OUT_DIR` and `WEB_REFERENCE_OUT_DIR` to capture into disposable directories without modifying checked-in media.
+
+`scripts/capture-dither-chart-media.sh` is the public-media workflow. It captures one light-mode Dither treatment for all 48 chart families into `Media/storybook-dither`, rebuilds the README chart tiles from those captures, refreshes the 21 advanced-chart documentation images, and regenerates their two review boards. The standard Storybook and upstream-parity baselines remain unchanged.
+
+`scripts/record-dither-showcase.sh` records the light-mode animated showcase and
+also refreshes the poster, GIF, and video embedded by the README.
 
 The normal CI workflow runs package tests, API compatibility, declared-platform builds, and the iOS demo build. Pull requests that affect rendering also run an eight-scenario visual smoke gate; the manually dispatched `Visual Parity` workflow can run either the smoke set or the full suite. XcodeGen, Node, npm dependencies, and the upstream Liveline revision are pinned by the repository.
 

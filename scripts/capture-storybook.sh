@@ -95,6 +95,18 @@ wait_seconds_for() {
   echo "$DEFAULT_CAPTURE_WAIT_SECONDS"
 }
 
+dither_variant_for() {
+  local scenario="$1"
+  local override
+  for override in ${STORYBOOK_DITHER_VARIANT_OVERRIDES:-}; do
+    if [[ "$override" == "$scenario="* ]]; then
+      echo "${override#*=}"
+      return
+    fi
+  done
+  echo "${STORYBOOK_DITHER_VARIANT:-gradient}"
+}
+
 mkdir -p "$MEDIA_DIR"
 
 if ! command -v xcodegen >/dev/null 2>&1 \
@@ -182,6 +194,7 @@ for scenario in "${SCENARIOS[@]}"; do
   fi
   if [[ "${STORYBOOK_DEMO_DITHER:-false}" == true ]]; then
     launch_args+=(--advanced-demo-dither)
+    launch_args+=(--advanced-demo-dither-variant "$(dither_variant_for "$scenario")")
   fi
   launch_args+=(--storybook-snapshot-elapsed "$capture_wait")
   launch_args+=(--storybook-capture-token "$capture_token")

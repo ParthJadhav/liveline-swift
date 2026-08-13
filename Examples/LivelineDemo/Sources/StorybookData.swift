@@ -420,18 +420,8 @@ enum StorybookData {
             },
             padding: padding
         )
-        if StorybookLaunch.advancedDemoDitherFromArguments() {
-            configuration.style = .dither(
-                LivelineDitherStyle(
-                    variant: StorybookLaunch.advancedDemoDitherVariantFromArguments(),
-                    bloom: .low,
-                    cellSize: 2,
-                    sparkleDensity: 0.028,
-                    animationSpeed: 1.35,
-                    maximumFramesPerSecond: 30,
-                    animated: true
-                )
-            )
+        if let ditherStyle = StorybookLaunch.advancedDemoDitherStyleFromArguments() {
+            configuration.style = ditherStyle
             configuration.fadeEffects = true
         }
         return configuration

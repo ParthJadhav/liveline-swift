@@ -6,7 +6,9 @@ This repository is a Swift Package. Any iOS app can add it with Swift Package Ma
 
 ## Chart gallery
 
-Each cell is captured from the included deterministic iOS Storybook.
+Each cell is a light-mode Dither capture from the included deterministic iOS
+Storybook. Filled regions use ordered texture while defining strokes remain
+solid and readable.
 
 <table>
   <tr>

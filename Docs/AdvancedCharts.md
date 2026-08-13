@@ -161,7 +161,7 @@ Use concise labels, avoid encoding meaning by color alone, and keep `formatValue
 
 ## Screenshots
 
-Deterministic chart-only captures for all 21 families live in [`Media/storybook-new-charts`](../Media/storybook-new-charts). The authoritative scenario IDs and coverage descriptions are in the [scenario matrix](ScenarioMatrix.md).
+Deterministic light-mode Dither captures for all 21 families live in [`Media/storybook-new-charts`](../Media/storybook-new-charts). The authoritative scenario IDs and coverage descriptions are in the [scenario matrix](ScenarioMatrix.md).
 
 | Distribution and planning | Relationships and density | Financial and proportional |
 | --- | --- | --- |
