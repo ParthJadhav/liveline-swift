@@ -367,8 +367,7 @@ struct LivelineBumpLayout {
     }
 
     func y(rank: Double) -> CGFloat {
-        let span = max(rankDomain.upperBound - rankDomain.lowerBound, 0.000_001)
-        let t = (rank - rankDomain.lowerBound) / span
+        let t = LivelineScalar.unitPosition(rank, in: rankDomain)
         return body.minY + CGFloat(lowerRankIsBetter ? t : 1 - t) * body.height
     }
 

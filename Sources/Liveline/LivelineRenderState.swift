@@ -281,9 +281,12 @@ final class LivelineRenderState: ObservableObject {
         series: [LivelineDistributionSeries],
         bandwidth: Double?
     ) -> [LivelineDistributionProfile] {
-        let key = LivelineDistributionProfileKey(series: series, bandwidth: bandwidth)
+        let cacheBandwidth = bandwidth.flatMap { value in
+            value.isFinite && value > 0 ? value : nil
+        }
+        let key = LivelineDistributionProfileKey(series: series, bandwidth: cacheBandwidth)
         if key == distributionProfileKey { return distributionProfileCache }
-        let profiles = LivelineAdvancedLayout.distributionProfiles(series, bandwidth: bandwidth)
+        let profiles = LivelineAdvancedLayout.distributionProfiles(series, bandwidth: cacheBandwidth)
         distributionProfileBuildCount += 1
         distributionProfileKey = key
         distributionProfileCache = profiles

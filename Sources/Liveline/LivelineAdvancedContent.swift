@@ -240,12 +240,13 @@ extension LivelineAdvancedChartContent {
         case .bump(let series, _):
             let primary = series.first?.points.map { LivelinePoint(time: $0.time, value: $0.rank) } ?? []
             let all = series.flatMap(\.points)
+            let distinctTimestamps = Set(all.map(\.time)).count
             return .timed(
                 value: primary.last?.value ?? 0,
                 points: primary,
                 earliest: all.map(\.time).min(),
                 latest: all.map(\.time).max(),
-                count: all.count,
+                count: distinctTimestamps,
                 seriesIDs: series.map(\.id),
                 capabilities: .advancedTimeline
             )

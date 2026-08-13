@@ -2297,6 +2297,67 @@ final class LivelineAdvancedChartTests: XCTestCase {
             accuracy: 0.000_1)
     }
 
+    func testNewestReviewBatchPreservesBumpScaleAccessibilityAndRenderCaches() throws {
+        let maximum = Double.greatestFiniteMagnitude
+        let bumpLayout = LivelineBumpLayout(
+            body: CGRect(x: 20, y: 30, width: 280, height: 160),
+            rankDomain: -maximum...maximum,
+            lowerRankIsBetter: true,
+            timeDomain: 0...1,
+            isRTL: false)
+        XCTAssertEqual(bumpLayout.y(rank: -maximum), bumpLayout.body.minY, accuracy: 0.000_1)
+        XCTAssertEqual(bumpLayout.y(rank: maximum), bumpLayout.body.maxY, accuracy: 0.000_1)
+        XCTAssertTrue(bumpLayout.y(rank: 0).isFinite)
+
+        let parallel = LivelineAdvancedChartContent.parallelCoordinates(
+            [
+                .init(id: "empty", label: "Empty", values: []),
+                .init(id: "visible", label: "Visible", values: [1, 2]),
+            ],
+            .init(axisLabels: ["Speed", "Cost"]))
+        XCTAssertEqual(parallel.accessibilityEntryCount, 1)
+        XCTAssertEqual(
+            parallel.accessibilityEntries(
+                formatValue: { String($0) },
+                formatTime: { String($0) }
+            ).map(\.id),
+            ["visible"])
+
+        let selfDrawnCartesian = LivelineChartCapabilities(
+            usesValueAxis: true,
+            usesCartesianGrid: false,
+            usesTimeAxis: true,
+            hoverBehavior: .discrete)
+        XCTAssertTrue(
+            LivelineRenderer.supportsPrimaryReferenceLine(
+                kind: .candle, capabilities: selfDrawnCartesian))
+        XCTAssertFalse(
+            LivelineRenderer.supportsPrimaryReferenceLine(
+                kind: .bump, capabilities: selfDrawnCartesian))
+
+        let distributions = [
+            LivelineDistributionSeries(id: "distribution", label: "Distribution", values: [1, 2, 3])
+        ]
+        let state = LivelineRenderState()
+        let nanProfiles = state.distributionProfiles(series: distributions, bandwidth: .nan)
+        let automaticProfiles = state.distributionProfiles(series: distributions, bandwidth: nil)
+        XCTAssertEqual(nanProfiles.map(\.profile), automaticProfiles.map(\.profile))
+        XCTAssertEqual(state.distributionProfileBuildCount, 1)
+
+        let sharedTimes = [0.0, 1.0, 2.0]
+        let bumpSeries = (0..<10).map { seriesIndex in
+            LivelineRankSeries(
+                id: "series-\(seriesIndex)",
+                label: "Series \(seriesIndex)",
+                points: sharedTimes.map {
+                    LivelineRankPoint(time: $0, rank: Double(seriesIndex + 1))
+                })
+        }
+        XCTAssertEqual(
+            LivelineAdvancedChartContent.bump(bumpSeries, .init()).semantics().sampleCount,
+            sharedTimes.count)
+    }
+
     private static func fixture(named name: String) -> LivelineAdvancedChartContent {
         fixtures.first { $0.name == name }!.content
     }

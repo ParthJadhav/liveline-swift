@@ -19,7 +19,8 @@ extension LivelineAdvancedChartContent {
         case .chord(let links, _):
             return links.filter { $0.value > 0 }.count
                 + LivelineAdvancedLayout.chordNodeTotals(links).count
-        case .parallelCoordinates(let records, _): return records.count
+        case .parallelCoordinates(let records, _):
+            return records.filter { !$0.values.isEmpty }.count
         case .hexbin(let points, let style):
             return accessibilityHexbins(points: points, style: style).count
         case .bump(let series, _): return series.reduce(0) { $0 + $1.points.count }
@@ -128,7 +129,7 @@ extension LivelineAdvancedChartContent {
             return nodeEntries + linkEntries
 
         case .parallelCoordinates(let records, let style):
-            return records.map { record in
+            return records.filter { !$0.values.isEmpty }.map { record in
                 let values = record.values.enumerated().map { index, value in
                     String(
                         format: LivelineStrings.accessibilityNamedValueFormat,

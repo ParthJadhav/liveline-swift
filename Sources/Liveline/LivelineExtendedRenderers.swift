@@ -221,23 +221,20 @@ extension LivelineRenderer {
             guard !visibleUpper.isEmpty else { continue }
 
             var area = Path()
-            LivelineMath.appendMonotoneSpline(
-                points: visibleUpper,
-                to: &area
-            )
-            LivelineMath.appendMonotoneSpline(
-                points: Array(visibleLower.reversed()),
-                to: &area,
-                connectToFirst: true
-            )
+            area.move(to: visibleUpper[0])
+            for point in visibleUpper.dropFirst() { area.addLine(to: point) }
+            for point in visibleLower.reversed() { area.addLine(to: point) }
             area.closeSubpath()
 
             let color = extendedSeriesColor(index: index, colors: style.colors, palette: palette)
             layer.fill(area, with: .color(color.opacity(style.resolvedFillOpacity)))
 
             if style.resolvedBoundaryLineWidth > 0 {
+                var boundary = Path()
+                boundary.move(to: visibleUpper[0])
+                for point in visibleUpper.dropFirst() { boundary.addLine(to: point) }
                 layer.stroke(
-                    LivelineMath.monotoneSplinePath(points: visibleUpper),
+                    boundary,
                     with: .color(color),
                     style: StrokeStyle(
                         lineWidth: style.resolvedBoundaryLineWidth,

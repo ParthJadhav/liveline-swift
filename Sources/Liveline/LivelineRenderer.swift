@@ -46,6 +46,15 @@ enum LivelineRenderer {
     static let candleLineLerpBase = 0.08
     static let candleLineAdaptiveBoost = 0.20
 
+    /// Candle charts draw their own Cartesian grid, but their value layout can
+    /// still position the original single reference-line annotation.
+    static func supportsPrimaryReferenceLine(
+        kind: LivelineChartKind,
+        capabilities: LivelineChartCapabilities
+    ) -> Bool {
+        capabilities.usesCartesianGrid || kind == .candle
+    }
+
     static func draw(context: inout GraphicsContext, state: LivelineRenderState, input: LivelineRenderInput) {
         guard input.size.width > 8, input.size.height > 8 else {
             state.interactionSnapshot = nil
@@ -234,7 +243,7 @@ enum LivelineRenderer {
         }
 
         if let referenceLine = config.referenceLine,
-            capabilities.usesCartesianGrid,
+            supportsPrimaryReferenceLine(kind: kind, capabilities: capabilities),
             state.chartReveal > 0.01
         {
             drawReferenceLine(context: &layer, layout: layout, palette: palette, referenceLine: referenceLine, formatValue: config.formatValue, textScale: textScale, alpha: state.chartReveal)
