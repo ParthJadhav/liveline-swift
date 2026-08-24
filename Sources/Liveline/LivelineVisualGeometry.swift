@@ -38,7 +38,10 @@ struct LivelineContourSampler {
     let minimumNormalizedValue: Double
     let maximumNormalizedValue: Double
 
-    private let values: [LivelineContourCoordinate: Double]
+    /// Normalized values in row-major order: `values[y * xs.count + x]`.
+    /// A flat grid keeps the interpolation loops on O(1) array reads instead
+    /// of hashing a Double pair per probe.
+    private let values: [Double]
 
     init?(samples: [LivelineContourSample]) {
         let collapsed = LivelineAdvancedLayout.contourSamplesByCoordinate(samples)
@@ -47,17 +50,31 @@ struct LivelineContourSampler {
         guard xs.count >= 2, ys.count >= 2, collapsed.count == xs.count * ys.count else {
             return nil
         }
-        let valueScale = max(collapsed.map { abs($0.value) }.max() ?? 0, 1)
-        let normalizedValues = collapsed.map { $0.value / valueScale }
+        let valueScale = max(collapsed.lazy.map { abs($0.value) }.max() ?? 0, 1)
+        var xIndices: [Double: Int] = [:]
+        xIndices.reserveCapacity(xs.count)
+        for (index, x) in xs.enumerated() { xIndices[x] = index }
+        var yIndices: [Double: Int] = [:]
+        yIndices.reserveCapacity(ys.count)
+        for (index, y) in ys.enumerated() { yIndices[y] = index }
+        var grid = Array(repeating: Double.zero, count: xs.count * ys.count)
+        var minimumNormalizedValue = Double.infinity
+        var maximumNormalizedValue = -Double.infinity
+        for sample in collapsed {
+            guard let xIndex = xIndices[sample.x], let yIndex = yIndices[sample.y] else {
+                return nil
+            }
+            let normalized = sample.value / valueScale
+            grid[yIndex * xs.count + xIndex] = normalized
+            minimumNormalizedValue = min(minimumNormalizedValue, normalized)
+            maximumNormalizedValue = max(maximumNormalizedValue, normalized)
+        }
         self.xs = xs
         self.ys = ys
         self.valueScale = valueScale
-        self.minimumNormalizedValue = normalizedValues.min() ?? 0
-        self.maximumNormalizedValue = normalizedValues.max() ?? 0
-        self.values = Dictionary(
-            uniqueKeysWithValues: zip(collapsed, normalizedValues).map { sample, value in
-                (LivelineContourCoordinate(x: sample.x, y: sample.y), value)
-            })
+        self.minimumNormalizedValue = minimumNormalizedValue.isFinite ? minimumNormalizedValue : 0
+        self.maximumNormalizedValue = maximumNormalizedValue.isFinite ? maximumNormalizedValue : 0
+        self.values = grid
     }
 
     func normalizedValue(x: Double, y: Double) -> Double? {
@@ -72,14 +89,15 @@ struct LivelineContourSampler {
         let ySpan = ys[cellY + 1] - ys[cellY]
         let localX = xSpan > 0 ? (x - xs[cellX]) / xSpan : 0
         let localY = ySpan > 0 ? (y - ys[cellY]) / ySpan : 0
+        return normalizedValue(cellX: cellX, cellY: cellY, localX: localX, localY: localY)
+    }
 
-        func coarseValue(x: Int, y: Int) -> Double {
-            let clampedX = min(max(x, 0), xs.count - 1)
-            let clampedY = min(max(y, 0), ys.count - 1)
-            return values[
-                LivelineContourCoordinate(x: xs[clampedX], y: ys[clampedY])
-            ] ?? minimumNormalizedValue
-        }
+    /// The interpolation core, entered with the grid cell already resolved so
+    /// dense-grid construction skips the per-node coordinate search.
+    func normalizedValue(cellX: Int, cellY: Int, localX: Double, localY: Double) -> Double {
+        let width = xs.count
+        let height = ys.count
+
         func cubic(
             _ p0: Double, _ p1: Double, _ p2: Double, _ p3: Double, _ t: Double
         ) -> Double {
@@ -90,26 +108,32 @@ struct LivelineContourSampler {
                     + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2
                     + (-p0 + 3 * p1 - 3 * p2 + p3) * t3)
         }
-        func interpolatedRow(_ row: Int) -> Double {
-            cubic(
-                coarseValue(x: cellX - 1, y: cellY + row),
-                coarseValue(x: cellX, y: cellY + row),
-                coarseValue(x: cellX + 1, y: cellY + row),
-                coarseValue(x: cellX + 2, y: cellY + row),
-                localX)
-        }
-        let interpolated = cubic(
-            interpolatedRow(-1), interpolatedRow(0),
-            interpolatedRow(1), interpolatedRow(2), localY)
+
         var localMinimum = Double.infinity
         var localMaximum = -Double.infinity
-        for row in -1...2 {
-            for column in -1...2 {
-                let sample = coarseValue(x: cellX + column, y: cellY + row)
-                localMinimum = min(localMinimum, sample)
-                localMaximum = max(localMaximum, sample)
+        var rowValues = (Double.zero, Double.zero, Double.zero, Double.zero)
+        let column0 = min(max(cellX - 1, 0), width - 1)
+        let column1 = min(max(cellX, 0), width - 1)
+        let column2 = min(max(cellX + 1, 0), width - 1)
+        let column3 = min(max(cellX + 2, 0), width - 1)
+        for row in 0..<4 {
+            let clampedY = min(max(cellY + row - 1, 0), height - 1)
+            let base = clampedY * width
+            let p0 = values[base + column0]
+            let p1 = values[base + column1]
+            let p2 = values[base + column2]
+            let p3 = values[base + column3]
+            localMinimum = min(localMinimum, min(min(p0, p1), min(p2, p3)))
+            localMaximum = max(localMaximum, max(max(p0, p1), max(p2, p3)))
+            let value = cubic(p0, p1, p2, p3, localX)
+            switch row {
+            case 0: rowValues.0 = value
+            case 1: rowValues.1 = value
+            case 2: rowValues.2 = value
+            default: rowValues.3 = value
             }
         }
+        let interpolated = cubic(rowValues.0, rowValues.1, rowValues.2, rowValues.3, localY)
         return min(max(interpolated, localMinimum), localMaximum)
     }
 
@@ -358,6 +382,14 @@ enum LivelineVisualGeometry {
         let xDomain = xs[0]...xs[xs.count - 1]
         let yDomain = ys[0]...ys[ys.count - 1]
 
+        // Each dense node's owning coarse cell and local parameter are derived
+        // once per axis, so the interpolation loop below never searches the
+        // coordinate arrays.
+        var cellXs = Array(repeating: 0, count: columnCount)
+        var localXs = Array(repeating: Double.zero, count: columnCount)
+        var cellYs = Array(repeating: 0, count: rowCount)
+        var localYs = Array(repeating: Double.zero, count: rowCount)
+
         for denseX in 0..<columnCount {
             let cellX = min(denseX / subdivisions, xs.count - 2)
             let localX = Double(denseX - cellX * subdivisions) / Double(subdivisions)
@@ -368,6 +400,14 @@ enum LivelineVisualGeometry {
                 from: xDomain,
                 to: isRTL ? (plot.maxX, plot.minX) : (plot.minX, plot.maxX)
             )
+            // Recover the cell the coordinate search would pick for the
+            // reconstructed valueX, which can land in the next cell when the
+            // interpolation rounds up to an exact grid coordinate.
+            var searchCellX = cellX
+            if valueX >= xs[cellX + 1] { searchCellX = min(cellX + 1, xs.count - 2) }
+            let xSpan = xs[searchCellX + 1] - xs[searchCellX]
+            cellXs[denseX] = searchCellX
+            localXs[denseX] = xSpan > 0 ? (valueX - xs[searchCellX]) / xSpan : 0
         }
         for denseY in 0..<rowCount {
             let cellY = min(denseY / subdivisions, ys.count - 2)
@@ -376,12 +416,21 @@ enum LivelineVisualGeometry {
             valueYs[denseY] = valueY
             screenYs[denseY] = LivelineRenderer.mapped(
                 valueY, from: yDomain, to: (plot.maxY, plot.minY))
+            var searchCellY = cellY
+            if valueY >= ys[cellY + 1] { searchCellY = min(cellY + 1, ys.count - 2) }
+            let ySpan = ys[searchCellY + 1] - ys[searchCellY]
+            cellYs[denseY] = searchCellY
+            localYs[denseY] = ySpan > 0 ? (valueY - ys[searchCellY]) / ySpan : 0
         }
 
         for denseY in 0..<rowCount {
+            let cellY = cellYs[denseY]
+            let localY = localYs[denseY]
+            guard valueYs[denseY] >= ys[0], valueYs[denseY] <= ys[ys.count - 1] else { continue }
             for denseX in 0..<columnCount {
+                guard valueXs[denseX] >= xs[0], valueXs[denseX] <= xs[xs.count - 1] else { continue }
                 denseValues[denseY * columnCount + denseX] = sampler.normalizedValue(
-                    x: valueXs[denseX], y: valueYs[denseY]) ?? minimum
+                    cellX: cellXs[denseX], cellY: cellY, localX: localXs[denseX], localY: localY)
             }
         }
 
@@ -392,81 +441,144 @@ enum LivelineVisualGeometry {
             min(max(Int(((value - minimum) / span) * Double(levels)), 0), levels - 1)
         }
 
+        var thresholds = Array(repeating: Double.zero, count: levels)
+        for level in 1..<levels {
+            thresholds[level] = minimum + span * Double(level) / Double(levels)
+        }
+        let levelScale = Double(levels) / span
+
         var fillCells: [LivelineContourFillCell] = []
         fillCells.reserveCapacity((columnCount - 1) * (rowCount - 1))
+        var segmentsByLevel = Array(repeating: [ContourSegment](), count: levels)
+
+        // One sweep over the dense cells computes both the fill level and, for
+        // only the levels a cell's value range actually crosses, its contour
+        // segments. Cells are visited in the same row-major order for every
+        // level, so per-level segment order — and therefore stitching — matches
+        // a per-level sweep.
         for y in 0..<(rowCount - 1) {
+            let topY = screenYs[y]
+            let bottomY = screenYs[y + 1]
+            let rowHeight = max(topY - bottomY, 0)
             for x in 0..<(columnCount - 1) {
-                let average = (value(x, y) + value(x + 1, y) + value(x + 1, y + 1)
-                    + value(x, y + 1)) / 4
+                let value0 = value(x, y)
+                let value1 = value(x + 1, y)
+                let value2 = value(x + 1, y + 1)
+                let value3 = value(x, y + 1)
+                let sum = value0 + value1 + value2 + value3
                 fillCells.append(
                     LivelineContourFillCell(
-                        level: level(for: average),
+                        level: level(for: sum / 4),
                         rect: CGRect(
                             x: min(screenXs[x], screenXs[x + 1]),
-                            y: screenYs[y + 1],
+                            y: bottomY,
                             width: abs(screenXs[x + 1] - screenXs[x]),
-                            height: max(screenYs[y] - screenYs[y + 1], 0)
+                            height: rowHeight
                         )
                     )
                 )
+
+                let cellMinimum = min(min(value0, value1), min(value2, value3))
+                let cellMaximum = max(max(value0, value1), max(value2, value3))
+                // A level line crosses this cell only when its threshold lies
+                // within the cell's value range; the ±1 slack keeps boundary
+                // rounding from skipping a level the comparisons would accept.
+                var lowerLevel = 1
+                var upperLevel = levels - 1
+                if cellMinimum.isFinite, cellMaximum.isFinite {
+                    let lowerEstimate = ((cellMinimum - minimum) * levelScale).rounded(.down) - 1
+                    let upperEstimate = ((cellMaximum - minimum) * levelScale).rounded(.up) + 1
+                    if lowerEstimate > 1, lowerEstimate.isFinite {
+                        lowerLevel = min(Int(lowerEstimate), levels)
+                    }
+                    if upperEstimate < Double(levels - 1), upperEstimate.isFinite {
+                        upperLevel = max(Int(upperEstimate), 0)
+                    }
+                }
+                guard lowerLevel <= upperLevel else { continue }
+
+                for level in lowerLevel...upperLevel {
+                    let threshold = thresholds[level]
+                    let high0 = value0 >= threshold
+                    let high1 = value1 >= threshold
+                    let high2 = value2 >= threshold
+                    let high3 = value3 >= threshold
+                    let mask = (high0 ? 1 : 0) | (high1 ? 2 : 0) | (high2 ? 4 : 0) | (high3 ? 8 : 0)
+                    guard mask != 0, mask != 15 else { continue }
+
+                    // Edge n runs from corner n to corner (n + 1) % 4; corners
+                    // start top-left and wind clockwise in screen space.
+                    func crossing(_ edge: Int) -> CGPoint {
+                        let startValue: Double
+                        let endValue: Double
+                        let startPoint: CGPoint
+                        let endPoint: CGPoint
+                        switch edge {
+                        case 0:
+                            startValue = value0
+                            endValue = value1
+                            startPoint = CGPoint(x: screenXs[x], y: topY)
+                            endPoint = CGPoint(x: screenXs[x + 1], y: topY)
+                        case 1:
+                            startValue = value1
+                            endValue = value2
+                            startPoint = CGPoint(x: screenXs[x + 1], y: topY)
+                            endPoint = CGPoint(x: screenXs[x + 1], y: bottomY)
+                        case 2:
+                            startValue = value2
+                            endValue = value3
+                            startPoint = CGPoint(x: screenXs[x + 1], y: bottomY)
+                            endPoint = CGPoint(x: screenXs[x], y: bottomY)
+                        default:
+                            startValue = value3
+                            endValue = value0
+                            startPoint = CGPoint(x: screenXs[x], y: bottomY)
+                            endPoint = CGPoint(x: screenXs[x], y: topY)
+                        }
+                        let delta = endValue - startValue
+                        let amount = abs(delta) < 0.000_001
+                            ? 0.5 : (threshold - startValue) / delta
+                        return interpolated(startPoint, endPoint, CGFloat(amount))
+                    }
+                    func appendSegment(_ startEdge: Int, _ endEdge: Int) {
+                        segmentsByLevel[level].append(
+                            ContourSegment(start: crossing(startEdge), end: crossing(endEdge)))
+                    }
+
+                    switch mask {
+                    case 1, 14: appendSegment(3, 0)
+                    case 2, 13: appendSegment(0, 1)
+                    case 3, 12: appendSegment(3, 1)
+                    case 4, 11: appendSegment(1, 2)
+                    case 6, 9: appendSegment(0, 2)
+                    case 7, 8: appendSegment(3, 2)
+                    case 5:
+                        if sum / 4 >= threshold {
+                            appendSegment(0, 1)
+                            appendSegment(2, 3)
+                        } else {
+                            appendSegment(3, 0)
+                            appendSegment(1, 2)
+                        }
+                    case 10:
+                        if sum / 4 >= threshold {
+                            appendSegment(3, 0)
+                            appendSegment(1, 2)
+                        } else {
+                            appendSegment(0, 1)
+                            appendSegment(2, 3)
+                        }
+                    default: break
+                    }
+                }
             }
         }
 
         var lines: [LivelineContourLine] = []
         let tolerance = max(min(plot.width, plot.height) / 100_000, 0.000_1)
         for level in 1..<levels {
-            let threshold = minimum + span * Double(level) / Double(levels)
-            var segments: [ContourSegment] = []
-            segments.reserveCapacity((columnCount - 1) * (rowCount - 1) / 2)
-            for y in 0..<(rowCount - 1) {
-                for x in 0..<(columnCount - 1) {
-                    let cellValues = [
-                        value(x, y), value(x + 1, y), value(x + 1, y + 1), value(x, y + 1),
-                    ]
-                    let cellPoints = [
-                        CGPoint(x: screenXs[x], y: screenYs[y]),
-                        CGPoint(x: screenXs[x + 1], y: screenYs[y]),
-                        CGPoint(x: screenXs[x + 1], y: screenYs[y + 1]),
-                        CGPoint(x: screenXs[x], y: screenYs[y + 1]),
-                    ]
-                    let edgePairs = [(0, 1), (1, 2), (2, 3), (3, 0)]
-                    var crossings: [Int: CGPoint] = [:]
-                    for (edge, pair) in edgePairs.enumerated()
-                    where (cellValues[pair.0] >= threshold) != (cellValues[pair.1] >= threshold) {
-                        let delta = cellValues[pair.1] - cellValues[pair.0]
-                        let amount = abs(delta) < 0.000_001
-                            ? 0.5 : (threshold - cellValues[pair.0]) / delta
-                        crossings[edge] = interpolated(
-                            cellPoints[pair.0], cellPoints[pair.1], CGFloat(amount))
-                    }
-
-                    let mask = cellValues.enumerated().reduce(0) { partial, item in
-                        item.element >= threshold ? partial | (1 << item.offset) : partial
-                    }
-                    let centerHigh = cellValues.reduce(0, +) / 4 >= threshold
-                    let pairs: [(Int, Int)]
-                    switch mask {
-                    case 1, 14: pairs = [(3, 0)]
-                    case 2, 13: pairs = [(0, 1)]
-                    case 3, 12: pairs = [(3, 1)]
-                    case 4, 11: pairs = [(1, 2)]
-                    case 6, 9: pairs = [(0, 2)]
-                    case 7, 8: pairs = [(3, 2)]
-                    case 5:
-                        pairs = centerHigh ? [(0, 1), (2, 3)] : [(3, 0), (1, 2)]
-                    case 10:
-                        pairs = centerHigh ? [(3, 0), (1, 2)] : [(0, 1), (2, 3)]
-                    default: pairs = []
-                    }
-                    for pair in pairs {
-                        if let start = crossings[pair.0], let end = crossings[pair.1] {
-                            segments.append(ContourSegment(start: start, end: end))
-                        }
-                    }
-                }
-            }
-
-            for polyline in stitched(segments, tolerance: tolerance) where polyline.points.count >= 2 {
+            for polyline in stitched(segmentsByLevel[level], tolerance: tolerance)
+            where polyline.points.count >= 2 {
                 lines.append(
                     LivelineContourLine(
                         level: level,
@@ -515,9 +627,18 @@ enum LivelineVisualGeometry {
             adjacency[end, default: []].append(index)
         }
 
-        var unused = Set(segments.indices)
+        // Seeds advance through the segments in construction order rather than
+        // hash order, so the stitched polylines are deterministic across
+        // processes instead of following the per-run Set hashing seed.
+        var used = [Bool](repeating: false, count: segments.count)
+        var seedCursor = 0
         var result: [(points: [CGPoint], isClosed: Bool)] = []
-        while let seed = unused.first {
+        while seedCursor < segments.count {
+            guard !used[seedCursor] else {
+                seedCursor += 1
+                continue
+            }
+            let seed = seedCursor
             let seedKeys = endpoints[seed]
             let startKey = adjacency[seedKeys.0]?.count == 1
                 ? seedKeys.0
@@ -526,8 +647,8 @@ enum LivelineVisualGeometry {
             var points: [CGPoint] = []
             var isClosed = false
 
-            while let edge = adjacency[currentKey]?.first(where: { unused.contains($0) }) {
-                unused.remove(edge)
+            while let edge = adjacency[currentKey]?.first(where: { !used[$0] }) {
+                used[edge] = true
                 let edgeKeys = endpoints[edge]
                 let segment = segments[edge]
                 if points.isEmpty {

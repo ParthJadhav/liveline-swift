@@ -1,3 +1,4 @@
+import SwiftUI
 import XCTest
 @testable import Liveline
 
@@ -761,6 +762,92 @@ final class LivelineRuntimeTests: XCTestCase {
         XCTAssertEqual(state.ditherGeometryBuildCount, 2)
     }
 
+    func testDitherSparklePhaseExpansionMatchesTheTrigonometricReference() {
+        let state = LivelineRenderState()
+        let layout = LivelineLayout(
+            size: CGSize(width: 320, height: 220),
+            padding: LivelineResolvedPadding(top: 20, right: 20, bottom: 20, left: 20),
+            minValue: 0,
+            maxValue: 10,
+            leftEdge: 0,
+            rightEdge: 10
+        )
+        let style = LivelineDitherStyle(
+            cellSize: 3,
+            sparkleDensity: 0.08,
+            animationSpeed: 1.7
+        )
+        let geometry = LivelineRenderer.ditherGeometry(
+            state: state,
+            layout: layout,
+            style: style
+        )
+
+        for timestamp in stride(from: 0.0, through: 4.0, by: 0.125) {
+            var expectedSparkles = Path()
+            var expectedFlares = Path()
+            for sparkle in geometry.sparkles {
+                let phase = atan2(sparkle.sinPhase, sparkle.cosPhase)
+                let wink = (sin(timestamp * style.animationSpeed * 3.5 + phase) + 1) / 2
+                guard wink > 0.55 else { continue }
+                expectedSparkles.addRect(sparkle.rect)
+                if wink > 0.92 {
+                    expectedFlares.addRect(
+                        sparkle.rect.insetBy(dx: -style.cellSize, dy: style.cellSize * 0.25))
+                    expectedFlares.addRect(
+                        sparkle.rect.insetBy(dx: style.cellSize * 0.25, dy: -style.cellSize))
+                }
+            }
+
+            let actual = LivelineRenderer.ditherSparklePaths(
+                geometry: geometry,
+                style: style,
+                timestamp: timestamp
+            )
+            XCTAssertEqual(actual.sparkles, expectedSparkles, "timestamp: \(timestamp)")
+            XCTAssertEqual(actual.flares, expectedFlares, "timestamp: \(timestamp)")
+        }
+
+        var staticStyle = style
+        staticStyle.animated = false
+        var allSparkles = Path()
+        for sparkle in geometry.sparkles { allSparkles.addRect(sparkle.rect) }
+        let staticPaths = LivelineRenderer.ditherSparklePaths(
+            geometry: geometry,
+            style: staticStyle,
+            timestamp: 3
+        )
+        XCTAssertEqual(staticPaths.sparkles, allSparkles)
+        XCTAssertTrue(staticPaths.flares.isEmpty)
+    }
+
+    func testBadgeTemplateMeasurementCacheInvalidatesWithTextScale() {
+        let state = LivelineRenderState()
+        var measurementCount = 0
+
+        func measure(_ size: CGSize) -> CGSize {
+            measurementCount += 1
+            return size
+        }
+
+        XCTAssertEqual(
+            state.badgeTemplateSize("$88.88") { measure(CGSize(width: 42, height: 12)) },
+            CGSize(width: 42, height: 12)
+        )
+        XCTAssertEqual(
+            state.badgeTemplateSize("$88.88") { measure(CGSize(width: 100, height: 20)) },
+            CGSize(width: 42, height: 12)
+        )
+        XCTAssertEqual(measurementCount, 1)
+
+        state.adoptTextScale(LivelineTextScale(factor: 1.5))
+        XCTAssertEqual(
+            state.badgeTemplateSize("$88.88") { measure(CGSize(width: 63, height: 18)) },
+            CGSize(width: 63, height: 18)
+        )
+        XCTAssertEqual(measurementCount, 2)
+    }
+
     func testIdleInteractionSnapshotSkipsFormattedTargetsButStillResolvesHover() {
         let points = [LivelinePoint(time: 1, value: 3), LivelinePoint(time: 2, value: 5)]
         let content = LivelineChartContent.line(data: points, value: 5)
@@ -1125,6 +1212,35 @@ final class LivelineRuntimeTests: XCTestCase {
         XCTAssertEqual(state.presentationTimestamp(for: 200, isPaused: true), 200)
         XCTAssertEqual(state.presentationTimestamp(for: 205, isPaused: true), 200)
         XCTAssertEqual(state.presentationTimestamp(for: 206, isPaused: false), 206)
+    }
+
+    func testSnapshotTimelineIsIndependentOfWallClockPhase() {
+        func timeline(start: TimeInterval) -> [TimeInterval] {
+            let state = LivelineRenderState()
+            return (0..<180).map { frame in
+                state.timestamp(
+                    for: start + Double(frame) / 60,
+                    snapshotElapsedTime: 2.2
+                )
+            }
+        }
+
+        let first = timeline(start: 1_000)
+        let second = timeline(start: 987_654_321)
+        XCTAssertEqual(first, second)
+        XCTAssertEqual(first.first, 0)
+        XCTAssertEqual(first.last ?? -1, 2.2, accuracy: 0.000_001)
+
+        let sparse = LivelineRenderState()
+        XCTAssertEqual(
+            sparse.timestamp(for: 4_000, snapshotElapsedTime: 2.2),
+            0
+        )
+        XCTAssertEqual(
+            sparse.timestamp(for: 4_002.5, snapshotElapsedTime: 2.2),
+            2.2,
+            accuracy: 0.000_001
+        )
     }
 
     func testReducedMotionSettlesTimedTransitionsOnTheFirstFrame() {

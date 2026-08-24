@@ -492,6 +492,7 @@ extension LivelineRenderer {
             guard config.badge, let livePoint else { return }
             drawBadge(
                 context: &context,
+                state: state,
                 layout: layout,
                 palette: palette,
                 value: input.smoothValue,

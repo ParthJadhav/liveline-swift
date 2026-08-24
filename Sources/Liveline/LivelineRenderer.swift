@@ -579,7 +579,8 @@ extension LivelineRenderer {
         }
 
         let range = LivelineMath.computeRange(
-            points: renderData.rangePoints,
+            pointsMinimum: renderData.rangePointsMinimum,
+            pointsMaximum: renderData.rangePointsMaximum,
             currentValue: smoothValue,
             referenceValue: config.referenceLine?.value,
             exaggerate: config.exaggerate

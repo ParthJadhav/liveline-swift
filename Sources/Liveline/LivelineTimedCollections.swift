@@ -70,8 +70,10 @@ extension Array {
     }
 
     /// Opaque address of the backing buffer. Only ever compared, never
-    /// dereferenced, so it is a cheap way to prove two arrays are the same
-    /// samples without walking them.
+    /// dereferenced, so it cheaply identifies one array storage allocation
+    /// without walking its elements. Any cache that persists this identity
+    /// must also retain the source array: that prevents address reuse and makes
+    /// a caller's next mutation take Swift's copy-on-write path.
     var livelineStorageIdentity: UInt {
         withUnsafeBufferPointer { buffer in
             buffer.baseAddress.map { UInt(bitPattern: UnsafeRawPointer($0)) } ?? 0

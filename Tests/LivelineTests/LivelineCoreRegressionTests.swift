@@ -398,6 +398,31 @@ final class LivelineCoreRegressionTests: XCTestCase {
         XCTAssertEqual(expanded, 3...1_000)
     }
 
+    func testPreparedChartInitializesItsCachedRangeBounds() {
+        let prepared = LivelinePreparedChart(
+            primaryVisible: [
+                LivelinePoint(time: 2, value: 4),
+                LivelinePoint(time: 8, value: 6),
+            ],
+            rangePoints: [
+                LivelinePoint(time: 2, value: 4),
+                LivelinePoint(time: 8, value: 6),
+            ],
+            rangeOverride: nil,
+            primaryValue: 6
+        )
+
+        let range = LivelineRenderer.valueRange(
+            renderData: prepared,
+            smoothValue: 6,
+            visibleTimeRange: 0...10,
+            config: LivelineChartConfiguration()
+        )
+
+        XCTAssertLessThan(range.lowerBound, 4)
+        XCTAssertGreaterThan(range.upperBound, 6)
+    }
+
     func testOffscreenFallbackCandleDoesNotDistortPopulatedVisibleRange() {
         let content = LivelineChartContent.candle(
             data: [

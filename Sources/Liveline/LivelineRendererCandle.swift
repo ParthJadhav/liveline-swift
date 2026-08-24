@@ -215,6 +215,7 @@ extension LivelineRenderer {
             if config.badge {
                 drawBadge(
                     context: &context,
+                    state: state,
                     layout: layout,
                     palette: palette,
                     value: lineResult.smoothValue,

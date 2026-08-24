@@ -436,7 +436,8 @@ public struct LivelineChart: View {
                 configuration: configuration,
                 hiddenSeries: hiddenSeries,
                 includeEntries: includeAccessibilityEntries
-            )
+            ),
+            retaining: content
         ) {
             LivelineChartAccessibilityModel.make(
                 content: content,

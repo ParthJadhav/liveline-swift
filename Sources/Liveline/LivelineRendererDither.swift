@@ -13,7 +13,10 @@ struct LivelineDitherGeometryKey: Equatable {
 
 struct LivelineDitherSparkle {
     var rect: CGRect
-    var phase: Double
+    /// The wink phase, stored as its sine and cosine so each animation frame
+    /// expands `sin(angle + phase)` with two multiplies instead of a `sin`.
+    var sinPhase: Double
+    var cosPhase: Double
 }
 
 struct LivelineDitherGeometry {
@@ -83,15 +86,29 @@ extension LivelineRenderer {
         style: LivelineDitherStyle,
         timestamp: TimeInterval
     ) -> (sparkles: Path, flares: Path) {
+        let cell = style.cellSize
         var sparklePath = Path()
         var flarePath = Path()
-        let motionTime = style.animated ? timestamp * style.animationSpeed : 0
-        let cell = style.cellSize
+        guard style.animated else {
+            // The static texture shows every sparkle and never flares.
+            for sparkle in geometry.sparkles {
+                sparklePath.addRect(sparkle.rect)
+            }
+            return (sparklePath, flarePath)
+        }
+
+        // The wink for a sparkle is `(sin(angle + phase) + 1) / 2` gated at
+        // 0.55 and 0.92; with each phase's sine and cosine precomputed at
+        // geometry build, that reduces to comparing the expanded sine against
+        // 0.1 and 0.84 — no transcendental per sparkle.
+        let angle = timestamp * style.animationSpeed * 3.5
+        let sinAngle = sin(angle)
+        let cosAngle = cos(angle)
         for sparkle in geometry.sparkles {
-            let wink = style.animated ? (sin(motionTime * 3.5 + sparkle.phase) + 1) / 2 : 0.85
-            guard wink > 0.55 else { continue }
+            let sine = sinAngle * sparkle.cosPhase + cosAngle * sparkle.sinPhase
+            guard sine > 0.1 else { continue }
             sparklePath.addRect(sparkle.rect)
-            if wink > 0.92 {
+            if sine > 0.84 {
                 flarePath.addRect(sparkle.rect.insetBy(dx: -cell, dy: cell * 0.25))
                 flarePath.addRect(sparkle.rect.insetBy(dx: cell * 0.25, dy: -cell))
             }
@@ -123,23 +140,32 @@ extension LivelineRenderer {
         let rows = max(1, Int(ceil(layout.chartHeight / cell)))
         var cutouts = Path()
         var sparkles: [LivelineDitherSparkle] = []
-        sparkles.reserveCapacity(Int(Double(columns * rows) * style.sparkleDensity * 1.05))
+        sparkles.reserveCapacity(Int(Double(min(columns * rows, 65_536)) * style.sparkleDensity * 1.05))
         let densityLimit = UInt32(style.sparkleDensity * Double(UInt32.max))
+        let hasSparkles = style.sparkleDensity > 0
+        let plotLeftX = layout.plotLeftX
+        let plotTop = layout.padding.top
+        let gradientBias = 0.1 * style.intensity
+        // A local copy keeps the per-cell threshold reads off the global's
+        // lazy-initialization accessor.
+        let thresholds = ditherBayerThresholds
 
         for row in 0..<rows {
             let density = Double(row) / Double(max(rows - 1, 1))
+            let rowY = plotTop + CGFloat(row) * cell
+            let thresholdBase = (row & 3) * 4
             for column in 0..<columns {
                 let rect = CGRect(
-                    x: layout.plotLeftX + CGFloat(column) * cell,
-                    y: layout.padding.top + CGFloat(row) * cell,
+                    x: plotLeftX + CGFloat(column) * cell,
+                    y: rowY,
                     width: cell,
                     height: cell
                 )
-                let threshold = ditherBayerThresholds[(row & 3) * 4 + (column & 3)]
+                let threshold = thresholds[thresholdBase + (column & 3)]
                 let shouldCut: Bool
                 switch style.variant {
                 case .gradient:
-                    shouldCut = density <= threshold - 0.1 * style.intensity
+                    shouldCut = density <= threshold - gradientBias
                 case .dotted:
                     shouldCut = density <= threshold + 0.12
                 case .hatched:
@@ -149,14 +175,12 @@ extension LivelineRenderer {
                 }
                 if shouldCut { cutouts.addRect(rect) }
 
-                guard style.sparkleDensity > 0 else { continue }
+                guard hasSparkles else { continue }
                 let hash = ditherHash(column: column, row: row)
                 guard hash <= densityLimit else { continue }
+                let phase = Double(hash & 0xFFFF) / Double(UInt16.max) * .pi * 2
                 sparkles.append(
-                    LivelineDitherSparkle(
-                        rect: rect,
-                        phase: Double(hash & 0xFFFF) / Double(UInt16.max) * .pi * 2
-                    )
+                    LivelineDitherSparkle(rect: rect, sinPhase: sin(phase), cosPhase: cos(phase))
                 )
             }
         }

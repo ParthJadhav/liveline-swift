@@ -54,6 +54,31 @@ final class LivelineAdvancedChartTests: XCTestCase {
         )
     }
 
+    func testDensityWindowingStaysWithinItsDocumentedKernelError() throws {
+        let values = [-30.0, -12, -8, -3, -1, 0, 0.5, 2, 5, 11, 28]
+        let bandwidth = 1.25
+        let profile = try XCTUnwrap(
+            LivelineAdvancedMath.densityProfile(
+                values: values,
+                bandwidth: bandwidth,
+                sampleCount: 80
+            )
+        )
+        let magnitude = values.map(abs).max() ?? 1
+        let scale = max(magnitude * 2, 1)
+        let gaussianScale = scale
+            / (Double(values.count) * bandwidth * sqrt(2 * Double.pi))
+        let tolerance = profile.peakDensity * 0.000_000_2
+
+        for sample in profile.samples {
+            let expected = values.reduce(0.0) { sum, observation in
+                let z = (sample.value - observation) / bandwidth
+                return sum + exp(-0.5 * z * z)
+            } * gaussianScale
+            XCTAssertEqual(sample.density, expected, accuracy: tolerance)
+        }
+    }
+
     func testFinanceTransformsFollowTheirPublishedRecurrences() {
         let points = [
             LivelinePoint(time: 0, value: 100),
@@ -117,6 +142,97 @@ final class LivelineAdvancedChartTests: XCTestCase {
             content.prepared(leftEdge: 0, rightEdge: 1, configuration: .init()).primaryValue,
             101
         )
+    }
+
+    func testMarketDepthOverflowFallbackRemainsFiniteAndMonotonic() {
+        let large = Double.greatestFiniteMagnitude * 0.75
+        let curve = LivelineAdvancedMath.marketDepthCurve([
+            LivelineOrderBookLevel(price: 99, bidSize: large * 0.5),
+            LivelineOrderBookLevel(price: 100, bidSize: large),
+            LivelineOrderBookLevel(price: 100, bidSize: large),
+            LivelineOrderBookLevel(price: 101, askSize: large),
+            LivelineOrderBookLevel(price: 101, askSize: large),
+            LivelineOrderBookLevel(price: 102, askSize: large * 0.5),
+        ])
+
+        XCTAssertEqual(curve.bestBid, 100)
+        XCTAssertEqual(curve.bestAsk, 101)
+        XCTAssertTrue((curve.bids + curve.asks).allSatisfy {
+            $0.time.isFinite && $0.value.isFinite && $0.value >= 0
+        })
+        XCTAssertGreaterThan(curve.bids[0].value, curve.bids[1].value)
+        XCTAssertLessThan(curve.asks[0].value, curve.asks[1].value)
+    }
+
+    func testMarketDepthFastPathMatchesDirectDuplicatePriceAccumulation() {
+        func reference(
+            _ levels: [LivelineOrderBookLevel]
+        ) -> (bids: [LivelinePoint], asks: [LivelinePoint], bestBid: Double?, bestAsk: Double?) {
+            var sizesByPrice: [Double: (bid: Double, ask: Double)] = [:]
+            for level in levels {
+                let current = sizesByPrice[level.price] ?? (0, 0)
+                sizesByPrice[level.price] = (
+                    current.bid + level.bidSize,
+                    current.ask + level.askSize
+                )
+            }
+            let merged = sizesByPrice.map { price, sizes in
+                LivelineOrderBookLevel(
+                    price: price,
+                    bidSize: sizes.bid,
+                    askSize: sizes.ask
+                )
+            }.sorted { $0.price < $1.price }
+
+            var bidTotal = 0.0
+            var bids: [LivelinePoint] = []
+            for level in merged.reversed() where level.bidSize > 0 {
+                bidTotal += level.bidSize
+                bids.append(LivelinePoint(time: level.price, value: bidTotal))
+            }
+            bids.reverse()
+
+            var askTotal = 0.0
+            var asks: [LivelinePoint] = []
+            for level in merged where level.askSize > 0 {
+                askTotal += level.askSize
+                asks.append(LivelinePoint(time: level.price, value: askTotal))
+            }
+            return (
+                bids,
+                asks,
+                merged.last(where: { $0.bidSize > 0 })?.price,
+                merged.first(where: { $0.askSize > 0 })?.price
+            )
+        }
+
+        for seed in 0..<25 {
+            var levels: [LivelineOrderBookLevel] = []
+            levels.reserveCapacity(250)
+            for index in 0..<250 {
+                let price = 90 + Double((index * 37 + seed * 13) % 23)
+                let bidSize = (index + seed).isMultiple(of: 3)
+                    ? Double((index * 17 + seed) % 19) + 0.25
+                    : 0
+                let askSize = (index * 2 + seed).isMultiple(of: 5)
+                    ? Double((index * 11 + seed * 3) % 17) + 0.5
+                    : 0
+                levels.append(
+                    LivelineOrderBookLevel(
+                        price: price,
+                        bidSize: bidSize,
+                        askSize: askSize
+                    )
+                )
+            }
+            let expected = reference(levels)
+            let actual = LivelineAdvancedMath.marketDepthCurve(levels)
+
+            XCTAssertEqual(actual.bids, expected.bids, "seed: \(seed)")
+            XCTAssertEqual(actual.asks, expected.asks, "seed: \(seed)")
+            XCTAssertEqual(actual.bestBid, expected.bestBid, "seed: \(seed)")
+            XCTAssertEqual(actual.bestAsk, expected.bestAsk, "seed: \(seed)")
+        }
     }
 
     func testPublicModelsNormalizeUnsafeInputAndStylesStayWithinRenderableBounds() {
@@ -623,6 +739,98 @@ final class LivelineAdvancedChartTests: XCTestCase {
                     && $0.x >= 10 && $0.x <= 330
                     && $0.y >= 20 && $0.y <= 260
             })
+    }
+
+    func testContourDenseSamplingMatchesCoordinateLookupOnNonuniformGrid() throws {
+        let xs = [-3.0, -0.5, 2, 9]
+        let ys = [-4.0, 1, 1.5, 8]
+        let samples = ys.enumerated().flatMap { yIndex, y in
+            xs.enumerated().map { xIndex, x in
+                LivelineContourSample(
+                    id: "\(xIndex)-\(yIndex)",
+                    x: x,
+                    y: y,
+                    value: x * x - y * 1.7 + x * y * 0.25
+                )
+            }
+        }
+        let sampler = try XCTUnwrap(LivelineContourSampler(samples: samples))
+        let subdivisions = 7
+        let columnCount = (xs.count - 1) * subdivisions + 1
+        let rowCount = (ys.count - 1) * subdivisions + 1
+
+        for denseY in 0..<rowCount {
+            let initialCellY = min(denseY / subdivisions, ys.count - 2)
+            let initialLocalY = Double(denseY - initialCellY * subdivisions)
+                / Double(subdivisions)
+            let y = ys[initialCellY]
+                + (ys[initialCellY + 1] - ys[initialCellY]) * initialLocalY
+            let cellY = y >= ys[initialCellY + 1]
+                ? min(initialCellY + 1, ys.count - 2)
+                : initialCellY
+            let localY = (y - ys[cellY]) / (ys[cellY + 1] - ys[cellY])
+
+            for denseX in 0..<columnCount {
+                let initialCellX = min(denseX / subdivisions, xs.count - 2)
+                let initialLocalX = Double(denseX - initialCellX * subdivisions)
+                    / Double(subdivisions)
+                let x = xs[initialCellX]
+                    + (xs[initialCellX + 1] - xs[initialCellX]) * initialLocalX
+                let cellX = x >= xs[initialCellX + 1]
+                    ? min(initialCellX + 1, xs.count - 2)
+                    : initialCellX
+                let localX = (x - xs[cellX]) / (xs[cellX + 1] - xs[cellX])
+
+                XCTAssertEqual(
+                    sampler.normalizedValue(
+                        cellX: cellX,
+                        cellY: cellY,
+                        localX: localX,
+                        localY: localY
+                    ),
+                    try XCTUnwrap(sampler.normalizedValue(x: x, y: y)),
+                    accuracy: 0.000_000_000_001,
+                    "dense coordinate: (\(denseX), \(denseY))"
+                )
+            }
+        }
+    }
+
+    func testContourSaddlesResolveBothAmbiguousMasksFromTheCellCenter() {
+        func topology(_ cornerValues: [Double]) -> Set<[Int]> {
+            let coordinates = [(0.0, 0.0), (1, 0), (1, 1), (0, 1)]
+            let samples = zip(coordinates, cornerValues).enumerated().map { index, pair in
+                LivelineContourSample(
+                    id: String(index),
+                    x: pair.0.0,
+                    y: pair.0.1,
+                    value: pair.1
+                )
+            }
+            let geometry = LivelineVisualGeometry.contour(
+                samples: samples,
+                levelCount: 2,
+                plot: CGRect(x: 0, y: 0, width: 100, height: 100),
+                subdivisions: 1
+            )
+
+            func edge(of point: CGPoint) -> Int {
+                if abs(point.y - 100) < 0.000_001 { return 0 }
+                if abs(point.x - 100) < 0.000_001 { return 1 }
+                if abs(point.y) < 0.000_001 { return 2 }
+                if abs(point.x) < 0.000_001 { return 3 }
+                return -1
+            }
+
+            return Set(geometry.lines.map { line in
+                [edge(of: line.points.first ?? .zero), edge(of: line.points.last ?? .zero)].sorted()
+            })
+        }
+
+        XCTAssertEqual(topology([1, 0, 1, 0]), Set([[0, 1], [2, 3]]))
+        XCTAssertEqual(topology([1, 0, 0.51, 0]), Set([[0, 3], [1, 2]]))
+        XCTAssertEqual(topology([0, 1, 0, 1]), Set([[0, 3], [1, 2]]))
+        XCTAssertEqual(topology([0, 1, 0, 0.51]), Set([[0, 1], [2, 3]]))
     }
 
     func testContourGeometryCacheTracksDataStyleAndPlotChanges() {

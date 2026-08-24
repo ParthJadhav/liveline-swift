@@ -164,13 +164,34 @@ enum LivelineMath {
         referenceValue: Double?,
         exaggerate: Bool
     ) -> ClosedRange<Double> {
-        var targetMin = Double.infinity
-        var targetMax = -Double.infinity
+        var pointsMinimum = Double.infinity
+        var pointsMaximum = -Double.infinity
 
         for point in points {
-            targetMin = min(targetMin, point.value)
-            targetMax = max(targetMax, point.value)
+            pointsMinimum = min(pointsMinimum, point.value)
+            pointsMaximum = max(pointsMaximum, point.value)
         }
+
+        return computeRange(
+            pointsMinimum: pointsMinimum,
+            pointsMaximum: pointsMaximum,
+            currentValue: currentValue,
+            referenceValue: referenceValue,
+            exaggerate: exaggerate
+        )
+    }
+
+    /// The range computation with the point scan already done, so a prepared
+    /// chart's cached bounds make the per-frame cost O(1).
+    static func computeRange(
+        pointsMinimum: Double,
+        pointsMaximum: Double,
+        currentValue: Double,
+        referenceValue: Double?,
+        exaggerate: Bool
+    ) -> ClosedRange<Double> {
+        var targetMin = pointsMinimum
+        var targetMax = pointsMaximum
 
         targetMin = min(targetMin, currentValue)
         targetMax = max(targetMax, currentValue)
@@ -265,12 +286,14 @@ enum LivelineMath {
         guard points.count >= 5 else { return .flat }
 
         let start = max(0, points.count - lookback)
-        let lookbackPoints = points[start..<points.count]
-        guard let minValue = lookbackPoints.map(\.value).min(),
-              let maxValue = lookbackPoints.map(\.value).max()
-        else {
-            return .flat
+        var minValue = Double.infinity
+        var maxValue = -Double.infinity
+        for index in start..<points.count {
+            let value = points[index].value
+            if value < minValue { minValue = value }
+            if value > maxValue { maxValue = value }
         }
+        guard minValue <= maxValue else { return .flat }
 
         let range = maxValue - minValue
         guard range != 0 else { return .flat }

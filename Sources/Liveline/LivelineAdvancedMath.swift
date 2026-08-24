@@ -61,7 +61,12 @@ enum LivelineAdvancedMath {
     }
 
     static func quantile(_ values: [Double], probability: Double) -> Double {
-        let sorted = values.filter(\.isFinite).sorted()
+        quantile(sortedFinite: values.filter(\.isFinite).sorted(), probability: probability)
+    }
+
+    /// Quantile over data the caller has already filtered to finite values and
+    /// sorted ascending, so profiles that need several cuts sort only once.
+    private static func quantile(sortedFinite sorted: [Double], probability: Double) -> Double {
         guard let first = sorted.first else { return 0 }
         guard sorted.count > 1 else { return first }
         let p = probability.livelineClamped(0, 1, fallback: 0.5)
@@ -97,9 +102,11 @@ enum LivelineAdvancedMath {
         let values = originalValues.map { $0 / scale }
         let normalizedMinimum = values[0]
         let normalizedMaximum = values[values.count - 1]
-        let normalizedLowerQuartile = quantile(values, probability: 0.25)
-        let normalizedMedian = quantile(values, probability: 0.5)
-        let normalizedUpperQuartile = quantile(values, probability: 0.75)
+        // `values` is already finite and sorted (dividing by a positive scale
+        // preserves order), so the quantiles skip re-filtering and re-sorting.
+        let normalizedLowerQuartile = quantile(sortedFinite: values, probability: 0.25)
+        let normalizedMedian = quantile(sortedFinite: values, probability: 0.5)
+        let normalizedUpperQuartile = quantile(sortedFinite: values, probability: 0.75)
         let spread = max(normalizedMaximum - normalizedMinimum, 0.000_001)
         let bandwidth: Double
         if let requestedBandwidth, requestedBandwidth.isFinite, requestedBandwidth > 0 {
@@ -107,7 +114,10 @@ enum LivelineAdvancedMath {
             bandwidth = max(normalized.isFinite ? normalized : 1, 0.000_000_000_001)
         } else if values.count > 1 {
             let mean = values.reduce(0, +) / Double(values.count)
-            let variance = values.reduce(0) { $0 + pow($1 - mean, 2) } / Double(values.count - 1)
+            let variance = values.reduce(0) {
+                let deviation = $1 - mean
+                return $0 + deviation * deviation
+            } / Double(values.count - 1)
             let standardDeviation = sqrt(max(variance, 0))
             let robustSigma = min(
                 standardDeviation,
@@ -124,14 +134,30 @@ enum LivelineAdvancedMath {
         let domainMax = min(normalizedMaximum + padding, normalizedLimit)
         let count = min(max(sampleCount, 24), 160)
         let gaussianScale = 1 / (Double(values.count) * bandwidth * sqrt(2 * Double.pi))
-        let samples = (0..<count).map { index -> LivelineDensitySample in
+        // Observations beyond six bandwidths contribute less than 2e-8 of a
+        // kernel's mass, so each sample sums only the sorted window around it,
+        // found by binary search instead of walking every observation.
+        let inverseBandwidth = 1 / bandwidth
+        let kernelReach = bandwidth * 6
+        var peakDensity = 0.0
+        var samples: [LivelineDensitySample] = []
+        samples.reserveCapacity(count)
+        for index in 0..<count {
             let t = Double(index) / Double(max(count - 1, 1))
             let normalizedValue = domainMin + (domainMax - domainMin) * t
-            let sum = values.reduce(0) { partial, observation in
-                let z = (normalizedValue - observation) / bandwidth
-                return partial + exp(-0.5 * z * z)
+            let window = sortedRange(
+                of: values,
+                from: normalizedValue - kernelReach,
+                through: normalizedValue + kernelReach
+            )
+            var sum = 0.0
+            for observation in values[window] {
+                let z = (normalizedValue - observation) * inverseBandwidth
+                sum += exp(-0.5 * z * z)
             }
-            return LivelineDensitySample(value: normalizedValue * scale, density: sum * gaussianScale)
+            let density = sum * gaussianScale
+            peakDensity = max(peakDensity, density)
+            samples.append(LivelineDensitySample(value: normalizedValue * scale, density: density))
         }
         return LivelineDensityProfile(
             samples: samples,
@@ -140,8 +166,30 @@ enum LivelineAdvancedMath {
             median: normalizedMedian * scale,
             upperQuartile: normalizedUpperQuartile * scale,
             maximum: maximum,
-            peakDensity: max(samples.map(\.density).max() ?? 0, 0.000_001)
+            peakDensity: max(peakDensity, 0.000_001)
         )
+    }
+
+    /// The index range of a sorted array whose elements fall in
+    /// `lowerBound...upperBound`, found with two binary searches.
+    private static func sortedRange(
+        of sorted: [Double],
+        from lowerBound: Double,
+        through upperBound: Double
+    ) -> Range<Int> {
+        var low = 0
+        var high = sorted.count
+        while low < high {
+            let mid = (low + high) / 2
+            if sorted[mid] < lowerBound { low = mid + 1 } else { high = mid }
+        }
+        let start = low
+        high = sorted.count
+        while low < high {
+            let mid = (low + high) / 2
+            if sorted[mid] <= upperBound { low = mid + 1 } else { high = mid }
+        }
+        return start..<low
     }
 
     static func renkoBricks(points: [LivelinePoint], brickSize: Double) -> [LivelineRenkoBrick] {
@@ -305,80 +353,105 @@ enum LivelineAdvancedMath {
     }
 
     static func marketDepthLevels(_ levels: [LivelineOrderBookLevel]) -> [LivelineOrderBookLevel] {
-        let bidScale = max(levels.map(\.bidSize).max() ?? 0, 0.000_001)
-        let askScale = max(levels.map(\.askSize).max() ?? 0, 0.000_001)
-        var sizesByPrice: [Double: (bid: Double, ask: Double)] = [:]
-        var normalizedSizesByPrice: [Double: (bid: Double, ask: Double)] = [:]
+        var maximumBidSize = -Double.infinity
+        var maximumAskSize = -Double.infinity
+        for level in levels {
+            if level.bidSize > maximumBidSize { maximumBidSize = level.bidSize }
+            if level.askSize > maximumAskSize { maximumAskSize = level.askSize }
+        }
+        let bidScale = max(levels.isEmpty ? 0 : maximumBidSize, 0.000_001)
+        let askScale = max(levels.isEmpty ? 0 : maximumAskSize, 0.000_001)
+        var sizesByPrice: [Double: (bid: Double, ask: Double, normalizedBid: Double, normalizedAsk: Double)] = [:]
+        sizesByPrice.reserveCapacity(levels.count)
         var bidOverflowed = false
         var askOverflowed = false
         for level in levels {
-            let current = sizesByPrice[level.price] ?? (0, 0)
+            let current = sizesByPrice[level.price] ?? (0, 0, 0, 0)
             let bid = current.bid + level.bidSize
             let ask = current.ask + level.askSize
             if !bid.isFinite { bidOverflowed = true }
             if !ask.isFinite { askOverflowed = true }
             sizesByPrice[level.price] = (
                 bid.isFinite ? bid : Double.greatestFiniteMagnitude,
-                ask.isFinite ? ask : Double.greatestFiniteMagnitude)
-            let normalized = normalizedSizesByPrice[level.price] ?? (0, 0)
-            normalizedSizesByPrice[level.price] = (
-                normalized.bid + level.bidSize / bidScale,
-                normalized.ask + level.askSize / askScale)
+                ask.isFinite ? ask : Double.greatestFiniteMagnitude,
+                current.normalizedBid + level.bidSize / bidScale,
+                current.normalizedAsk + level.askSize / askScale)
         }
-        let maximumNormalizedBid = max(
-            normalizedSizesByPrice.values.map(\.bid).max() ?? 0, 0.000_001)
-        let maximumNormalizedAsk = max(
-            normalizedSizesByPrice.values.map(\.ask).max() ?? 0, 0.000_001)
-        return sizesByPrice.map {
-            let normalized = normalizedSizesByPrice[$0.key] ?? (0, 0)
-            return LivelineOrderBookLevel(
-                price: $0.key,
+        // The normalized maxima only rescale overflowed sides, so the extra
+        // passes run only in that degenerate case.
+        let maximumNormalizedBid = bidOverflowed
+            ? max(sizesByPrice.values.lazy.map(\.normalizedBid).max() ?? 0, 0.000_001)
+            : 0.000_001
+        let maximumNormalizedAsk = askOverflowed
+            ? max(sizesByPrice.values.lazy.map(\.normalizedAsk).max() ?? 0, 0.000_001)
+            : 0.000_001
+        var merged = sizesByPrice.map { price, sizes in
+            LivelineOrderBookLevel(
+                price: price,
                 bidSize: bidOverflowed
-                    ? normalized.bid / maximumNormalizedBid * bidScale
-                    : $0.value.bid,
+                    ? sizes.normalizedBid / maximumNormalizedBid * bidScale
+                    : sizes.bid,
                 askSize: askOverflowed
-                    ? normalized.ask / maximumNormalizedAsk * askScale
-                    : $0.value.ask)
-        }.sorted { $0.price < $1.price }
+                    ? sizes.normalizedAsk / maximumNormalizedAsk * askScale
+                    : sizes.ask)
+        }
+        merged.sort { $0.price < $1.price }
+        return merged
     }
 
     private static func cumulativeDepthPoints(
         _ levels: [LivelineOrderBookLevel],
-        size: KeyPath<LivelineOrderBookLevel, Double>
+        size: (LivelineOrderBookLevel) -> Double
     ) -> [LivelinePoint] {
-        let scale = max(levels.map { $0[keyPath: size] }.max() ?? 0, 0.000_001)
+        var maximumSize = -Double.infinity
+        for level in levels {
+            let levelSize = size(level)
+            if levelSize > maximumSize { maximumSize = levelSize }
+        }
+        let scale = max(levels.isEmpty ? 0 : maximumSize, 0.000_001)
         var rawTotal = 0.0
-        var normalizedTotal = 0.0
         var overflowed = false
-        let samples = levels.map { level -> (price: Double, raw: Double, normalized: Double) in
-            let levelSize = level[keyPath: size]
-            let nextRawTotal = rawTotal + levelSize
+        var points: [LivelinePoint] = []
+        points.reserveCapacity(levels.count)
+        for level in levels {
+            let nextRawTotal = rawTotal + size(level)
             if nextRawTotal.isFinite {
                 rawTotal = nextRawTotal
             } else {
                 overflowed = true
             }
-            normalizedTotal += levelSize / scale
-            return (level.price, rawTotal, normalizedTotal)
+            points.append(LivelinePoint(time: level.price, value: rawTotal))
         }
-        guard overflowed else {
-            return samples.map { LivelinePoint(time: $0.price, value: $0.raw) }
+        guard overflowed else { return points }
+
+        // Overflow fallback: rebuild from normalized running totals. This
+        // second pass runs only when a cumulative side exceeds Double range.
+        var normalizedTotal = 0.0
+        var normalizedTotals: [Double] = []
+        normalizedTotals.reserveCapacity(levels.count)
+        for level in levels {
+            normalizedTotal += size(level) / scale
+            normalizedTotals.append(normalizedTotal)
         }
-        let maximumNormalizedTotal = max(samples.last?.normalized ?? 0, 0.000_001)
-        return samples.map {
+        let maximumNormalizedTotal = max(normalizedTotals.last ?? 0, 0.000_001)
+        return levels.indices.map { index in
             LivelinePoint(
-                time: $0.price,
-                value: $0.normalized / maximumNormalizedTotal * scale)
+                time: levels[index].price,
+                value: normalizedTotals[index] / maximumNormalizedTotal * scale)
         }
     }
 
     static func marketDepthCurve(_ levels: [LivelineOrderBookLevel]) -> LivelineMarketDepthCurve {
+        // `marketDepthLevels` merges duplicate prices and returns levels sorted
+        // ascending, so both sides come from cheap filters and reversals
+        // rather than fresh sorts.
         let levels = marketDepthLevels(levels)
-        let bids = levels.filter { $0.bidSize > 0 }.sorted { $0.price > $1.price }
-        let asks = levels.filter { $0.askSize > 0 }.sorted { $0.price < $1.price }
-        let bidPoints = cumulativeDepthPoints(bids, size: \.bidSize)
-            .sorted { $0.time < $1.time }
-        let askPoints = cumulativeDepthPoints(asks, size: \.askSize)
+        let ascendingBids = levels.filter { $0.bidSize > 0 }
+        let asks = levels.filter { $0.askSize > 0 }
+        let bids = Array(ascendingBids.reversed())
+        var bidPoints = cumulativeDepthPoints(bids) { $0.bidSize }
+        bidPoints.reverse()
+        let askPoints = cumulativeDepthPoints(asks) { $0.askSize }
         return LivelineMarketDepthCurve(
             bids: bidPoints,
             asks: askPoints,

@@ -128,6 +128,323 @@ final class LivelinePreparationTests: XCTestCase {
         XCTAssertEqual(uncached.primaryVisible, restored.primaryVisible)
     }
 
+    func testPreparedChartCacheCoalescesSubpixelEdgeMovement() throws {
+        var points = (0..<240).map {
+            LivelinePoint(time: Double($0), value: Double($0 % 13))
+        }
+        points.append(LivelinePoint(time: 160.105, value: 99))
+        points.sort { $0.time < $1.time }
+        let content = LivelineChartContent.line(data: points, value: 5)
+        let configuration = LivelineChartConfiguration(window: 60)
+        let state = LivelineRenderState()
+
+        let firstKey = try XCTUnwrap(LivelineChartPreparer.cacheKey(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 100.1,
+            rightEdge: 160.1,
+            config: configuration
+        ))
+        let subpixelKey = try XCTUnwrap(LivelineChartPreparer.cacheKey(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 100.11,
+            rightEdge: 160.11,
+            config: configuration
+        ))
+        let movedKey = try XCTUnwrap(LivelineChartPreparer.cacheKey(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 100.3,
+            rightEdge: 160.3,
+            config: configuration
+        ))
+
+        XCTAssertEqual(firstKey, subpixelKey)
+        XCTAssertNotEqual(firstKey, movedKey)
+
+        let first = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 100.1,
+            rightEdge: 160.1,
+            config: configuration,
+            state: state
+        )
+        XCTAssertFalse(first.primaryVisible.contains { $0.time == 160.105 })
+        XCTAssertEqual(first.rangePointsMaximum, 12)
+        let repeated = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 100.11,
+            rightEdge: 160.11,
+            config: configuration,
+            state: state
+        )
+        let uncachedRepeated = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 100.11,
+            rightEdge: 160.11,
+            config: configuration
+        )
+        XCTAssertEqual(repeated.primaryVisible, uncachedRepeated.primaryVisible)
+        XCTAssertEqual(repeated.rangePointsMinimum, uncachedRepeated.rangePointsMinimum)
+        XCTAssertEqual(repeated.rangePointsMaximum, uncachedRepeated.rangePointsMaximum)
+        XCTAssertTrue(repeated.primaryVisible.contains { $0.time == 160.105 })
+        XCTAssertTrue(repeated.primaryVisible.livelineSharesStorage(
+            with: try XCTUnwrap(state.preparedChart(for: subpixelKey)).primaryVisible
+        ))
+
+        let timeline = LivelineChartContent.timeline(
+            data: [LivelineTimelineItem(
+                id: "future", label: "Future", start: 160.105, end: 170, lane: 0
+            )],
+            style: LivelineTimelineStyle()
+        )
+        XCTAssertNotEqual(
+            LivelineChartPreparer.cacheKey(
+                for: timeline, hiddenSeries: [], leftEdge: 100.1, rightEdge: 160.1,
+                config: configuration
+            ),
+            LivelineChartPreparer.cacheKey(
+                for: timeline, hiddenSeries: [], leftEdge: 100.11, rightEdge: 160.11,
+                config: configuration
+            ),
+            "timeline events can cross a window edge even when their end-time range point cannot detect it"
+        )
+    }
+
+    func testPreparedChartCacheInvalidatesAfterAnInteriorArrayMutation() throws {
+        var points = (0..<200).map {
+            LivelinePoint(time: Double($0), value: Double($0))
+        }
+        let state = LivelineRenderState()
+        let configuration = LivelineChartConfiguration()
+
+        let first = LivelineChartPreparer.prepare(
+            for: .line(data: points, value: 199),
+            hiddenSeries: [],
+            leftEdge: 50,
+            rightEdge: 150,
+            config: configuration,
+            state: state
+        )
+        let originalStorage = points.livelineStorageIdentity
+
+        points[100].value = 9_999
+        XCTAssertNotEqual(
+            points.livelineStorageIdentity,
+            originalStorage,
+            "the live cache must retain the old buffer so mutation takes the copy-on-write path"
+        )
+
+        let updated = LivelineChartPreparer.prepare(
+            for: .line(data: points, value: 199),
+            hiddenSeries: [],
+            leftEdge: 50,
+            rightEdge: 150,
+            config: configuration,
+            state: state
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(updated.primaryVisible.first { $0.time == 100 }).value,
+            9_999
+        )
+        XCTAssertFalse(updated.primaryVisible.livelineSharesStorage(with: first.primaryVisible))
+    }
+
+    func testSnappedCachePreservesExactWindowsWhenPrimaryPointsCannotGuardTheRange() {
+        let configuration = LivelineChartConfiguration(window: 60)
+        let contents: [LivelineChartContent] = [
+            .series([
+                LivelineSeries(
+                    id: "primary",
+                    data: [
+                        LivelinePoint(time: 99, value: 1),
+                        LivelinePoint(time: 160, value: 2),
+                    ],
+                    value: 2,
+                    color: .blue
+                ),
+                LivelineSeries(
+                    id: "secondary",
+                    data: [
+                        LivelinePoint(time: 99, value: 3),
+                        LivelinePoint(time: 160, value: 4),
+                        LivelinePoint(time: 160.105, value: 999),
+                    ],
+                    value: 4,
+                    color: .red
+                ),
+            ]),
+            .heatmap(
+                data: [
+                    LivelineHeatmapCell(time: 99, row: 0, value: 1),
+                    LivelineHeatmapCell(time: 160, row: 0, value: 2),
+                    LivelineHeatmapCell(time: 160.105, row: 0, value: 999),
+                ],
+                style: LivelineHeatmapStyle()
+            ),
+        ]
+
+        func assertMatchesUncached(
+            _ content: LivelineChartContent,
+            leftEdge: TimeInterval,
+            rightEdge: TimeInterval,
+            state: LivelineRenderState,
+            file: StaticString = #filePath,
+            line: UInt = #line
+        ) -> LivelinePreparedChart {
+            let cached = LivelineChartPreparer.prepare(
+                for: content, hiddenSeries: [], leftEdge: leftEdge, rightEdge: rightEdge,
+                config: configuration, state: state
+            )
+            let uncached = LivelineChartPreparer.prepare(
+                for: content, hiddenSeries: [], leftEdge: leftEdge, rightEdge: rightEdge,
+                config: configuration
+            )
+            XCTAssertEqual(cached.primaryVisible, uncached.primaryVisible, file: file, line: line)
+            XCTAssertEqual(cached.rangePoints, uncached.rangePoints, file: file, line: line)
+            XCTAssertEqual(cached.rangeOverride, uncached.rangeOverride, file: file, line: line)
+            XCTAssertEqual(cached.primaryValue, uncached.primaryValue, file: file, line: line)
+            XCTAssertEqual(cached.rangePointsMinimum, uncached.rangePointsMinimum, file: file, line: line)
+            XCTAssertEqual(cached.rangePointsMaximum, uncached.rangePointsMaximum, file: file, line: line)
+            return cached
+        }
+
+        for content in contents {
+            let state = LivelineRenderState()
+            let before = assertMatchesUncached(
+                content, leftEdge: 100.1, rightEdge: 160.1, state: state
+            )
+            XCTAssertLessThan(before.rangePointsMaximum, 999)
+            let repeatedBefore = assertMatchesUncached(
+                content, leftEdge: 100.1, rightEdge: 160.1, state: state
+            )
+            XCTAssertLessThan(repeatedBefore.rangePointsMaximum, 999)
+            let after = assertMatchesUncached(
+                content, leftEdge: 100.11, rightEdge: 160.11, state: state
+            )
+            XCTAssertEqual(after.rangePointsMaximum, 999)
+        }
+    }
+
+    func testDerivedIdentityCachesInvalidateAfterInteriorArrayMutations() {
+        do {
+            var points = (0..<8).map {
+                LivelinePoint(time: Double($0), value: Double($0 + 1))
+            }
+            let state = LivelineRenderState()
+            let first = state.waterfallSegments(points: points, initialValue: 10)
+            let storage = points.livelineStorageIdentity
+            points[3].value = 100
+            XCTAssertNotEqual(points.livelineStorageIdentity, storage)
+            let updated = state.waterfallSegments(points: points, initialValue: 10)
+            XCTAssertEqual(
+                updated,
+                LivelineMath.waterfallSegments(points: points, initialValue: 10)
+            )
+            XCTAssertNotEqual(updated, first)
+        }
+
+        do {
+            var values = [1.0, 2, 3, 4, 5]
+            let state = LivelineRenderState()
+            let first = state.histogramBins(values: values, binning: .count(3))
+            let storage = values.livelineStorageIdentity
+            values[2] = 100
+            XCTAssertNotEqual(values.livelineStorageIdentity, storage)
+            let updated = state.histogramBins(values: values, binning: .count(3))
+            XCTAssertEqual(
+                updated,
+                LivelineMath.histogramBins(values: values, binning: .count(3))
+            )
+            XCTAssertNotEqual(updated, first)
+        }
+
+        do {
+            var nodes = [
+                LivelineTreemapNode(label: "A", value: 6),
+                LivelineTreemapNode(label: "B", value: 4),
+                LivelineTreemapNode(label: "C", value: 2),
+            ]
+            let state = LivelineRenderState()
+            let rect = CGRect(x: 0, y: 0, width: 240, height: 160)
+            let style = LivelineTreemapStyle()
+            let first = state.treemapLayout(nodes: nodes, style: style, in: rect)
+            let storage = nodes.livelineStorageIdentity
+            nodes[1].value = 40
+            XCTAssertNotEqual(nodes.livelineStorageIdentity, storage)
+            let updated = state.treemapLayout(nodes: nodes, style: style, in: rect)
+            XCTAssertEqual(
+                updated,
+                LivelineMath.treemapLayout(
+                    nodes: nodes,
+                    in: rect,
+                    padding: style.resolvedPadding,
+                    groupPadding: style.resolvedGroupPadding,
+                    groupHeaderHeight: style.resolvedGroupHeaderHeight
+                )
+            )
+            XCTAssertNotEqual(updated, first)
+        }
+
+        do {
+            var links = [
+                LivelineSankeyLink(source: "A", target: "B", value: 10),
+                LivelineSankeyLink(source: "B", target: "C", value: 4),
+                LivelineSankeyLink(source: "C", target: "D", value: 2),
+            ]
+            let state = LivelineRenderState()
+            let first = state.sankeyGraph(links: links)
+            let storage = links.livelineStorageIdentity
+            links[1].value = 40
+            XCTAssertNotEqual(links.livelineStorageIdentity, storage)
+            let updated = state.sankeyGraph(links: links)
+            XCTAssertEqual(updated, LivelineMath.sankeyGraph(links: links))
+            XCTAssertNotEqual(updated, first)
+        }
+
+        do {
+            var points = [
+                LivelinePoint(time: 0, value: 1),
+                LivelinePoint(time: 1, value: 2),
+                LivelinePoint(time: 2, value: 3),
+            ]
+            let state = LivelineRenderState()
+            let configuration = LivelineChartConfiguration()
+
+            func model(for points: [LivelinePoint]) -> LivelineChartAccessibilityModel {
+                let content = LivelineChartContent.line(data: points, value: points.last?.value ?? 0)
+                let semantics = content.semantics()
+                let key = LivelineAccessibilityModelKey.make(
+                    content: content,
+                    semantics: semantics,
+                    configuration: configuration,
+                    hiddenSeries: [],
+                    includeEntries: true
+                )
+                return state.accessibilityModel(for: key, retaining: content) {
+                    LivelineChartAccessibilityModel.make(
+                        content: content,
+                        semantics: semantics,
+                        configuration: configuration,
+                        hiddenSeries: []
+                    )
+                }
+            }
+
+            let first = model(for: points)
+            let storage = points.livelineStorageIdentity
+            points[1].value = 9_999
+            XCTAssertNotEqual(points.livelineStorageIdentity, storage)
+            let updated = model(for: points)
+            XCTAssertEqual(updated.entries[1].value, configuration.formatValue(9_999))
+            XCTAssertNotEqual(updated, first)
+        }
+    }
+
     func testWaterfallSegmentsAreMemoizedUntilSamplesChange() {
         let state = LivelineRenderState()
         let points = (0..<64).map { LivelinePoint(time: Double($0), value: Double($0 % 5) - 2) }
@@ -220,6 +537,15 @@ final class LivelinePreparationTests: XCTestCase {
         )
         XCTAssertEqual(prepared.rangePoints.map(\.value), [10, 4])
         XCTAssertEqual(prepared.primaryValue, 14)
+        let movedWindow = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 100,
+            rightEdge: 200,
+            config: configuration,
+            state: state
+        )
+        XCTAssertTrue(movedWindow.rangePoints.livelineSharesStorage(with: prepared.rangePoints))
 
         // A flow chart's prepared layout does depend on the links, so its cache
         // key has to change with them.
@@ -266,6 +592,15 @@ final class LivelinePreparationTests: XCTestCase {
         XCTAssertEqual(prepared.rangeOverride, 0...Double(bins.map(\.count).max() ?? 1))
         XCTAssertEqual(prepared.primaryValue, Double(values.count))
         XCTAssertTrue(prepared.hasData)
+        let movedWindow = LivelineChartPreparer.prepare(
+            for: content,
+            hiddenSeries: [],
+            leftEdge: 100,
+            rightEdge: 200,
+            config: configuration,
+            state: state
+        )
+        XCTAssertTrue(movedWindow.rangePoints.livelineSharesStorage(with: prepared.rangePoints))
 
         // Binning is cacheable: identical samples and rule reuse the buffer.
         let repeated = state.histogramBins(values: values, binning: .count(4))

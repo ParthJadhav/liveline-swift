@@ -245,7 +245,10 @@ for scenario in "${SCENARIOS[@]}"; do
   # `simctl io screenshot` from replacing them in place. Remove
   # only the exact destination immediately before writing the fresh baseline.
   rm -f "$MEDIA_DIR/$scenario.png"
-  xcrun simctl io "$DEVICE_ID" screenshot "$MEDIA_DIR/$scenario.png" >/dev/null
+  # Make the PNG independent of Simulator's current bezel/mask setting. Without
+  # this, the same device can intermittently render the Dynamic Island black or
+  # omit it, creating a large false visual diff above an identical chart.
+  xcrun simctl io "$DEVICE_ID" screenshot --mask=ignored "$MEDIA_DIR/$scenario.png" >/dev/null
   echo "Captured $scenario"
 done
 
