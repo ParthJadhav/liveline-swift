@@ -20,6 +20,11 @@ def parse_args():
         default="",
         help="Comma-separated scenario IDs excluded from upstream parity thresholds.",
     )
+    parser.add_argument(
+        "--scenarios",
+        nargs="+",
+        help="Optional scenario IDs to diff from a directory containing a larger baseline set.",
+    )
     parser.add_argument("--fail-changed-pct", type=float, default=None, help="Fail when any scenario exceeds this changed-pixel percentage.")
     parser.add_argument("--fail-rms", type=float, default=None, help="Fail when any scenario exceeds this RGB RMS delta.")
     parser.add_argument(
@@ -122,6 +127,17 @@ def main():
     reference_paths = sorted(web_dir.glob("*.png"))
     if not reference_paths:
         raise SystemExit(f"No web reference PNGs found in: {web_dir}")
+    if args.scenarios:
+        if len(args.scenarios) != len(set(args.scenarios)):
+            raise SystemExit("Requested scenario IDs must be unique")
+        requested = set(args.scenarios)
+        available = {path.stem for path in reference_paths}
+        missing = sorted(requested - available)
+        if missing:
+            raise SystemExit(
+                "Requested web reference scenario(s) are missing: " + ", ".join(missing)
+            )
+        reference_paths = [path for path in reference_paths if path.stem in requested]
     reference_scenarios = {path.stem for path in reference_paths}
     unknown_thresholds = sorted(set(scenario_thresholds) - reference_scenarios)
     if unknown_thresholds:
