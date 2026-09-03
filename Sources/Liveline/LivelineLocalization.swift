@@ -41,6 +41,27 @@ enum LivelineStrings {
     static let chartKindTreemap = localized("chart.kind.treemap", "Treemap", "VoiceOver name for a treemap")
     static let chartKindSunburst = localized("chart.kind.sunburst", "Sunburst chart", "VoiceOver name for a sunburst chart")
     static let chartKindSankey = localized("chart.kind.sankey", "Sankey diagram", "VoiceOver name for a Sankey flow diagram")
+    static let chartKindViolin = localized("chart.kind.violin", "Violin chart", "VoiceOver name for a violin chart")
+    static let chartKindRidgeline = localized("chart.kind.ridgeline", "Ridgeline chart", "VoiceOver name for a ridgeline chart")
+    static let chartKindCalendarHeatmap = localized("chart.kind.calendarHeatmap", "Calendar heatmap", "VoiceOver name for a calendar heatmap")
+    static let chartKindGantt = localized("chart.kind.gantt", "Gantt chart", "VoiceOver name for a Gantt chart")
+    static let chartKindChord = localized("chart.kind.chord", "Chord diagram", "VoiceOver name for a chord diagram")
+    static let chartKindParallelCoordinates = localized("chart.kind.parallelCoordinates", "Parallel coordinates chart", "VoiceOver name for a parallel coordinates chart")
+    static let chartKindHexbin = localized("chart.kind.hexbin", "Hexbin chart", "VoiceOver name for a hexbin chart")
+    static let chartKindBump = localized("chart.kind.bump", "Bump chart", "VoiceOver name for a bump chart")
+    static let chartKindHorizon = localized("chart.kind.horizon", "Horizon chart", "VoiceOver name for a horizon chart")
+    static let chartKindMarimekko = localized("chart.kind.marimekko", "Marimekko chart", "VoiceOver name for a Marimekko chart")
+    static let chartKindPolarArea = localized("chart.kind.polarArea", "Polar area chart", "VoiceOver name for a polar area chart")
+    static let chartKindNetwork = localized("chart.kind.network", "Network graph", "VoiceOver name for a network graph")
+    static let chartKindContour = localized("chart.kind.contour", "Contour plot", "VoiceOver name for a contour plot")
+    static let chartKindTernary = localized("chart.kind.ternary", "Ternary plot", "VoiceOver name for a ternary plot")
+    static let chartKindWaffle = localized("chart.kind.waffle", "Waffle chart", "VoiceOver name for a waffle chart")
+    static let chartKindVolumeProfile = localized("chart.kind.volumeProfile", "Volume profile chart", "VoiceOver name for a volume profile chart")
+    static let chartKindRenko = localized("chart.kind.renko", "Renko chart", "VoiceOver name for a Renko chart")
+    static let chartKindHeikinAshi = localized("chart.kind.heikinAshi", "Heikin-Ashi chart", "VoiceOver name for a Heikin-Ashi chart")
+    static let chartKindMarketDepth = localized("chart.kind.marketDepth", "Market depth chart", "VoiceOver name for a market depth chart")
+    static let chartKindOHLCVolume = localized("chart.kind.ohlcVolume", "OHLC and volume chart", "VoiceOver name for an OHLC and volume chart")
+    static let chartKindPointAndFigure = localized("chart.kind.pointAndFigure", "Point-and-figure chart", "VoiceOver name for a point-and-figure chart")
     static let chartKindCandle = localized("chart.kind.candle", "Candlestick chart", "VoiceOver name for a candlestick chart")
     static let chartKindSeries = localized("chart.kind.series", "Multi-series chart", "VoiceOver name for a chart with several series")
 
@@ -81,6 +102,27 @@ enum LivelineStrings {
     static let labelInbound = localized("label.inbound", "In", "Label for everything flowing into a Sankey node")
     static let labelOutbound = localized("label.outbound", "Out", "Label for everything flowing out of a Sankey node")
     static let labelGaugeValue = localized("label.gaugeValue", "Gauge value", "Label for the value a gauge is showing")
+    static let labelSamples = localized("label.samples", "Samples", "Label for a distribution sample count")
+    static let labelProgress = localized("label.progress", "Progress", "Label for task completion progress")
+    static let labelRank = localized("label.rank", "Rank", "Label for a rank value")
+    static let labelWeight = localized("label.weight", "Weight", "Label for a weighted observation")
+    static let labelConnections = localized("label.connections", "Connections", "Label for a network node connection count")
+    static let labelX = localized("label.x", "X", "Label for the horizontal component of a point")
+    static let labelY = localized("label.y", "Y", "Label for the vertical component of a point")
+    static let labelVolume = localized("label.volume", "Volume", "Label for traded volume")
+    static let labelVolumeShort = localized("label.volume.short", "Vol", "Compact label for traded volume")
+    static let labelBid = localized("label.bid", "Bid", "Label for bid liquidity")
+    static let labelAsk = localized("label.ask", "Ask", "Label for ask liquidity")
+    static let labelColumnWidth = localized("label.columnWidth", "Column width", "Label for Marimekko column width")
+    static let labelSegment = localized("label.segment", "Segment", "Label for a Marimekko segment value")
+    static let labelBoxes = localized("label.boxes", "Boxes", "Label for point-and-figure box count")
+    static let labelRising = localized("label.rising", "Rising", "Label for an upward price mark")
+    static let labelFalling = localized("label.falling", "Falling", "Label for a downward price mark")
+    static let labelPoint = localized("label.point", "Point", "Fallback label for an unlabeled point")
+
+    static let labelAxisFormat = localized("label.axis.format", "Axis %ld", "Fallback name for a numbered axis")
+    static let labelColumnFormat = localized("label.column.format", "Column %ld", "Fallback name for a numbered column")
+    static let labelPointFigureLegendFormat = localized("label.pointFigureLegend.format", "X %1$@ · O %2$@", "Legend identifying rising X and falling O point-and-figure symbols")
 
     /// A histogram bin's value interval. `%1$@` is the lower bound, `%2$@` the
     /// upper bound.
@@ -182,6 +224,22 @@ enum LivelineStrings {
 
     /// `%1$@` open, `%2$@` high, `%3$@` low, `%4$@` close.
     static let accessibilityCandleValueFormat = localized("accessibility.candle.value.format", "Open %1$@, high %2$@, low %3$@, close %4$@", "VoiceOver value for a candle")
+
+    // MARK: - Advanced chart accessibility
+
+    static let accessibilityNamedValueFormat = localized("accessibility.namedValue.format", "%1$@ %2$@", "VoiceOver phrase pairing a localized field name with its formatted value")
+    static let accessibilityPercentFormat = localized("accessibility.percent.format", "%@ percent", "VoiceOver percentage phrase")
+    static let accessibilityDistributionFormat = localized("accessibility.distribution.format", "%1$ld samples, median %2$@, interquartile range %3$@ to %4$@", "VoiceOver summary for one distribution series")
+    static let accessibilityGanttFormat = localized("accessibility.gantt.format", "%1$@ to %2$@, duration %3$@, %4$@ complete", "VoiceOver value for a Gantt task")
+    static let accessibilityGanttDependenciesFormat = localized("accessibility.gantt.dependencies.format", "%1$@, depends on %2$@", "VoiceOver value appending Gantt dependency labels")
+    static let accessibilityXYWeightFormat = localized("accessibility.xyWeight.format", "X %1$@, Y %2$@, weight %3$@", "VoiceOver value for a weighted two-dimensional point")
+    static let accessibilityNetworkFormat = localized("accessibility.network.format", "Weight %1$@, %2$ld connections", "VoiceOver value for a network node")
+    static let accessibilityTernaryFormat = localized("accessibility.ternary.format", "%1$@ %2$@, %3$@ %4$@, %5$@ %6$@", "VoiceOver value for a three-component ternary point")
+    static let accessibilityBrickFormat = localized("accessibility.brick.format", "%1$@ brick, %2$@ to %3$@", "VoiceOver value for a rising or falling Renko brick")
+    static let accessibilityDepthFormat = localized("accessibility.depth.format", "Bid %1$@, ask %2$@", "VoiceOver value for one market-depth level")
+    static let accessibilityCandleVolumeFormat = localized("accessibility.candleVolume.format", "%1$@, volume %2$@", "VoiceOver value joining an OHLC candle and its volume")
+    static let accessibilityPointFigureLabelFormat = localized("accessibility.pointFigure.label.format", "%1$@ %2$@ column %3$ld", "VoiceOver label for a rising X or falling O point-and-figure column")
+    static let accessibilityRangeBoxesFormat = localized("accessibility.rangeBoxes.format", "%1$@ to %2$@, %3$ld boxes", "VoiceOver value for a point-and-figure column range and box count")
 
     // MARK: - Controls
 

@@ -11,8 +11,10 @@ fi
 
 if [[ ! -d "$VENV_DIR" ]]; then
   python3 -m venv "$VENV_DIR"
-  "$VENV_DIR/bin/python" -m pip install --upgrade pip >/dev/null
-  "$VENV_DIR/bin/python" -m pip install Pillow >/dev/null
+  "$VENV_DIR/bin/python" -m pip install \
+    --disable-pip-version-check \
+    --requirement "$ROOT_DIR/scripts/visual-requirements.txt" \
+    >/dev/null
 fi
 
 cd "$ROOT_DIR"

@@ -1,13 +1,57 @@
 import Foundation
 
 struct LivelinePreparedChart {
-    var primaryVisible: [LivelinePoint]
-    var rangePoints: [LivelinePoint]
-    var rangeOverride: ClosedRange<Double>?
-    var primaryValue: Double
+    let primaryVisible: [LivelinePoint]
+    let rangePoints: [LivelinePoint]
+    let rangeOverride: ClosedRange<Double>?
+    let primaryValue: Double
+    /// Min and max of `rangePoints`, scanned once when the chart is prepared so
+    /// each frame's value-range computation skips the O(visible) pass. Empty
+    /// range points leave the infinities, which the range computation already
+    /// treats as "no data".
+    let rangePointsMinimum: Double
+    let rangePointsMaximum: Double
+    /// Time bounds are cached alongside the value bounds so a chart prepared
+    /// for a snapped, outward-rounded bucket can be checked against the exact
+    /// caller window in O(1). This prevents a not-yet-visible outlier (or a
+    /// just-expired point) from changing the current range on a cache hit.
+    let rangePointsEarliestTime: TimeInterval
+    let rangePointsLatestTime: TimeInterval
+
+    init(
+        primaryVisible: [LivelinePoint],
+        rangePoints: [LivelinePoint],
+        rangeOverride: ClosedRange<Double>?,
+        primaryValue: Double
+    ) {
+        var minimum = Double.infinity
+        var maximum = -Double.infinity
+        var earliestTime = Double.infinity
+        var latestTime = -Double.infinity
+        for point in rangePoints {
+            minimum = Swift.min(minimum, point.value)
+            maximum = Swift.max(maximum, point.value)
+            earliestTime = Swift.min(earliestTime, point.time)
+            latestTime = Swift.max(latestTime, point.time)
+        }
+
+        self.primaryVisible = primaryVisible
+        self.rangePoints = rangePoints
+        self.rangeOverride = rangeOverride
+        self.primaryValue = primaryValue
+        self.rangePointsMinimum = minimum
+        self.rangePointsMaximum = maximum
+        self.rangePointsEarliestTime = earliestTime
+        self.rangePointsLatestTime = latestTime
+    }
 
     var hasData: Bool {
         !rangePoints.isEmpty
+    }
+
+    func rangePointsFit(leftEdge: TimeInterval, rightEdge: TimeInterval) -> Bool {
+        rangePoints.isEmpty
+            || (rangePointsEarliestTime >= leftEdge - 2 && rangePointsLatestTime <= rightEdge)
     }
 }
 
@@ -27,8 +71,9 @@ struct LivelineWaterfallKey: Equatable {
     var initialValue: Double
 }
 
-/// Identity of a prepared chart. Everything `prepare` reads is either covered
-/// here or derived from it, so a matching key means a matching result.
+/// Identity of a prepared-chart bucket. Everything `prepare` reads is either
+/// covered here or derived from it; time-sliced results additionally verify
+/// their cached point bounds against the caller's exact window.
 struct LivelinePreparedChartKey: Equatable {
     var kind: LivelineChartKind
     var shapes: [LivelineDataShape]
@@ -72,10 +117,45 @@ enum LivelineChartPreparer {
             )
         }
         if let state, let key, let cached = state.preparedChart(for: key) {
-            return cached
+            if key.kind == .histogram || key.kind == .sankey
+                || cached.rangePointsFit(leftEdge: leftEdge, rightEdge: rightEdge) {
+                return cached
+            }
+            return build(
+                for: content,
+                hiddenSeries: hiddenSeries,
+                leftEdge: leftEdge,
+                rightEdge: rightEdge,
+                config: config,
+                state: state
+            )
         }
 
+        // A snapped key represents every exact window inside its bucket. Build
+        // against that bucket's outward-rounded bounds so a later cache hit
+        // cannot omit a point that lies just beyond the first caller's exact
+        // right edge. Without a cache key, preserve the exact caller bounds.
+        let preparationLeftEdge = key?.leftEdge ?? leftEdge
+        let preparationRightEdge = key?.rightEdge ?? rightEdge
         let prepared = build(
+            for: content,
+            hiddenSeries: hiddenSeries,
+            leftEdge: preparationLeftEdge,
+            rightEdge: preparationRightEdge,
+            config: config,
+            state: state
+        )
+        if let state, let key {
+            state.storePreparedChart(prepared, for: key, retaining: content)
+        }
+        guard let key else { return prepared }
+        if key.kind == .histogram || key.kind == .sankey
+            || prepared.rangePointsFit(leftEdge: leftEdge, rightEdge: rightEdge) {
+            return prepared
+        }
+        // Keep the bucketed chart cached for a later window that includes all
+        // of its points, but preserve exact semantics for this caller.
+        return build(
             for: content,
             hiddenSeries: hiddenSeries,
             leftEdge: leftEdge,
@@ -83,10 +163,6 @@ enum LivelineChartPreparer {
             config: config,
             state: state
         )
-        if let state, let key {
-            state.storePreparedChart(prepared, for: key)
-        }
-        return prepared
     }
 
     private static func build(
@@ -442,6 +518,13 @@ enum LivelineChartPreparer {
                 primaryValue: graph.total
             )
 
+        case let .advanced(content):
+            return content.prepared(
+                leftEdge: leftEdge,
+                rightEdge: rightEdge,
+                configuration: config
+            )
+
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
             let visibleRange = (leftEdge - 2)...rightEdge
             let lineSource = lineData.isEmpty ? data : lineData
@@ -639,10 +722,47 @@ enum LivelineChartPreparer {
             ]
             identifiers = [links.first?.source ?? "", links.last?.target ?? "", "\(style.resolvedNodeWidth)"]
 
-        case .radar, .donut, .gauge, .funnel, .bullet, .treemap, .sunburst, .candle:
+        case .radar, .donut, .gauge, .funnel, .bullet, .treemap, .sunburst, .candle, .advanced:
             // Aggregates over unordered data or a live candle: not worth a key
             // that would have to restate the whole payload.
             return nil
+        }
+
+        // On a live chart both edges advance a fraction of a pixel every frame,
+        // which would turn each frame's key into a guaranteed cache miss.
+        // Snapping the key's edges to a grid of 1/1024 of the visible span —
+        // well under a pixel for any plausible plot width — lets consecutive
+        // frames share one prepared chart. Data changes still rekey through
+        // `shapes`; the exact-fit check in `prepare` rejects a bucket whenever
+        // its narrow boundary strips actually contain a point.
+        var keyLeftEdge = leftEdge
+        var keyRightEdge = rightEdge
+        if kind == .histogram || kind == .sankey {
+            // These aggregate the whole payload and do not read either edge.
+            keyLeftEdge = 0
+            keyRightEdge = 0
+        }
+        let span = rightEdge - leftEdge
+        if kind != .timeline, kind != .histogram, kind != .sankey,
+           span.isFinite, span > 0 {
+            // Equal-width windows can subtract to spans a few ULPs apart as
+            // their absolute edges move. Stabilize that arithmetic noise first
+            // or the derived quantum — and therefore both exact Double keys —
+            // still changes every frame. Keeping roughly 43 significand bits
+            // is far beyond anything the renderer can resolve.
+            let spanResolution = span.ulp * 1_024
+            let stableSpan = (span / spanResolution).rounded() * spanResolution
+            if stableSpan.isFinite, stableSpan > 0 {
+                let quantum = stableSpan / 1_024
+                if quantum.isFinite, quantum > 0 {
+                    let snappedLeft = (leftEdge / quantum).rounded(.down) * quantum
+                    let snappedRight = (rightEdge / quantum).rounded(.up) * quantum
+                    if snappedLeft.isFinite, snappedRight.isFinite {
+                        keyLeftEdge = snappedLeft
+                        keyRightEdge = snappedRight
+                    }
+                }
+            }
         }
 
         return LivelinePreparedChartKey(
@@ -651,8 +771,8 @@ enum LivelineChartPreparer {
             identifiers: identifiers,
             variant: variant,
             hiddenSeries: hiddenSeries,
-            leftEdge: leftEdge,
-            rightEdge: rightEdge,
+            leftEdge: keyLeftEdge,
+            rightEdge: keyRightEdge,
             referenceValue: config.referenceLine?.value,
             exaggerate: config.exaggerate
         )

@@ -1,12 +1,14 @@
 # Liveline Swift
 
-Native SwiftUI real-time charts for iOS apps. Liveline includes line, candlestick, multi-series, bar, range-band, scatter, step, lollipop, bubble, box-plot, waterfall, error-bar, dumbbell, stacked-bar, stacked-area, timeline, heatmap, radar, donut, gauge, funnel, histogram, bullet, treemap, sunburst, and Sankey renderers with typed customization.
+Native SwiftUI charts for Apple platforms. Liveline includes 48 typed chart families spanning real-time series, distributions, planning, relationships, multivariate analysis, hierarchy, flow, and financial market structure.
 
 This repository is a Swift Package. Any iOS app can add it with Swift Package Manager and import `Liveline`.
 
 ## Chart gallery
 
-Each cell is captured from the included deterministic iOS Storybook.
+Each cell is a light-mode Dither capture from the included deterministic iOS
+Storybook. Filled regions use ordered texture while defining strokes remain
+solid and readable.
 
 <table>
   <tr>
@@ -324,6 +326,11 @@ LivelineChart(funnel: stages, style: LivelineFunnelStyle(showsValues: true))
 - Donut charts with configurable ring thickness, gaps, palettes, and labels
 - Radial gauges with custom sweeps, tracks, ticks, targets, and value labels
 - Funnel charts with configurable widths, spacing, palettes, labels, and values
+- Distribution charts: violin and ridgeline
+- Planning and rank charts: calendar heatmap, Gantt, bump, and horizon
+- Relationship and multivariate charts: chord, parallel coordinates, hexbin, network, contour, and ternary
+- Proportional charts: Marimekko, polar area, and waffle
+- Financial charts: volume profile, Renko, Heikin-Ashi, market depth, synchronized OHLC with volume, and point-and-figure
 
 On tvOS, focus a chart and press Select to enter inspection, then move left or
 right through its values. Press Select, Up, Down, or Menu to leave inspection
@@ -346,7 +353,7 @@ open LivelineDemo.xcodeproj
 
 The generated project uses the local package path (`../..`). Its Live dashboard
 adapts from iPhone to a two-column iPad layout and follows the system color
-scheme. Storybook includes 71 deterministic scenarios with search, chart-family
+scheme. Storybook includes 92 deterministic scenarios with search, chart-family
 filters, static gallery previews, interaction guidance, and copyable SwiftUI
 recipes. CI builds the demo target as an iOS simulator app.
 
@@ -360,6 +367,9 @@ reproducible Remotion source in `remotion/`.
 ## Documentation
 
 - [API overview](Docs/API.md)
+- [Advanced chart catalog](Docs/AdvancedCharts.md)
+- [Chart quality standard](Docs/ChartQuality.md)
+- [Chart visual audit](Docs/ChartVisualAudit.md)
 - [Animation model](Docs/Animations.md)
 - [Example recipes](Docs/Examples.md)
 - [Scenario matrix](Docs/ScenarioMatrix.md)

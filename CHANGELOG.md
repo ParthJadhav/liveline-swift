@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Adds 21 native chart families: violin, ridgeline, calendar heatmap, Gantt,
+  chord, parallel coordinates, hexbin, bump, horizon, Marimekko, polar area,
+  network, contour, ternary, waffle, volume profile, Renko, Heikin-Ashi,
+  market depth, synchronized OHLC with volume, and point-and-figure.
+- Gives every new family typed models and styles, deterministic rendering,
+  direct tooltip targets, VoiceOver inspection, localized Audio Graph data,
+  standard and Dither treatments, and unsafe-input normalization.
+- Expands Storybook from 71 to 92 deterministic scenarios and adds a complete
+  advanced-chart screenshot set, chart-selection guide, quality standard, and
+  repeatable advanced-chart verification gate.
+- Adds transform recurrence, accessibility, audio, interaction, standard and
+  Dither render, edge-case, strict-concurrency, and release benchmark coverage.
+- Refines continuous chart geometry with bounded curves, stitched contour
+  isolines, seamless scalar fills, rounded joins, and plot-edge clipping while
+  preserving intentional corners in discrete financial and rank encodings.
+- Corrects Marimekko gap budgeting and reveal stability, separates axis and
+  direct-label gutters, and distributes colliding endpoint labels without
+  moving their data marks.
+- Adds a 92-scenario screenshot integrity gate, reusable review-board tooling,
+  settled visual baselines, a five-gate pixel-quality rubric, and a complete
+  48-family audit record.
+
 ## 0.7.0 - 2026-08-09
 
 - Improves chart legibility with higher-contrast grid, reference, and time-axis

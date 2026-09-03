@@ -1,0 +1,55 @@
+name: Legacy Compatibility
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios-17-ui:
+    name: iOS Demo UI (iOS 17.5)
+    runs-on: macos-14
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Select Xcode 15.4
+        uses: maxim-lobanov/setup-xcode@v1.7.0
+        with:
+          xcode-version: "15.4"
+
+      - name: Show toolchain
+        run: xcodebuild -version
+
+      - name: Install pinned XcodeGen
+        run: |
+          scripts/install-xcodegen.sh "$RUNNER_TEMP/xcodegen"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Generate demo project
+        run: xcodegen generate
+        working-directory: Examples/LivelineDemo
+
+      - name: Run demo UI tests
+        run: >-
+          scripts/run-demo-ui-tests.sh
+          17
+          "$RUNNER_TEMP/liveline-demo-ui-tests"
+          ios-17
+
+      - name: Upload UI-test failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: liveline-demo-ui-tests-ios-17
+          path: ${{ runner.temp }}/liveline-demo-ui-tests
+          if-no-files-found: warn
+          retention-days: 7

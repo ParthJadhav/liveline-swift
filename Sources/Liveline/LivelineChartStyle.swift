@@ -45,9 +45,10 @@ public enum LivelineDitherBloom: Sendable {
 /// The defaults mirror Dither Kit's two-point cells, gradient texture, subtle
 /// bloom, and winking colour sparkles. Set `animated` to `false` for a stable
 /// texture; Liveline also disables dither motion automatically when Reduce
-/// Motion is enabled.
+/// Motion is enabled. Ordered texture is confined to broad fill interiors;
+/// outlines, line-only series, axes, and other thin strokes remain continuous.
 public struct LivelineDitherStyle: Sendable {
-    /// The ordered-pixel texture applied to chart marks.
+    /// The ordered-pixel texture applied inside filled chart marks.
     public var variant: LivelineDitherVariant
 
     /// The strength and spread of the coloured glow behind chart marks.
@@ -74,7 +75,7 @@ public struct LivelineDitherStyle: Sendable {
     /// Creates an ordered-dither style.
     ///
     /// - Parameters:
-    ///   - variant: The ordered-pixel texture applied to chart marks.
+    ///   - variant: The ordered-pixel texture applied inside filled chart marks.
     ///   - bloom: The strength and spread of the coloured glow.
     ///   - cellSize: The dither cell size in points.
     ///   - intensity: The texture opacity.

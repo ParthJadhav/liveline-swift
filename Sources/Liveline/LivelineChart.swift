@@ -21,6 +21,7 @@ public struct LivelineChart: View {
     @Environment(\.dynamicTypeSize) var dynamicTypeSize
     @Environment(\.layoutDirection) var layoutDirection
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.displayScale) var displayScale
     @Environment(\.livelineSnapshotElapsedTime) var snapshotElapsedTime
     @Environment(\.livelineRendersSettledFrame) var rendersSettledFrame
     @Environment(\.livelineChartStyleOverride) var chartStyleOverride
@@ -435,7 +436,8 @@ public struct LivelineChart: View {
                 configuration: configuration,
                 hiddenSeries: hiddenSeries,
                 includeEntries: includeAccessibilityEntries
-            )
+            ),
+            retaining: content
         ) {
             LivelineChartAccessibilityModel.make(
                 content: content,

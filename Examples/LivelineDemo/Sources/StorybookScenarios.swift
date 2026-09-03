@@ -18,6 +18,49 @@ struct StorybookLaunch {
         ProcessInfo.processInfo.arguments.contains("--chart-showcase")
     }
 
+    static func advancedDemoLightFromArguments() -> Bool {
+        ProcessInfo.processInfo.arguments.contains("--advanced-demo-light")
+    }
+
+    static func advancedDemoDitherFromArguments() -> Bool {
+        ProcessInfo.processInfo.arguments.contains("--advanced-demo-dither")
+    }
+
+    static func advancedDemoLiveFromArguments() -> Bool {
+        ProcessInfo.processInfo.arguments.contains("--advanced-demo-live")
+    }
+
+    static func advancedDemoDitherVariantFromArguments() -> LivelineDitherVariant {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard let index = arguments.firstIndex(of: "--advanced-demo-dither-variant"),
+              arguments.indices.contains(index + 1)
+        else {
+            return .gradient
+        }
+
+        switch arguments[index + 1] {
+        case "dotted": return .dotted
+        case "hatched": return .hatched
+        case "solid": return .solid
+        default: return .gradient
+        }
+    }
+
+    static func advancedDemoDitherStyleFromArguments() -> LivelineChartStyle? {
+        guard advancedDemoDitherFromArguments() else { return nil }
+        return .dither(
+            LivelineDitherStyle(
+                variant: advancedDemoDitherVariantFromArguments(),
+                bloom: .low,
+                cellSize: 2,
+                sparkleDensity: 0.028,
+                animationSpeed: 1.35,
+                maximumFramesPerSecond: 30,
+                animated: true
+            )
+        )
+    }
+
     static func scenarioLaunchFromArguments() -> StorybookScenarioLaunch {
         let arguments = ProcessInfo.processInfo.arguments
         guard let index = arguments.firstIndex(of: "--storybook-scenario") else {
@@ -208,6 +251,27 @@ private enum StorybookCodeSamples {
         case "Treemap": initializer = "treemap: hierarchy"
         case "Sunburst": initializer = "sunburst: hierarchy"
         case "Sankey": initializer = "sankey: flows"
+        case "Violin": initializer = "violin: distributions"
+        case "Ridgeline": initializer = "ridgeline: distributions"
+        case "Calendar heatmap": initializer = "calendarHeatmap: dailyValues"
+        case "Gantt": initializer = "gantt: tasks"
+        case "Chord": initializer = "chord: links"
+        case "Parallel coordinates": initializer = "parallelCoordinates: records"
+        case "Hexbin": initializer = "hexbin: observations"
+        case "Bump": initializer = "bump: rankSeries"
+        case "Horizon": initializer = "horizon: points"
+        case "Marimekko": initializer = "marimekko: columns"
+        case "Polar area": initializer = "polarArea: categories"
+        case "Network": initializer = "networkNodes: nodes, edges: edges"
+        case "Contour": initializer = "contour: samples"
+        case "Ternary": initializer = "ternary: compositions"
+        case "Waffle": initializer = "waffle: categories"
+        case "Volume profile": initializer = "volumeProfile: priceLevels"
+        case "Renko": initializer = "renko: prices, style: .init(brickSize: 1)"
+        case "Heikin-Ashi": initializer = "heikinAshi: candles"
+        case "Market depth": initializer = "marketDepth: orderBook"
+        case "OHLC + volume": initializer = "ohlcVolume: candlesWithVolume"
+        case "Point-and-figure": initializer = "pointAndFigure: prices, style: .init(boxSize: 1)"
         default:
             initializer = "data: points, value: points.last?.value ?? 0"
         }
@@ -307,6 +371,27 @@ enum StorybookCatalog {
         treemapBasic,
         sunburstBasic,
         sankeyBasic,
+        violinBasic,
+        ridgelineBasic,
+        calendarHeatmapBasic,
+        ganttBasic,
+        chordBasic,
+        parallelBasic,
+        hexbinBasic,
+        bumpBasic,
+        horizonBasic,
+        marimekkoBasic,
+        polarAreaBasic,
+        networkBasic,
+        contourBasic,
+        ternaryBasic,
+        waffleBasic,
+        volumeProfileBasic,
+        renkoBasic,
+        heikinAshiBasic,
+        marketDepthBasic,
+        ohlcVolumeBasic,
+        pointFigureBasic,
     ]
 
     static let all = definitions
@@ -339,7 +424,7 @@ extension StorybookCatalog {
             group: group,
             title: title,
             detail: detail,
-            background: background,
+            background: StorybookLaunch.advancedDemoLightFromArguments() ? .white : background,
             height: height,
             makeView: { AnyView(makeView()) }
         )

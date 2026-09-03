@@ -9,6 +9,7 @@ import {HeroScene} from './improvements/HeroScene';
 import {QualityScene} from './improvements/QualityScene';
 import {StorybookScene} from './improvements/StorybookScene';
 import {WorkbenchScene} from './improvements/WorkbenchScene';
+import {AdvancedPRVideo, TOTAL_DURATION_ADVANCED_PR} from './advanced-pr/AdvancedPRVideo';
 
 export const Root: React.FC = () => {
   return (
@@ -33,6 +34,14 @@ export const Root: React.FC = () => {
         id="Liveline070"
         component={Liveline070Video}
         durationInFrames={TOTAL_DURATION_070}
+        fps={30}
+        width={1920}
+        height={1080}
+      />
+      <Composition
+        id="LivelineAdvancedPR"
+        component={AdvancedPRVideo}
+        durationInFrames={TOTAL_DURATION_ADVANCED_PR}
         fps={30}
         width={1920}
         height={1080}

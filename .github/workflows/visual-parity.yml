@@ -6,9 +6,9 @@ on:
       - "Sources/Liveline/**"
       - "Examples/LivelineDemo/**"
       - "scripts/capture-storybook.sh"
-      - "scripts/capture-web-references.sh"
       - "scripts/storybook_diff.py"
-      - "scripts/web-reference/**"
+      - "scripts/diff-storybook.sh"
+      - "scripts/chart_visual_quality.py"
       - ".github/workflows/visual-parity.yml"
   workflow_dispatch:
     inputs:
@@ -21,22 +21,40 @@ on:
           - full
           - smoke
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   storybook-diff:
     name: Storybook Diff
     runs-on: macos-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Select visual suite
         shell: bash
         run: |
-          echo "WEB_REFERENCE_OUT_DIR=$RUNNER_TEMP/liveline-parity/web" >> "$GITHUB_ENV"
           echo "STORYBOOK_OUT_DIR=$RUNNER_TEMP/liveline-parity/native" >> "$GITHUB_ENV"
           echo "VISUAL_DIFF_OUT_DIR=$RUNNER_TEMP/liveline-parity/diff" >> "$GITHUB_ENV"
+
+          # The upstream commit is pinned, so PRs diff against its committed,
+          # reviewed reference images instead of rebuilding identical images.
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "WEB_REFERENCE_OUT_DIR=$GITHUB_WORKSPACE/Media/web-reference" >> "$GITHUB_ENV"
+          else
+            echo "WEB_REFERENCE_OUT_DIR=$RUNNER_TEMP/liveline-parity/web" >> "$GITHUB_ENV"
+          fi
+
           smoke="line-basic-dark line-basic-light line-no-grid-no-fill line-minimal-badge line-reference line-loading candle-basic candle-line-mode"
           if [[ "${{ github.event_name }}" == "pull_request" || "${{ inputs.scope }}" == "smoke" ]]; then
+            # Every native PR capture now has a matching web reference and is
+            # consumed by the diff. The old suite captured 15 unused images.
             echo "STORYBOOK_SCENARIOS=$smoke" >> "$GITHUB_ENV"
             echo "WEB_REFERENCE_SCENARIOS=$smoke" >> "$GITHUB_ENV"
           fi
@@ -49,30 +67,60 @@ jobs:
           scripts/install-xcodegen.sh "$RUNNER_TEMP/xcodegen"
           echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
 
-      - name: Use pinned Node.js
-        uses: actions/setup-node@v4
+      - name: Use pinned Node.js for reference regeneration
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/setup-node@v7
         with:
           node-version: "24.15.0"
           cache: npm
           cache-dependency-path: scripts/web-reference/package-lock.json
 
-      - name: Capture upstream web references
+      - name: Regenerate pinned upstream web references
+        if: github.event_name == 'workflow_dispatch'
         run: scripts/capture-web-references.sh
 
       - name: Capture native chart screenshots
         run: scripts/capture-storybook.sh --chart-only
 
+      - name: Validate captured chart screenshots
+        shell: bash
+        run: |
+          args=(--directory "$STORYBOOK_OUT_DIR")
+          if [[ -n "${STORYBOOK_SCENARIOS:-}" ]]; then
+            read -r -a scenarios <<< "$STORYBOOK_SCENARIOS"
+            args+=(--scenarios "${scenarios[@]}")
+          fi
+          python3 scripts/chart_visual_quality.py "${args[@]}"
+
       - name: Diff screenshots
         env:
           VISUAL_PARITY_EXCLUSIONS: line-show-value-windows,line-rounded-windows,line-text-windows,candle-mode-controls,multi-basic,multi-light,multi-compact,multi-two-series
-        run: scripts/diff-storybook.sh --web-dir "$WEB_REFERENCE_OUT_DIR" --native-dir "$STORYBOOK_OUT_DIR" --out-dir "$VISUAL_DIFF_OUT_DIR" --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12 --scenario-threshold line-orderbook:5.1:13
+        shell: bash
+        run: |
+          args=(
+            --web-dir "$WEB_REFERENCE_OUT_DIR"
+            --native-dir "$STORYBOOK_OUT_DIR"
+            --out-dir "$VISUAL_DIFF_OUT_DIR"
+            --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS"
+            --fail-changed-pct 5
+            --fail-rms 12
+          )
+          if [[ -z "${WEB_REFERENCE_SCENARIOS:-}" || " $WEB_REFERENCE_SCENARIOS " == *" line-orderbook "* ]]; then
+            args+=(--scenario-threshold line-orderbook:5.1:13)
+          fi
+          if [[ -n "${WEB_REFERENCE_SCENARIOS:-}" ]]; then
+            read -r -a scenarios <<< "$WEB_REFERENCE_SCENARIOS"
+            args+=(--scenarios "${scenarios[@]}")
+          fi
+          scripts/diff-storybook.sh "${args[@]}"
 
       - name: Upload parity artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: visual-parity
           path: |
-            ${{ env.WEB_REFERENCE_OUT_DIR }}
             ${{ env.STORYBOOK_OUT_DIR }}
             ${{ env.VISUAL_DIFF_OUT_DIR }}
+          if-no-files-found: warn
+          retention-days: 7

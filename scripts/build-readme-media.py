@@ -4,13 +4,18 @@
 from __future__ import annotations
 
 from collections import deque
+import os
 from pathlib import Path
 
 from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_DIR = ROOT / "Media" / "storybook-chart-only"
+SOURCE_DIR = Path(
+    os.environ.get("README_CHART_SOURCE_DIR", ROOT / "Media" / "storybook-chart-only")
+)
+if not SOURCE_DIR.is_absolute():
+    SOURCE_DIR = ROOT / SOURCE_DIR
 OUT_DIR = ROOT / "Media" / "readme" / "charts"
 
 # Removes the simulator chrome and the unused lower portion of each Storybook

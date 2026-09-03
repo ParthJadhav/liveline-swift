@@ -218,10 +218,10 @@ extension LivelineRenderer {
             let lowerPoints = bounds.map { CGPoint(x: layout.x(for: $0.time), y: layout.y(for: $0.segment.lower)) }
             let visibleUpper = LivelineMath.revealedPoints(upperPoints, reveal: progress)
             let visibleLower = LivelineMath.revealedPoints(lowerPoints, reveal: progress)
-            guard let first = visibleUpper.first else { continue }
+            guard !visibleUpper.isEmpty else { continue }
 
             var area = Path()
-            area.move(to: first)
+            area.move(to: visibleUpper[0])
             for point in visibleUpper.dropFirst() { area.addLine(to: point) }
             for point in visibleLower.reversed() { area.addLine(to: point) }
             area.closeSubpath()
@@ -230,10 +230,17 @@ extension LivelineRenderer {
             layer.fill(area, with: .color(color.opacity(style.resolvedFillOpacity)))
 
             if style.resolvedBoundaryLineWidth > 0 {
+                var boundary = Path()
+                boundary.move(to: visibleUpper[0])
+                for point in visibleUpper.dropFirst() { boundary.addLine(to: point) }
                 layer.stroke(
-                    linePath(points: visibleUpper),
+                    boundary,
                     with: .color(color),
-                    style: StrokeStyle(lineWidth: style.resolvedBoundaryLineWidth, lineJoin: .round)
+                    style: StrokeStyle(
+                        lineWidth: style.resolvedBoundaryLineWidth,
+                        lineCap: .round,
+                        lineJoin: .round
+                    )
                 )
             }
         }
