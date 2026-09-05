@@ -370,6 +370,8 @@ reproducible Remotion source in `remotion/`.
 
 ## Attribution
 
+Swift implementation by [Parth Jadhav](https://www.parthjadhav.com/).
+
 Liveline Swift is a native Swift implementation inspired by [benjitaylor/liveline](https://github.com/benjitaylor/liveline). It does not embed the original React/canvas implementation.
 
 The ordered-dither chart style is inspired by [Dither Kit](https://www.tripwire.sh/dither-kit) from Boring Software Inc. Liveline reimplements the effect natively in SwiftUI and does not embed Dither Kit's React/TypeScript source.
