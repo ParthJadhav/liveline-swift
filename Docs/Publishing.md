@@ -37,11 +37,11 @@ swift package diagnose-api-breaking-changes "$BASELINE_TAG" --products Liveline
 xcodebuild docbuild -scheme Liveline -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO OTHER_DOCC_FLAGS='--warnings-as-errors'
 scripts/install-xcodegen.sh .build/tools/xcodegen
 .build/tools/xcodegen/bin/xcodegen generate --spec Examples/LivelineDemo/project.yml
+export PATH="$PWD/.build/tools/xcodegen/bin:$PATH"
 xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
 xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
 scripts/capture-storybook.sh --chart-only
-VISUAL_PARITY_EXCLUSIONS=line-show-value-windows,line-rounded-windows,line-text-windows,candle-mode-controls,multi-basic,multi-light,multi-compact,multi-two-series
-scripts/diff-storybook.sh --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12 --scenario-threshold line-orderbook:5.1:13
+scripts/verify-visual-parity.sh
 (cd remotion/tools/shotgen && SHOTGEN_MODE=frames SHOTGEN_CLIPS_ONLY=line-live,dynamic-type swift run ShotGen)
 (cd remotion && bun install --frozen-lockfile && bunx tsc --noEmit && bun audit && bun run render:070)
 ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_name,width,height,r_frame_rate -of json Media/liveline-0-7-0-demo.mp4
@@ -56,6 +56,14 @@ xcodebuild -scheme Liveline -destination 'generic/platform=tvOS' build
 xcodebuild -scheme Liveline -destination 'generic/platform=watchOS' build
 xcodebuild -scheme Liveline -destination 'generic/platform=visionOS' build
 ```
+
+## Documentation Review
+
+Before tagging, review the README installation version, CHANGELOG, release notes,
+public API additions in `Docs/API.md` and `Docs/AdvancedCharts.md`, and curated
+DocC topics in `Sources/Liveline/Liveline.docc/Liveline.md`. Run
+`python3 scripts/storybook_manifest.py validate` for generated metadata and
+marked current catalog counts; this does not prove API documentation coverage.
 
 ## Tagging A Release
 

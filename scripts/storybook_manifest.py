@@ -20,6 +20,13 @@ DEFAULT_MANIFEST = (
     / "Resources"
     / "storybook-scenarios.json"
 )
+# Only these marked current facts are checked; release records stay historical.
+CATALOG_FACTS = {
+    "README.md": ("scenarios",),
+    "Docs/Development.md": ("scenarios", "families", "advanced"),
+    "Docs/ParityStatus.md": ("scenarios", "families"),
+    "Docs/AdvancedCharts.md": ("advanced",),
+}
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
 
@@ -82,7 +89,48 @@ def swift_enum(scenarios: list[dict[str, str]]) -> str:
     return "\n".join(lines)
 
 
+def enum_case_count(path: Path, name: str) -> int:
+    source = path.read_text(encoding="utf-8")
+    match = re.search(rf"^enum {name}[^\n]*\{{(.*?)^\}}", source, re.MULTILINE | re.DOTALL)
+    if not match:
+        raise ValueError(f"cannot find {name} in {path}")
+    # These catalog enums declare one case per line, before any methods.
+    declarations = re.findall(r"^\s*case (.+)$", match[1], re.MULTILINE)
+    cases = []
+    for declaration in declarations:
+        case = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)(?:\(.*\))?\s*(?://.*)?", declaration)
+        if not case:
+            raise ValueError(f"{name}: declare one catalog case per line")
+        cases.append(case[1])
+    if not cases or len(cases) != len(set(cases)):
+        raise ValueError(f"invalid catalog cases in {name}")
+    return len(cases)
+
+
+def validate_catalog_facts(scenarios: list[dict[str, str]], root: Path = ROOT) -> None:
+    counts = {
+        "scenarios": len(scenarios),
+        "families": enum_case_count(
+            root / "Sources/Liveline/LivelineChartContent.swift", "LivelineChartKind"
+        ),
+        "advanced": enum_case_count(
+            root / "Sources/Liveline/LivelineAdvancedContent.swift", "LivelineAdvancedChartContent"
+        ),
+    }
+    for relative_path, facts in CATALOG_FACTS.items():
+        document = (root / relative_path).read_text(encoding="utf-8")
+        for fact in facts:
+            pattern = rf"<!-- catalog:{fact} -->([0-9]+)<!-- /catalog -->"
+            values = re.findall(pattern, document)
+            if not values or any(int(value) != counts[fact] for value in values):
+                raise ValueError(
+                    f"{relative_path}: catalog:{fact} is missing or stale; "
+                    f"set every marked value to {counts[fact]}"
+                )
+
+
 def validate_derived_files(scenarios: list[dict[str, str]]) -> None:
+    validate_catalog_facts(scenarios)
     begin = "<!-- BEGIN GENERATED SCENARIO TABLE -->"
     end = "<!-- END GENERATED SCENARIO TABLE -->"
     document = SCENARIO_DOC.read_text(encoding="utf-8")
