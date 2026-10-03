@@ -9,6 +9,9 @@ MEDIA_DIR="$ROOT_DIR/Media/dither"
 RAW_VIDEO="$BUILD_DIR/dither-showcase.mp4"
 IMAGE_PATH="$MEDIA_DIR/dither-showcase.png"
 GIF_PATH="$MEDIA_DIR/dither-showcase.gif"
+README_VIDEO_PATH="$ROOT_DIR/Media/liveline-launch.mp4"
+README_IMAGE_PATH="$ROOT_DIR/Media/liveline-launch-poster.png"
+README_GIF_PATH="$ROOT_DIR/Media/liveline-launch.gif"
 
 mkdir -p "$BUILD_DIR" "$MEDIA_DIR"
 
@@ -45,9 +48,9 @@ xcrun simctl install "$DEVICE_ID" "$APP_PATH"
 xcrun simctl terminate "$DEVICE_ID" com.liveline.demo >/dev/null 2>&1 || true
 xcrun simctl launch "$DEVICE_ID" com.liveline.demo --dither-showcase
 sleep 2
+rm -f "$RAW_VIDEO" "$IMAGE_PATH" "$GIF_PATH"
 xcrun simctl io "$DEVICE_ID" screenshot "$IMAGE_PATH"
 
-rm -f "$RAW_VIDEO" "$GIF_PATH"
 xcrun simctl io "$DEVICE_ID" recordVideo --codec=h264 --mask=ignored --force "$RAW_VIDEO" &
 RECORD_PID=$!
 sleep 5
@@ -62,6 +65,11 @@ ffmpeg \
   -vf "fps=15,scale=585:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer" \
   "$GIF_PATH"
 
+cp "$RAW_VIDEO" "$README_VIDEO_PATH"
+cp "$IMAGE_PATH" "$README_IMAGE_PATH"
+cp "$GIF_PATH" "$README_GIF_PATH"
+
 xcrun simctl terminate "$DEVICE_ID" com.liveline.demo >/dev/null 2>&1 || true
 echo "Wrote $IMAGE_PATH"
 echo "Wrote $GIF_PATH"
+echo "Refreshed README launch poster, GIF, and video."

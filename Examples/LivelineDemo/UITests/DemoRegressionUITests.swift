@@ -92,7 +92,10 @@ final class DemoRegressionUITests: XCTestCase {
         search.tap()
         search.typeText("sankey")
 
-        XCTAssertTrue(app.staticTexts["1 of 71 scenarios"].waitForExistence(timeout: 3))
+        let filteredCount = app.staticTexts.matching(
+            NSPredicate(format: "label MATCHES %@", "1 of [0-9]+ scenarios")
+        ).firstMatch
+        XCTAssertTrue(filteredCount.waitForExistence(timeout: 3))
         let card = element("storybook-card-sankey-basic")
         XCTAssertTrue(card.waitForExistence(timeout: 3))
         XCTAssertFalse(element("storybook-card-line-basic").exists)

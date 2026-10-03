@@ -378,6 +378,14 @@ struct LivelineChartAccessibilityModel: Equatable {
                 )
             }
 
+        case let .advanced(content):
+            entries = content.isEmpty
+                ? []
+                : content.accessibilityEntries(
+                    formatValue: formatValue,
+                    formatTime: formatTime
+                )
+
         case let .candle(data, _, candles, _, liveCandle, lineData, _):
             if configuration.lineMode, !lineData.isEmpty {
                 entries = pointEntries(lineData)
@@ -556,6 +564,8 @@ struct LivelineChartAccessibilityModel: Equatable {
             return sunburstCells(nodes).count
         case let .sankey(links, _):
             return LivelineMath.sankeyGraph(links: links).links.count
+        case let .advanced(content):
+            return content.isEmpty ? 0 : content.accessibilityEntryCount
         case let .candle(data, _, candles, _, liveCandle, lineData, _):
             if configuration.lineMode, !lineData.isEmpty {
                 return lineData.count
@@ -691,6 +701,12 @@ struct LivelineAccessibilityModelKey: Equatable {
             variants = links.map(\.value)
             identifiers = links.flatMap { [$0.source, $0.target] }
 
+        case let .advanced(content):
+            let descriptor = content.accessibilityCacheDescriptor
+            shapes = descriptor.shapes
+            identifiers = descriptor.identifiers
+            variants = descriptor.variants
+
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
             shapes = [
                 data.livelineShape(lastValue: data.last?.value ?? 0),
@@ -773,6 +789,27 @@ private extension LivelineChartKind {
         case .treemap: return LivelineStrings.chartKindTreemap
         case .sunburst: return LivelineStrings.chartKindSunburst
         case .sankey: return LivelineStrings.chartKindSankey
+        case .violin: return LivelineStrings.chartKindViolin
+        case .ridgeline: return LivelineStrings.chartKindRidgeline
+        case .calendarHeatmap: return LivelineStrings.chartKindCalendarHeatmap
+        case .gantt: return LivelineStrings.chartKindGantt
+        case .chord: return LivelineStrings.chartKindChord
+        case .parallelCoordinates: return LivelineStrings.chartKindParallelCoordinates
+        case .hexbin: return LivelineStrings.chartKindHexbin
+        case .bump: return LivelineStrings.chartKindBump
+        case .horizon: return LivelineStrings.chartKindHorizon
+        case .marimekko: return LivelineStrings.chartKindMarimekko
+        case .polarArea: return LivelineStrings.chartKindPolarArea
+        case .network: return LivelineStrings.chartKindNetwork
+        case .contour: return LivelineStrings.chartKindContour
+        case .ternary: return LivelineStrings.chartKindTernary
+        case .waffle: return LivelineStrings.chartKindWaffle
+        case .volumeProfile: return LivelineStrings.chartKindVolumeProfile
+        case .renko: return LivelineStrings.chartKindRenko
+        case .heikinAshi: return LivelineStrings.chartKindHeikinAshi
+        case .marketDepth: return LivelineStrings.chartKindMarketDepth
+        case .ohlcVolume: return LivelineStrings.chartKindOHLCVolume
+        case .pointAndFigure: return LivelineStrings.chartKindPointAndFigure
         case .candle: return LivelineStrings.chartKindCandle
         case .series: return LivelineStrings.chartKindSeries
         }

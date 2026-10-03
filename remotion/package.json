@@ -7,10 +7,14 @@
     "studio": "remotion studio",
     "render": "remotion render LivelinePlatforms ../Media/liveline-platforms.mp4",
     "render:060": "remotion render Liveline060 ../Media/liveline-0-6-0-demo.mp4",
-    "render:070": "remotion render Liveline070 ../Media/liveline-0-7-0-demo.mp4 --concurrency=4"
+    "render:070": "remotion render Liveline070 ../Media/liveline-0-7-0-demo.mp4 --concurrency=4",
+    "render:advanced-pr": "remotion render LivelineAdvancedPR ../Media/liveline-advanced-charts-pr.mp4 --concurrency=4",
+    "poster:advanced-pr": "remotion still LivelineAdvancedPR ../Media/liveline-advanced-charts-pr-poster.png --frame=48",
+    "verify:advanced-pr": "bun tools/verify-advanced-pr-demo.ts"
   },
   "dependencies": {
     "@remotion/cli": "4.0.507",
+    "@remotion/media": "4.0.507",
     "@remotion/transitions": "4.0.507",
     "react": "18.3.1",
     "react-dom": "18.3.1",

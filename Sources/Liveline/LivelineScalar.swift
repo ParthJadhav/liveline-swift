@@ -54,6 +54,33 @@ enum LivelineScalar {
         let scaled = value * scale
         return scaled.isFinite ? scaled.rounded() / scale : value
     }
+
+    /// A finite arithmetic mean that never forms an overflowing sum.
+    static func mean(_ values: [Double], fallback: Double = 0) -> Double {
+        let values = values.filter(\.isFinite)
+        guard let first = values.first else { return fallback }
+        var mean = first
+        for (offset, value) in values.dropFirst().enumerated() {
+            let count = Double(offset + 2)
+            mean = mean * ((count - 1) / count) + value / count
+        }
+        return mean.isFinite ? mean : fallback
+    }
+
+    /// Maps a finite value into a unit interval without subtracting opposite
+    /// `Double` extremes directly.
+    static func unitPosition(_ value: Double, in range: ClosedRange<Double>) -> Double {
+        guard value.isFinite else { return 0.5 }
+        let lower = range.lowerBound
+        let upper = range.upperBound
+        guard lower.isFinite, upper.isFinite, lower < upper else { return 0.5 }
+        let scale = max(abs(lower), abs(upper), abs(value), 1)
+        let normalizedLower = lower / scale
+        let normalizedUpper = upper / scale
+        let span = normalizedUpper - normalizedLower
+        guard span.isFinite, span > 0 else { return 0.5 }
+        return min(max((value / scale - normalizedLower) / span, 0), 1)
+    }
 }
 
 extension BinaryFloatingPoint {
@@ -63,6 +90,11 @@ extension BinaryFloatingPoint {
 
     func livelineAtLeast(_ minimum: Self, fallback: Self) -> Self {
         guard isFinite else { return fallback }
+        return Swift.min(Swift.max(self, minimum), Self(10_000))
+    }
+
+    func livelinePositive(atLeast minimum: Self, fallback: Self) -> Self {
+        guard isFinite, self > 0 else { return fallback }
         return Swift.min(Swift.max(self, minimum), Self(10_000))
     }
 

@@ -8,16 +8,17 @@ struct DitherShowcaseView: View {
 
     var body: some View {
         ZStack {
-            StorybookData.darkBackground.ignoresSafeArea()
+            Color(red: 248 / 255, green: 249 / 255, blue: 251 / 255)
+                .ignoresSafeArea()
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("DITHER / LIVELINE")
                             .font(.title2.weight(.bold).monospaced())
-                            .foregroundStyle(.white)
-                        Text("One animated style · every native chart")
+                            .foregroundStyle(Color.black.opacity(0.88))
+                        Text("Textured fills · crisp defining lines")
                             .font(.caption.weight(.medium).monospaced())
-                            .foregroundStyle(.white.opacity(0.52))
+                            .foregroundStyle(Color.black.opacity(0.5))
                     }
 
                     LazyVGrid(
@@ -66,7 +67,7 @@ struct DitherShowcaseView: View {
             .scrollIndicators(.hidden)
             .accessibilityIdentifier("dither-showcase-scroll")
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
     }
 
     private func config(
@@ -75,7 +76,7 @@ struct DitherShowcaseView: View {
         window: TimeInterval
     ) -> LivelineChartConfiguration {
         LivelineChartConfiguration(
-            theme: .dark,
+            theme: .light,
             style: .dither(
                 LivelineDitherStyle(
                     variant: variant,
@@ -104,16 +105,16 @@ struct DitherShowcaseView: View {
         VStack(alignment: .leading, spacing: 5) {
             Text(title)
                 .font(.caption2.weight(.semibold).monospaced())
-                .foregroundStyle(.white.opacity(0.72))
+                .foregroundStyle(Color.black.opacity(0.68))
                 .accessibilityIdentifier("dither-panel-title-\(id)")
             content()
                 .frame(height: verticalSizeClass == .compact ? 140 : 196)
         }
         .padding(9)
-        .background(Color.white.opacity(0.035))
+        .background(Color.white)
         .overlay {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(Color.black.opacity(0.08), lineWidth: 1)
         }
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }

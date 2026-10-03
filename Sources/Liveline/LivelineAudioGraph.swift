@@ -264,6 +264,17 @@ struct LivelineAudioGraphModel: Equatable {
             categoryOrder = samples.map(\.0)
             series = [categorical(LivelineStrings.labelFlow, isContinuous: false, samples)]
 
+        case let .advanced(content):
+            let descriptor = LivelineAdvancedAudioGraph.make(
+                content: content,
+                visibleRange: visibleRange,
+                formatValue: configuration.formatValue
+            )
+            series = descriptor.series
+            isCategorical = descriptor.isCategorical
+            categoryOrder = descriptor.categoryOrder
+            explicitValueRange = descriptor.valueRange
+
         case let .candle(data, _, candles, _, liveCandle, lineData, _):
             if configuration.lineMode, !lineData.isEmpty {
                 series = [timed(LivelineStrings.labelPrice, isContinuous: true, lineData.map { ($0.time, $0.value) })]

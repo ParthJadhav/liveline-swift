@@ -46,6 +46,15 @@ enum LivelineRenderer {
     static let candleLineLerpBase = 0.08
     static let candleLineAdaptiveBoost = 0.20
 
+    /// Candle charts draw their own Cartesian grid, but their value layout can
+    /// still position the original single reference-line annotation.
+    static func supportsPrimaryReferenceLine(
+        kind: LivelineChartKind,
+        capabilities: LivelineChartCapabilities
+    ) -> Bool {
+        capabilities.usesCartesianGrid || kind == .candle
+    }
+
     static func draw(context: inout GraphicsContext, state: LivelineRenderState, input: LivelineRenderInput) {
         guard input.size.width > 8, input.size.height > 8 else {
             state.interactionSnapshot = nil
@@ -233,7 +242,10 @@ enum LivelineRenderer {
             if state.shakeAmplitude < 0.2 { state.shakeAmplitude = 0 }
         }
 
-        if let referenceLine = config.referenceLine, state.chartReveal > 0.01 {
+        if let referenceLine = config.referenceLine,
+            supportsPrimaryReferenceLine(kind: kind, capabilities: capabilities),
+            state.chartReveal > 0.01
+        {
             drawReferenceLine(context: &layer, layout: layout, palette: palette, referenceLine: referenceLine, formatValue: config.formatValue, textScale: textScale, alpha: state.chartReveal)
         }
 
@@ -267,7 +279,10 @@ enum LivelineRenderer {
             // datum. Keep the idle snapshot lightweight and only pay that cost
             // while a pointer or touch is actively inspecting the chart.
             includeTargets: input.hoverLocation != nil,
-            targetLocation: input.hoverLocation
+            targetLocation: input.hoverLocation,
+            textScale: textScale,
+            displayScale: context.environment.displayScale,
+            state: state
         )
         state.interactionSnapshot = interactionSnapshot
         let tooltipSelection = LivelineHoverResolver.resolveSelection(
@@ -319,6 +334,16 @@ enum LivelineRenderer {
                     input: compositorInput,
                     drawText: false
                 )
+
+                var maskInput = compositorInput
+                // The mask redraw is purely geometric. It must not advance
+                // transitions, spawn decorations, or include the candle grid.
+                maskInput.deltaTime = 0
+                maskInput.configuration.grid = false
+                maskInput.configuration.badge = false
+                maskInput.configuration.pulse = false
+                maskInput.configuration.endpointDecorations = false
+                maskInput.configuration.degen = nil
                 drawDitherTexture(
                     context: &styledLayer,
                     state: state,
@@ -326,9 +351,18 @@ enum LivelineRenderer {
                     color: input.accent,
                     style: style,
                     timestamp: animationTimestamp
-                )
+                ) { mask in
+                    _ = drawContent(
+                        context: &mask,
+                        state: state,
+                        input: maskInput,
+                        drawText: false,
+                        drawDecorations: false
+                    )
+                }
             }
-            drawContentText(context: &layer, input: compositorInput, overlay: contentOverlay)
+            drawContentText(
+                context: &layer, state: state, input: compositorInput, overlay: contentOverlay)
         }
 
         if capabilities.usesTimeAxis {
@@ -545,7 +579,8 @@ extension LivelineRenderer {
         }
 
         let range = LivelineMath.computeRange(
-            points: renderData.rangePoints,
+            pointsMinimum: renderData.rangePointsMinimum,
+            pointsMaximum: renderData.rangePointsMaximum,
             currentValue: smoothValue,
             referenceValue: config.referenceLine?.value,
             exaggerate: config.exaggerate

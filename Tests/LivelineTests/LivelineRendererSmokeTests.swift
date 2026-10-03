@@ -111,6 +111,27 @@ final class LivelineRendererSmokeTests: XCTestCase {
                 LivelineSankeyLink(source: "Visits", target: "Bounced", value: 60),
                 LivelineSankeyLink(source: "Signups", target: "Paid", value: 12),
             ], configuration: config))),
+            ("violin", AnyView(LivelineChart(violin: [LivelineDistributionSeries(id: "a", label: "A", values: [1, 2, 2, 3, 5])], configuration: config))),
+            ("ridgeline", AnyView(LivelineChart(ridgeline: [LivelineDistributionSeries(id: "a", label: "A", values: [1, 2, 2, 3, 5])], configuration: config))),
+            ("calendarHeatmap", AnyView(LivelineChart(calendarHeatmap: [LivelineCalendarValue(date: Date(timeIntervalSince1970: 1_700_000_000), value: 4)], configuration: config))),
+            ("gantt", AnyView(LivelineChart(gantt: [LivelineGanttTask(id: "a", label: "Build", start: 1, end: 3, lane: 0, progress: 0.5)], configuration: config))),
+            ("chord", AnyView(LivelineChart(chord: [LivelineChordLink(source: "A", target: "B", value: 4)], configuration: config))),
+            ("parallelCoordinates", AnyView(LivelineChart(parallelCoordinates: [LivelineParallelRecord(id: "a", label: "A", values: [1, 4, 2]), LivelineParallelRecord(id: "b", label: "B", values: [3, 2, 5])], configuration: config))),
+            ("hexbin", AnyView(LivelineChart(hexbin: [LivelineXYPoint(id: "a", x: 1, y: 3), LivelineXYPoint(id: "b", x: 2, y: 4)], configuration: config))),
+            ("bump", AnyView(LivelineChart(bump: [LivelineRankSeries(id: "a", label: "A", points: [LivelineRankPoint(time: 1, rank: 1), LivelineRankPoint(time: 3, rank: 2)])], configuration: config))),
+            ("horizon", AnyView(LivelineChart(horizon: points, configuration: config))),
+            ("marimekko", AnyView(LivelineChart(marimekko: [LivelineMarimekkoColumn(id: "a", label: "A", width: 2, segments: categories)], configuration: config))),
+            ("polarArea", AnyView(LivelineChart(polarArea: categories, configuration: config))),
+            ("network", AnyView(LivelineChart(networkNodes: [LivelineNetworkNode(id: "a", label: "A"), LivelineNetworkNode(id: "b", label: "B")], edges: [LivelineNetworkEdge(source: "a", target: "b")], configuration: config))),
+            ("contour", AnyView(LivelineChart(contour: [LivelineContourSample(id: "00", x: 0, y: 0, value: 1), LivelineContourSample(id: "10", x: 1, y: 0, value: 2), LivelineContourSample(id: "01", x: 0, y: 1, value: 3), LivelineContourSample(id: "11", x: 1, y: 1, value: 4)], configuration: config))),
+            ("ternary", AnyView(LivelineChart(ternary: [LivelineTernaryPoint(id: "a", label: "A", a: 3, b: 2, c: 1)], configuration: config))),
+            ("waffle", AnyView(LivelineChart(waffle: categories, configuration: config))),
+            ("volumeProfile", AnyView(LivelineChart(volumeProfile: [LivelinePriceVolume(price: 10, volume: 4), LivelinePriceVolume(price: 11, volume: 7)], configuration: config))),
+            ("renko", AnyView(LivelineChart(renko: points, style: LivelineRenkoStyle(brickSize: 1), configuration: config))),
+            ("heikinAshi", AnyView(LivelineChart(heikinAshi: [LivelineCandle(time: 1, open: 3, high: 6, low: 2, close: 5), LivelineCandle(time: 2, open: 5, high: 8, low: 4, close: 6)], configuration: config))),
+            ("marketDepth", AnyView(LivelineChart(marketDepth: [LivelineOrderBookLevel(price: 9, bidSize: 4), LivelineOrderBookLevel(price: 11, askSize: 5)], configuration: config))),
+            ("ohlcVolume", AnyView(LivelineChart(ohlcVolume: [LivelineCandleVolume(time: 1, open: 3, high: 6, low: 2, close: 5, volume: 8)], configuration: config))),
+            ("pointAndFigure", AnyView(LivelineChart(pointAndFigure: points, style: LivelinePointAndFigureStyle(boxSize: 1), configuration: config))),
             ("candle", AnyView(LivelineChart(
                 data: points,
                 value: 5,
@@ -213,6 +234,188 @@ final class LivelineRendererSmokeTests: XCTestCase {
             let image: NSImage = try XCTUnwrap(renderer.nsImage, "Failed to render dither variant \(index)")
             XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
         }
+    }
+
+    @MainActor
+    func testDitherTexturesBroadFillsWithoutCuttingThinStrokes() throws {
+        let size = CGSize(width: 96, height: 72)
+        let fillRect = CGRect(x: 8, y: 8, width: 34, height: 42)
+        var strokePath = Path()
+        strokePath.move(to: CGPoint(x: 52, y: 16))
+        strokePath.addLine(to: CGPoint(x: 88, y: 54))
+
+        func frame(dithered: Bool) throws -> [UInt8] {
+            let renderer = ImageRenderer(
+                content: Canvas { context, canvasSize in
+                    context.fill(Path(fillRect), with: .color(.blue))
+                    context.stroke(strokePath, with: .color(.blue), lineWidth: 2)
+
+                    guard dithered else { return }
+                    let layout = LivelineLayout(
+                        size: canvasSize,
+                        padding: LivelineResolvedPadding(top: 0, right: 0, bottom: 0, left: 0),
+                        minValue: 0,
+                        maxValue: 1,
+                        leftEdge: 0,
+                        rightEdge: 1
+                    )
+                    LivelineRenderer.drawDitherTexture(
+                        context: &context,
+                        state: LivelineRenderState(),
+                        layout: layout,
+                        color: .blue,
+                        style: LivelineDitherStyle(
+                            variant: .hatched,
+                            bloom: .off,
+                            cellSize: 2,
+                            sparkleDensity: 0,
+                            animated: false
+                        ),
+                        timestamp: 0
+                    ) { mask in
+                        mask.fill(Path(fillRect), with: .color(.white))
+                        mask.stroke(strokePath, with: .color(.white), lineWidth: 2)
+                    }
+                }
+                .frame(width: size.width, height: size.height)
+            )
+            renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+            renderer.scale = 1
+            let image: CGImage = try XCTUnwrap(renderer.cgImage)
+            var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+            let bitmap = try XCTUnwrap(CGContext(
+                data: &pixels,
+                width: image.width,
+                height: image.height,
+                bitsPerComponent: 8,
+                bytesPerRow: image.width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ))
+            bitmap.draw(image, in: CGRect(origin: .zero, size: size))
+            return pixels
+        }
+
+        func changedChannels(
+            from standard: [UInt8],
+            to dithered: [UInt8],
+            in region: CGRect
+        ) -> Int {
+            let minX = max(0, Int(region.minX))
+            let maxX = min(Int(size.width), Int(region.maxX))
+            let minY = max(0, Int(region.minY))
+            let maxY = min(Int(size.height), Int(region.maxY))
+            var count = 0
+            for y in minY..<maxY {
+                for x in minX..<maxX {
+                    let offset = (y * Int(size.width) + x) * 4
+                    for channel in 0..<4 where abs(Int(standard[offset + channel]) - Int(dithered[offset + channel])) > 16 {
+                        count += 1
+                    }
+                }
+            }
+            return count
+        }
+
+        let standard = try frame(dithered: false)
+        let dithered = try frame(dithered: true)
+        XCTAssertGreaterThan(
+            changedChannels(from: standard, to: dithered, in: fillRect.insetBy(dx: 5, dy: 5)),
+            400,
+            "Dither did not texture the broad fill interior"
+        )
+        XCTAssertEqual(
+            changedChannels(
+                from: standard,
+                to: dithered,
+                in: CGRect(x: 48, y: 12, width: 44, height: 46)
+            ),
+            0,
+            "Dither must not punch holes into readability-critical strokes"
+        )
+    }
+
+    @MainActor
+    func testViolinRevealChangesOpacityWithoutNarrowingFinalGeometry() throws {
+        let size = CGSize(width: 180, height: 160)
+        let series = [
+            LivelineDistributionSeries(
+                id: "distribution", label: "Distribution",
+                values: [1, 1.5, 2, 2.1, 2.2, 3, 4, 4.5, 5])
+        ]
+        let style = LivelineViolinStyle(showsLabels: false)
+        let profiles = LivelineAdvancedLayout.distributionProfiles(series, bandwidth: style.bandwidth)
+        let layout = LivelineLayout(
+            size: size,
+            padding: .init(top: 10, right: 10, bottom: 10, left: 10),
+            minValue: 0,
+            maxValue: 6,
+            leftEdge: 0,
+            rightEdge: 1
+        )
+        let palette = LivelinePalette.resolve(accent: .blue, mode: .light, lineWidth: 2)
+
+        func alphaBounds(reveal: Double) throws -> CGRect {
+            let renderer = ImageRenderer(
+                content: Canvas { context, _ in
+                    LivelineRenderer.drawViolins(
+                        context: &context,
+                        series: series,
+                        style: style,
+                        layout: layout,
+                        palette: palette,
+                        profiles: profiles,
+                        reveal: reveal,
+                        textScale: .standard,
+                        drawMarks: true,
+                        drawLabels: false
+                    )
+                }
+                .frame(width: size.width, height: size.height)
+            )
+            renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+            renderer.scale = 1
+            let image = try XCTUnwrap(renderer.cgImage)
+            var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+            let bitmap = try XCTUnwrap(CGContext(
+                data: &pixels,
+                width: image.width,
+                height: image.height,
+                bitsPerComponent: 8,
+                bytesPerRow: image.width * 4,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ))
+            bitmap.draw(image, in: CGRect(origin: .zero, size: size))
+
+            var minimumX = image.width
+            var maximumX = -1
+            var minimumY = image.height
+            var maximumY = -1
+            for y in 0..<image.height {
+                for x in 0..<image.width where pixels[(y * image.width + x) * 4 + 3] > 2 {
+                    minimumX = min(minimumX, x)
+                    maximumX = max(maximumX, x)
+                    minimumY = min(minimumY, y)
+                    maximumY = max(maximumY, y)
+                }
+            }
+            XCTAssertGreaterThanOrEqual(maximumX, minimumX)
+            XCTAssertGreaterThanOrEqual(maximumY, minimumY)
+            return CGRect(
+                x: minimumX,
+                y: minimumY,
+                width: maximumX - minimumX + 1,
+                height: maximumY - minimumY + 1
+            )
+        }
+
+        let partial = try alphaBounds(reveal: 0.4)
+        let settled = try alphaBounds(reveal: 1)
+        XCTAssertEqual(partial.minX, settled.minX, accuracy: 1)
+        XCTAssertEqual(partial.maxX, settled.maxX, accuracy: 1)
+        XCTAssertEqual(partial.minY, settled.minY, accuracy: 1)
+        XCTAssertEqual(partial.maxY, settled.maxY, accuracy: 1)
     }
 
     @MainActor

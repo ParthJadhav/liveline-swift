@@ -496,7 +496,8 @@ final class LivelineAccessibilityTests: XCTestCase {
                     configuration: configuration,
                     hiddenSeries: [],
                     includeEntries: includeEntries
-                )
+                ),
+                retaining: content
             ) {
                 LivelineChartAccessibilityModel.make(
                     content: content,

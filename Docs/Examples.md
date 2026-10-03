@@ -1,5 +1,7 @@
 # Example Recipes
 
+For violin, ridgeline, calendar heatmap, Gantt, chord, parallel coordinates, hexbin, bump, horizon, Marimekko, polar area, network, contour, ternary, waffle, volume profile, Renko, Heikin-Ashi, market depth, OHLC with volume, and point-and-figure recipes, see the [advanced chart catalog](AdvancedCharts.md).
+
 ## Dashboard Line Chart
 
 ```swift

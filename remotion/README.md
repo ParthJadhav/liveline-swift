@@ -1,12 +1,13 @@
 # Liveline demo videos (Remotion)
 
-Three release compositions live here:
+Four release compositions live here:
 
 | Composition ID | Output | Length |
 | --- | --- | --- |
 | `LivelinePlatforms` | `Media/liveline-platforms.mp4` | ~22s |
 | `Liveline060` | `Media/liveline-0-6-0-demo.mp4` | 50s |
 | `Liveline070` | `Media/liveline-0-7-0-demo.mp4` | 26s |
+| `LivelineAdvancedPR` | `Media/liveline-advanced-charts-pr.mp4` | ~62s |
 
 ```sh
 bun install --frozen-lockfile
@@ -14,7 +15,20 @@ bun run studio       # live-edit at http://localhost:3000
 bun run render       # writes ../Media/liveline-platforms.mp4
 bun run render:060   # writes ../Media/liveline-0-6-0-demo.mp4
 bun run render:070   # writes ../Media/liveline-0-7-0-demo.mp4
+bun run render:advanced-pr # writes ../Media/liveline-advanced-charts-pr.mp4
+bun run poster:advanced-pr # writes the PR poster PNG
+bun run verify:advanced-pr # asserts 21 unique scenes and native assets
 ```
+
+## `LivelineAdvancedPR` — the advanced-chart PR demo
+
+The light-mode cut gives every one of the 21 new chart families in PR #6 a
+dedicated scene. Every standard and Dither clip is native SwiftUI footage with
+changing chart data; Remotion keeps the chart viewport fixed and owns only the
+short labels, cuts, and audio. The creative contract, asset provenance, and
+exact reproduction commands live in [`ADVANCED_PR_DEMO.md`](ADVANCED_PR_DEMO.md).
+Native inputs live in `public/advanced-pr-light/`, and the reel composition lives
+in `src/advanced-pr/`.
 
 ## `Liveline070` — the 0.7.0 improvement demo
 

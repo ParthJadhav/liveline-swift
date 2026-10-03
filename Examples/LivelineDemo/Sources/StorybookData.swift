@@ -406,19 +406,25 @@ enum StorybookData {
         suffix: String,
         padding: LivelinePadding = LivelinePadding()
     ) -> LivelineChartConfiguration {
-        LivelineChartConfiguration(
-            theme: theme,
+        var configuration = LivelineChartConfiguration(
+            theme: StorybookLaunch.advancedDemoLightFromArguments() ? .light : theme,
             window: window,
             badge: false,
             fill: false,
             pulse: false,
             endpointDecorations: false,
-            fadeEffects: StorybookLaunch.chartShowcaseFromArguments(),
+            fadeEffects: StorybookLaunch.chartShowcaseFromArguments()
+                || StorybookLaunch.advancedDemoLiveFromArguments(),
             formatValue: { value in
                 value.formatted(.number.precision(.fractionLength(0))) + suffix
             },
             padding: padding
         )
+        if let ditherStyle = StorybookLaunch.advancedDemoDitherStyleFromArguments() {
+            configuration.style = ditherStyle
+            configuration.fadeEffects = true
+        }
+        return configuration
     }
 
     static func normalizedSnapshotConfig(

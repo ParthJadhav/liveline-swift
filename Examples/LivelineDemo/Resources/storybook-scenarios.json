@@ -353,5 +353,110 @@
     "id": "sankey-basic",
     "area": "Sankey",
     "coverage": "Three-column funnel flow with proportional ribbons."
+  },
+  {
+    "id": "violin-basic",
+    "area": "Violin",
+    "coverage": "Mirrored kernel densities with quartiles, medians, and labels."
+  },
+  {
+    "id": "ridgeline-basic",
+    "area": "Ridgeline",
+    "coverage": "Overlapping density profiles for three distributions."
+  },
+  {
+    "id": "calendar-heatmap-basic",
+    "area": "Calendar heatmap",
+    "coverage": "Fourteen week civil-day activity grid with month and weekday labels."
+  },
+  {
+    "id": "gantt-basic",
+    "area": "Gantt",
+    "coverage": "Progress-bearing tasks with dependency connectors."
+  },
+  {
+    "id": "chord-basic",
+    "area": "Chord",
+    "coverage": "Weighted relationships between proportional team arcs."
+  },
+  {
+    "id": "parallel-basic",
+    "area": "Parallel coordinates",
+    "coverage": "Four records compared across five independently scaled axes."
+  },
+  {
+    "id": "hexbin-basic",
+    "area": "Hexbin",
+    "coverage": "Weighted two-dimensional observations aggregated into hexagonal bins."
+  },
+  {
+    "id": "bump-basic",
+    "area": "Bump",
+    "coverage": "Five crossing rank series with point markers and end labels."
+  },
+  {
+    "id": "horizon-basic",
+    "area": "Horizon",
+    "coverage": "Three folded positive and negative deviation bands."
+  },
+  {
+    "id": "marimekko-basic",
+    "area": "Marimekko",
+    "coverage": "Region width and plan share encoded across two proportional dimensions."
+  },
+  {
+    "id": "polar-area-basic",
+    "area": "Polar area",
+    "coverage": "Equal-angle radial sectors with area-scaled category values."
+  },
+  {
+    "id": "network-basic",
+    "area": "Network",
+    "coverage": "Deterministic weighted service topology with direct labels."
+  },
+  {
+    "id": "contour-basic",
+    "area": "Contour",
+    "coverage": "Seven filled scalar-field levels with boundary lines."
+  },
+  {
+    "id": "ternary-basic",
+    "area": "Ternary",
+    "coverage": "Three-part compositions in a labelled triangular domain."
+  },
+  {
+    "id": "waffle-basic",
+    "area": "Waffle",
+    "coverage": "One hundred cells and a categorical legend."
+  },
+  {
+    "id": "volume-profile-basic",
+    "area": "Volume profile",
+    "coverage": "Horizontal price-level volume with point-of-control emphasis."
+  },
+  {
+    "id": "renko-basic",
+    "area": "Renko",
+    "coverage": "Fixed-size directional price bricks."
+  },
+  {
+    "id": "heikin-ashi-basic",
+    "area": "Heikin-Ashi",
+    "coverage": "Smoothed derived candles with distinct rising and falling bodies."
+  },
+  {
+    "id": "market-depth-basic",
+    "area": "Market depth",
+    "coverage": "Cumulative bid and ask liquidity with spread and midpoint."
+  },
+  {
+    "id": "ohlc-volume-basic",
+    "area": "OHLC + volume",
+    "coverage": "Synchronized candle and volume panes on a shared time axis."
+  },
+  {
+    "id": "point-figure-basic",
+    "area": "Point-and-figure",
+    "coverage": "Three-box reversal columns rendered with X and O symbols."
   }
 ]

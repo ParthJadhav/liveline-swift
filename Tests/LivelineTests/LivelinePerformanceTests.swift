@@ -62,6 +62,75 @@ final class LivelinePerformanceTests: XCTestCase {
             return snapshot.targets.count
         }
 
+        let distribution: [Double] = (0..<1_000).map { index -> Double in
+            let position = Double(index)
+            let primary = sin(position * 0.071) * 12
+            let secondary = cos(position * 0.019) * 4
+            return primary + secondary
+        }
+        benchmark(name: "advanced.density-1000", iterations: 20) { _ in
+            LivelineAdvancedMath.densityProfile(values: distribution, bandwidth: nil)?.samples.count ?? 0
+        }
+
+        let pricePoints: [LivelinePoint] = (0..<5_000).map { index -> LivelinePoint in
+            let position = Double(index)
+            let cycle = sin(position * 0.017) * 8
+            let microstructure = Double(index % 17) * 0.08
+            return LivelinePoint(
+                time: position,
+                value: 100 + cycle + microstructure
+            )
+        }
+        benchmark(name: "advanced.renko-5000", iterations: 50) { _ in
+            LivelineAdvancedMath.renkoBricks(points: pricePoints, brickSize: 0.5).count
+        }
+        benchmark(name: "advanced.point-figure-5000", iterations: 50) { _ in
+            LivelineAdvancedMath.pointFigureColumns(points: pricePoints, boxSize: 0.5, reversalBoxes: 3).count
+        }
+
+        let depth = (0..<2_000).map { index in
+            let offset = Double(index) * 0.01
+            return index.isMultiple(of: 2)
+                ? LivelineOrderBookLevel(price: 100 - offset, bidSize: Double(index % 11 + 1))
+                : LivelineOrderBookLevel(price: 100 + offset, askSize: Double(index % 13 + 1))
+        }
+        benchmark(name: "advanced.market-depth-2000", iterations: 100) { _ in
+            let curve = LivelineAdvancedMath.marketDepthCurve(depth)
+            return curve.bids.count + curve.asks.count
+        }
+
+        let contourSamples = (0..<9).flatMap { y in
+            (0..<9).map { x in
+                let dx = Double(x) - 4
+                let dy = Double(y) - 4
+                return LivelineContourSample(
+                    id: "\(x)-\(y)",
+                    x: Double(x),
+                    y: Double(y),
+                    value: exp(-(dx * dx + dy * dy) / 11)
+                )
+            }
+        }
+        benchmark(name: "visual.contour-9x9", iterations: 30) { _ in
+            let geometry = LivelineVisualGeometry.contour(
+                samples: contourSamples,
+                levelCount: 7,
+                plot: CGRect(x: 0, y: 0, width: 320, height: 220),
+                subdivisions: 8
+            )
+            return geometry.fillCells.count + geometry.lines.count
+        }
+        let contourState = LivelineRenderState()
+        benchmark(name: "visual.contour-warm-frame", iterations: 1_000) { _ in
+            let geometry = contourState.contourGeometry(
+                samples: contourSamples,
+                levelCount: 7,
+                plot: CGRect(x: 0, y: 0, width: 320, height: 220),
+                subdivisions: 8
+            )
+            return geometry.fillCells.count + geometry.lines.count
+        }
+
         let frameState = LivelineRenderState()
         benchmark(name: "renderer.dither-warm-frame", iterations: 200) { iteration in
             let renderer = ImageRenderer(

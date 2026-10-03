@@ -167,9 +167,7 @@ extension LivelineRenderer {
                     formatValue(value),
                     context: &rowLayer,
                     at: CGPoint(
-                        x: layout.isRTL
-                            ? layout.plotLeftX - axisLabelOffsetX
-                            : layout.rightX + axisLabelOffsetX,
+                        x: layout.valueAxisLabelX(offset: axisLabelOffsetX),
                         y: y
                     ),
                     anchor: layout.isRTL ? .trailing : .leading,
@@ -240,7 +238,7 @@ extension LivelineRenderer {
             }
         }
 
-        var labels: [(x: CGFloat, text: String, alpha: Double, width: CGFloat)] = []
+        var labels: [(x: CGFloat, tickX: CGFloat, text: String, alpha: Double, width: CGFloat)] = []
         for (key, label) in state.timeAxisLabels {
             guard label.alpha > 0.02 else { continue }
             let time = key
@@ -265,10 +263,16 @@ extension LivelineRenderer {
                 width = measureText(label.text, context: layer, font: font).width
                 state.timeAxisLabels[key]?.measuredWidth = width
             }
-            labels.append((x, label.text, label.alpha, width))
+            let halfWidth = width / 2
+            let lowerBound = layout.plotLeftX + halfWidth
+            let upperBound = layout.rightX - halfWidth
+            let clampedX = lowerBound > upperBound
+                ? (layout.plotLeftX + layout.rightX) / 2
+                : min(max(x, lowerBound), upperBound)
+            labels.append((clampedX, x, label.text, label.alpha, width))
         }
 
-        var drawn: [(x: CGFloat, text: String, alpha: Double, width: CGFloat)] = []
+        var drawn: [(x: CGFloat, tickX: CGFloat, text: String, alpha: Double, width: CGFloat)] = []
         for label in labels.sorted(by: { $0.x < $1.x }) {
             if let previous = drawn.last {
                 let left = label.x - label.width / 2
@@ -288,8 +292,8 @@ extension LivelineRenderer {
             tickLayer.opacity *= label.alpha
 
             var tick = Path()
-            tick.move(to: CGPoint(x: label.x, y: layout.bottomY))
-            tick.addLine(to: CGPoint(x: label.x, y: layout.bottomY + 5))
+            tick.move(to: CGPoint(x: label.tickX, y: layout.bottomY))
+            tick.addLine(to: CGPoint(x: label.tickX, y: layout.bottomY + 5))
             tickLayer.stroke(tick, with: .color(palette.gridLine), lineWidth: 1)
 
             drawText(

@@ -117,8 +117,8 @@ extension LivelineRenderer {
         let visibleLower = LivelineMath.revealedPoints(lowerPoints, reveal: progress)
 
         var band = Path()
-        if let first = visibleUpper.first {
-            band.move(to: first)
+        if !visibleUpper.isEmpty {
+            band.move(to: visibleUpper[0])
             for point in visibleUpper.dropFirst() { band.addLine(to: point) }
             for point in visibleLower.reversed() { band.addLine(to: point) }
             band.closeSubpath()

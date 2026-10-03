@@ -60,23 +60,40 @@ final class LivelineRenderState: ObservableObject {
     var paletteBuildCount = 0
     var legendGutterMeasureCount = 0
     var accessibilityModelBuildCount = 0
+    var contourGeometryBuildCount = 0
+    var distributionProfileBuildCount = 0
     /// Every cached text measurement was taken at this scale; a Dynamic Type
     /// change invalidates them all.
     private(set) var textScale: LivelineTextScale = .standard
     private var preparedChartKey: LivelinePreparedChartKey?
     private var preparedChartCache: LivelinePreparedChart?
+    /// Retaining the source keeps its array buffers shared while the pointer-
+    /// based key is live. A caller's next mutation must then use Swift copy-on-
+    /// write and receive a new storage identity instead of silently reusing a
+    /// stale prepared chart after an in-place interior edit.
+    private var preparedChartSource: LivelineChartContent?
     private var waterfallKey: LivelineWaterfallKey?
     private var waterfallCache: [LivelineWaterfallSegment] = []
+    private var waterfallSource: [LivelinePoint]?
     private var histogramKey: LivelineHistogramKey?
     private var histogramCache: [LivelineHistogramBin] = []
+    private var histogramSource: [Double]?
     private var treemapKey: LivelineTreemapKey?
     private var treemapCache: LivelineTreemapLayout = .empty
+    private var treemapSource: [LivelineTreemapNode]?
     private var sankeyKey: LivelineSankeyKey?
     private var sankeyCache: LivelineSankeyGraph?
+    private var sankeySource: [LivelineSankeyLink]?
+    private var contourKey: LivelineContourKey?
+    private var contourCache: LivelineContourGeometry?
+    private var distributionProfileKey: LivelineDistributionProfileKey?
+    private var distributionProfileCache: [LivelineDistributionProfile] = []
     private var paletteCache: [LivelinePaletteKey: LivelinePalette] = [:]
     private var legendGutterCache: [LivelineLegendGutterKey: CGFloat] = [:]
+    private var badgeTemplateSizeCache: [String: CGSize] = [:]
     private var accessibilityModelKey: LivelineAccessibilityModelKey?
     private var accessibilityModelCache: LivelineChartAccessibilityModel?
+    private var accessibilityModelSource: LivelineChartContent?
 
     /// Resolving a palette bridges the accent through `UIColor`/`NSColor` and
     /// rebuilds every derived shade. That happens for the chart and for each
@@ -99,9 +116,23 @@ final class LivelineRenderState: ObservableObject {
         guard scale != textScale else { return }
         textScale = scale
         legendGutterCache.removeAll(keepingCapacity: true)
+        badgeTemplateSizeCache.removeAll(keepingCapacity: true)
         for key in timeAxisLabels.keys {
             timeAxisLabels[key]?.measuredWidth = nil
         }
+    }
+
+    /// The badge measures a digit-stable template through the graphics
+    /// context — Core Text layout — which is invariant until the template or
+    /// the type scale changes, so it must not be repeated per frame.
+    func badgeTemplateSize(_ template: String, measure: () -> CGSize) -> CGSize {
+        if let cached = badgeTemplateSizeCache[template] { return cached }
+        if badgeTemplateSizeCache.count >= 8 {
+            badgeTemplateSizeCache.removeAll(keepingCapacity: true)
+        }
+        let size = measure()
+        badgeTemplateSizeCache[template] = size
+        return size
     }
 
     /// Legend labels are measured through the graphics context, which is far
@@ -126,6 +157,7 @@ final class LivelineRenderState: ObservableObject {
     /// whole dataset would be reformatted on each move while VoiceOver runs.
     func accessibilityModel(
         for key: LivelineAccessibilityModelKey,
+        retaining source: LivelineChartContent,
         make: () -> LivelineChartAccessibilityModel
     ) -> LivelineChartAccessibilityModel {
         if key == accessibilityModelKey, let cached = accessibilityModelCache {
@@ -135,6 +167,7 @@ final class LivelineRenderState: ObservableObject {
         accessibilityModelBuildCount += 1
         accessibilityModelKey = key
         accessibilityModelCache = model
+        accessibilityModelSource = source
         return model
     }
 
@@ -144,9 +177,14 @@ final class LivelineRenderState: ObservableObject {
         preparedChartKey == key ? preparedChartCache : nil
     }
 
-    func storePreparedChart(_ chart: LivelinePreparedChart, for key: LivelinePreparedChartKey) {
+    func storePreparedChart(
+        _ chart: LivelinePreparedChart,
+        for key: LivelinePreparedChartKey,
+        retaining source: LivelineChartContent
+    ) {
         preparedChartKey = key
         preparedChartCache = chart
+        preparedChartSource = source
     }
 
     /// Waterfall segments are a running total over the *entire* dataset, so
@@ -157,6 +195,7 @@ final class LivelineRenderState: ObservableObject {
         let segments = LivelineMath.waterfallSegments(points: points, initialValue: initialValue)
         waterfallKey = key
         waterfallCache = segments
+        waterfallSource = points
         return segments
     }
 
@@ -178,6 +217,7 @@ final class LivelineRenderState: ObservableObject {
         let bins = LivelineMath.histogramBins(values: values, binning: binning)
         histogramKey = key
         histogramCache = bins
+        histogramSource = values
         return bins
     }
 
@@ -210,6 +250,7 @@ final class LivelineRenderState: ObservableObject {
         )
         treemapKey = key
         treemapCache = tiling
+        treemapSource = nodes
         return tiling
     }
 
@@ -226,7 +267,68 @@ final class LivelineRenderState: ObservableObject {
         let graph = LivelineMath.sankeyGraph(links: links)
         sankeyKey = key
         sankeyCache = graph
+        sankeySource = links
         return graph
+    }
+
+    /// Bicubic sampling and isoline stitching are substantially more expensive
+    /// than painting the resulting paths. Cache the settled geometry across
+    /// reveal frames and Dither's separate mark/text passes.
+    func contourGeometry(
+        samples: [LivelineContourSample],
+        levelCount: Int,
+        plot: CGRect,
+        subdivisions: Int,
+        isRTL: Bool = false
+    ) -> LivelineContourGeometry {
+        var fingerprint: UInt64 = 0xcbf2_9ce4_8422_2325
+        for sample in samples {
+            fingerprint ^= sample.x.bitPattern
+            fingerprint &*= 0x0000_0100_0000_01b3
+            fingerprint ^= sample.y.bitPattern
+            fingerprint &*= 0x0000_0100_0000_01b3
+            fingerprint ^= sample.value.bitPattern
+            fingerprint &*= 0x0000_0100_0000_01b3
+        }
+        let key = LivelineContourKey(
+            fingerprint: fingerprint,
+            count: samples.count,
+            levelCount: levelCount,
+            plot: plot,
+            subdivisions: subdivisions,
+            isRTL: isRTL
+        )
+        if contourKey == key, let cached = contourCache { return cached }
+        let geometry = LivelineVisualGeometry.contour(
+            samples: samples,
+            levelCount: levelCount,
+            plot: plot,
+            subdivisions: subdivisions,
+            isRTL: isRTL
+        )
+        contourGeometryBuildCount += 1
+        contourKey = key
+        contourCache = geometry
+        return geometry
+    }
+
+    /// KDE sorts observations and scans them for every sample in the profile.
+    /// The mark, text, and active-interaction passes all read the same result,
+    /// so retain it until either the observations or bandwidth changes.
+    func distributionProfiles(
+        series: [LivelineDistributionSeries],
+        bandwidth: Double?
+    ) -> [LivelineDistributionProfile] {
+        let cacheBandwidth = bandwidth.flatMap { value in
+            value.isFinite && value > 0 ? value : nil
+        }
+        let key = LivelineDistributionProfileKey(series: series, bandwidth: cacheBandwidth)
+        if key == distributionProfileKey { return distributionProfileCache }
+        let profiles = LivelineAdvancedLayout.distributionProfiles(series, bandwidth: cacheBandwidth)
+        distributionProfileBuildCount += 1
+        distributionProfileKey = key
+        distributionProfileCache = profiles
+        return profiles
     }
 
     func frame(for timestamp: TimeInterval, isPaused: Bool) -> LivelineAnimationFrame {
@@ -277,12 +379,21 @@ final class LivelineRenderState: ObservableObject {
         if snapshotStartTimestamp == nil {
             snapshotStartTimestamp = timestamp
             snapshotElapsedCursor = 0
-            return timestamp
+            return 0
         }
 
-        let frameInterval = 1.0 / 60.0
-        snapshotElapsedCursor = min(snapshotElapsedTime, snapshotElapsedCursor + frameInterval)
-        return (snapshotStartTimestamp ?? timestamp) + snapshotElapsedCursor
+        let frameRate = 60.0
+        let elapsed = max(timestamp - (snapshotStartTimestamp ?? timestamp), 0)
+        let quantizedFrames = (elapsed * frameRate).rounded()
+        let targetCursor = min(snapshotElapsedTime, quantizedFrames / frameRate)
+        snapshotElapsedCursor = max(snapshotElapsedCursor, targetCursor)
+        // Snapshot animation time must not inherit the run's wall-clock phase:
+        // effects based on a modulo or sine would otherwise differ between two
+        // captures at the same requested elapsed time. Quantizing elapsed time
+        // to a 60 Hz testing timeline also lets rate-limited or dropped render
+        // calls catch up instead of making a 30 FPS Dither capture run at half
+        // speed.
+        return snapshotElapsedCursor
     }
 
     func resetIfNeeded(anchorValue: Double, window: TimeInterval) {
@@ -341,18 +452,26 @@ final class LivelineRenderState: ObservableObject {
         ditherGeometryCache = nil
         preparedChartKey = nil
         preparedChartCache = nil
+        preparedChartSource = nil
         waterfallKey = nil
         waterfallCache.removeAll(keepingCapacity: true)
+        waterfallSource = nil
         histogramKey = nil
         histogramCache.removeAll(keepingCapacity: true)
+        histogramSource = nil
         treemapKey = nil
         treemapCache = .empty
+        treemapSource = nil
         sankeyKey = nil
         sankeyCache = nil
+        sankeySource = nil
+        contourKey = nil
+        contourCache = nil
         paletteCache.removeAll(keepingCapacity: true)
         legendGutterCache.removeAll(keepingCapacity: true)
         accessibilityModelKey = nil
         accessibilityModelCache = nil
+        accessibilityModelSource = nil
     }
 
     func nextRandom(seed: UInt32) -> Double {
@@ -452,6 +571,20 @@ struct LivelineSankeyKey: Equatable {
     var count: Int
     var firstValue: Double
     var lastValue: Double
+}
+
+struct LivelineContourKey: Equatable {
+    var fingerprint: UInt64
+    var count: Int
+    var levelCount: Int
+    var plot: CGRect
+    var subdivisions: Int
+    var isRTL: Bool
+}
+
+struct LivelineDistributionProfileKey: Hashable {
+    var series: [LivelineDistributionSeries]
+    var bandwidth: Double?
 }
 
 struct LivelineLegendGutterKey: Hashable {

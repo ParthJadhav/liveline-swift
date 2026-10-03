@@ -9,6 +9,9 @@ struct LivelineDemoApp: App {
         if CommandLine.arguments.contains("-ui-test-light-appearance") {
             return .light
         }
+        if CommandLine.arguments.contains("--advanced-demo-light") {
+            return .light
+        }
         return nil
     }()
 

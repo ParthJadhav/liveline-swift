@@ -55,6 +55,7 @@ extension LivelineRenderer {
 
     static func drawSeriesEndpoints(
         context: inout GraphicsContext,
+        layout: LivelineLayout,
         endpoints: [(point: CGPoint, palette: LivelinePalette, label: String?, alpha: Double)],
         alpha: Double,
         showPulse: Bool,
@@ -66,8 +67,23 @@ extension LivelineRenderer {
     ) {
         let dotAlpha = alpha < 0.3 ? 0 : (alpha - 0.3) / 0.7
         guard dotAlpha > 0.01 else { return }
+        let labeledEndpoints = drawsLabel
+            ? endpoints.enumerated().compactMap { index, endpoint in
+                endpoint.label == nil ? nil : (index, endpoint.point.y)
+            }
+            : []
+        let distributedLabels = LivelineVisualGeometry.distributedLabelPositions(
+            labeledEndpoints.map { $0.1 },
+            minimum: layout.padding.top + textScale.scaled(6),
+            maximum: layout.bottomY - textScale.scaled(6),
+            spacing: textScale.scaled(13)
+        )
+        let labelPositions = Dictionary(
+            uniqueKeysWithValues: zip(labeledEndpoints, distributedLabels).map {
+                ($0.0.0, $0.1)
+            })
 
-        for endpoint in endpoints {
+        for (index, endpoint) in endpoints.enumerated() {
             var layer = context
             layer.opacity *= dotAlpha * endpoint.alpha
             if drawsDot {
@@ -83,10 +99,24 @@ extension LivelineRenderer {
             if drawsLabel, let label = endpoint.label {
                 let labelOffset: CGFloat = legendSide == .trailing ? 6 : -6
                 let anchor: UnitPoint = legendSide == .trailing ? .leading : .trailing
+                let labelY = labelPositions[index] ?? endpoint.point.y
+                if abs(labelY - endpoint.point.y) > 0.5 {
+                    var leader = Path()
+                    leader.move(to: endpoint.point)
+                    leader.addLine(
+                        to: CGPoint(
+                            x: endpoint.point.x + labelOffset * 0.72,
+                            y: labelY
+                        ))
+                    layer.stroke(
+                        leader,
+                        with: .color(endpoint.palette.line.opacity(0.72)),
+                        style: StrokeStyle(lineWidth: 1, lineCap: .round, lineJoin: .round))
+                }
                 drawText(
                     label,
                     context: &layer,
-                    at: CGPoint(x: endpoint.point.x + labelOffset, y: endpoint.point.y - 0.5),
+                    at: CGPoint(x: endpoint.point.x + labelOffset, y: labelY),
                     anchor: anchor,
                     color: endpoint.palette.line,
                     font: textScale.font(10, weight: .semibold)

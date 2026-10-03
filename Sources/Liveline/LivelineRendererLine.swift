@@ -178,7 +178,18 @@ extension LivelineRenderer {
         }
 
         if config.badge {
-            drawBadge(context: &context, layout: layout, palette: palette, value: smoothValue, momentum: momentum, y: lastPoint.y, config: config, textScale: textScale, alpha: state.chartReveal)
+            drawBadge(
+                context: &context,
+                state: state,
+                layout: layout,
+                palette: palette,
+                value: smoothValue,
+                momentum: momentum,
+                y: lastPoint.y,
+                config: config,
+                textScale: textScale,
+                alpha: state.chartReveal
+            )
         }
 
     }
@@ -315,6 +326,7 @@ extension LivelineRenderer {
 extension LivelineRenderer {
     static func drawBadge(
         context: inout GraphicsContext,
+        state: LivelineRenderState,
         layout: LivelineLayout,
         palette: LivelinePalette,
         value: Double,
@@ -326,9 +338,16 @@ extension LivelineRenderer {
     ) {
         guard alpha > 0.25 else { return }
         let text = config.formatValue(value)
-        let template = text.map { $0.isNumber ? "8" : String($0) }.joined()
+        var template = ""
+        template.reserveCapacity(text.count)
+        for character in text {
+            template.append(character.isNumber ? "8" : character)
+        }
         let font = textScale.font(11, weight: .regular, design: .monospaced)
-        let size = measureText(template, context: context, font: font)
+        let localContext = context
+        let size = state.badgeTemplateSize(template) {
+            measureText(template, context: localContext, font: font)
+        }
         let tailLength = config.badgeTail ? badgeTailLength : 0
         let pillWidth = size.width + badgePaddingX * 2
         let pillHeight = textScale.scaled(badgeLineHeight) + badgePaddingY * 2
