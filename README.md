@@ -346,14 +346,14 @@ and resume normal focus navigation.
 The iOS demo lives in `Examples/LivelineDemo`.
 
 ```bash
-cd Examples/LivelineDemo
-xcodegen generate
-open LivelineDemo.xcodeproj
+scripts/install-xcodegen.sh .build/tools/xcodegen
+.build/tools/xcodegen/bin/xcodegen generate --spec Examples/LivelineDemo/project.yml
+open Examples/LivelineDemo/LivelineDemo.xcodeproj
 ```
 
 The generated project uses the local package path (`../..`). Its Live dashboard
 adapts from iPhone to a two-column iPad layout and follows the system color
-scheme. Storybook includes 92 deterministic scenarios with search, chart-family
+scheme. Storybook includes <!-- catalog:scenarios -->92<!-- /catalog --> deterministic scenarios with search, chart-family
 filters, static gallery previews, interaction guidance, and copyable SwiftUI
 recipes. CI builds the demo target as an iOS simulator app.
 
@@ -366,6 +366,9 @@ reproducible Remotion source in `remotion/`.
 
 ## Documentation
 
+- [Contributor quick start](CONTRIBUTING.md)
+- [Agent task map](AGENTS.md)
+- [Architecture](Docs/Architecture.md)
 - [API overview](Docs/API.md)
 - [Advanced chart catalog](Docs/AdvancedCharts.md)
 - [Chart quality standard](Docs/ChartQuality.md)
@@ -374,6 +377,9 @@ reproducible Remotion source in `remotion/`.
 - [Example recipes](Docs/Examples.md)
 - [Scenario matrix](Docs/ScenarioMatrix.md)
 - [Development and verification](Docs/Development.md)
+- [CI execution model](Docs/CI.md)
+- [Performance](Docs/Performance.md)
+- [Demo video provenance](remotion/README.md)
 - [Visual parity status](Docs/ParityStatus.md)
 - [Publishing checklist](Docs/Publishing.md)
 - [Changelog](CHANGELOG.md)

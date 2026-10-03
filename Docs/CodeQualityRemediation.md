@@ -1,4 +1,10 @@
-# Code Quality Remediation Plan
+# Code Quality Remediation Plan (historical)
+
+This records the remediation at `62918564` (2026-07-12), amended for the 0.7.0
+release at `2b57a29b` (2026-08-09). Verification numbers and local SDK availability
+below belong to those revisions; they are not current release acceptance.
+Use [Architecture](Architecture.md) for the current source map and
+[Development](Development.md) for current checks.
 
 ## Objective
 
@@ -20,52 +26,9 @@ Restructure Liveline so new chart families can be added without enlarging a god 
 - Visual-reference dependencies and the upstream revision are pinned.
 - Renderer, state, invalid-input, interaction, and platform-color behavior is covered by automated tests; a stable visual regression subset runs on pull requests.
 
-## Target Design
+## Architecture
 
-### Prepared chart module
-
-`LivelinePreparedChart` is the internal seam used by the view, compositor, and tests. Its interface exposes only normalized content, current value and momentum, time/range inputs, capabilities, and chart identity. Preparation hides chart-family data conversion and validation.
-
-```text
-Public initializers
-       |
-       v
-LivelineChartContent
-       |
-       v
-LivelineChartPreparer.prepare(...)
-       |
-       v
-LivelinePreparedChart
-       |
-       +----> Cartesian compositor (grid / time axis / hover / active point)
-       |
-       +----> Family mark renderer
-```
-
-The module is entirely in-process. Tests cross the same preparation interface as production; no adapter or mock seam is needed.
-
-### Motion module
-
-`LivelineMotionPolicy` resolves system Reduce Motion, caller pause, deterministic snapshot time, and whether the chart has active continuous effects. It produces the single effective frame delta and schedule decision consumed by every renderer subsystem.
-
-- Paused means a zero animation delta everywhere.
-- Reduce Motion completes reveals immediately, disables spatial/continuous effects, and retains static color/opacity feedback.
-- Static charts use a plain Canvas.
-- Animated charts use a timeline only while an animation or explicitly continuous effect is active.
-
-### Interaction ownership
-
-The chart remains source-compatible, but internal selection state is reconciled from a stable chart identity:
-
-- configuration changes update window and mode state when the caller changes their requested values;
-- hidden series IDs are intersected with current IDs;
-- at least one series remains visible;
-- hover is computed as immutable render output and delivered by the view after drawing.
-
-### Configuration
-
-The canonical initializer accepts typed groups for appearance, effects, viewport, interaction, motion, annotations, formatting, and callbacks. Existing flat properties and initializers forward to those groups for source compatibility. Screenshot timing moves to an internal environment value used by the demo rather than remaining part of ordinary renderer logic.
+The enduring implementation map is maintained in [Architecture](Architecture.md).
 
 ## Work Sequence
 
@@ -88,6 +51,11 @@ The canonical initializer accepts typed groups for appearance, effects, viewport
 - Preserve snapshot images unless a deliberate correctness fix requires updating the baseline and is documented.
 
 ## Verification Record
+
+The original July record reported 53 tests, 64 native captures, and a largest
+Swift file of 736 lines. The August amendment updated test, capture, UI, and
+file-size results below; unchanged coverage and SDK observations were carried
+forward from July and were not separately dated in the original record.
 
 - [x] Unit and behavior tests: 252 tests pass, including every chart kind and extreme finite-value rendering.
 - [x] Renderer/state coverage materially increased from the 0.22% audit baseline: package line coverage is 83.50%, `LivelineRenderer.swift` is 74.13%, and `LivelineRenderState.swift` is 89.24%.

@@ -125,7 +125,9 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Validate generated project metadata
-        run: python3 scripts/storybook_manifest.py validate
+        run: |
+          python3 scripts/storybook_manifest.py validate
+          python3 scripts/test_storybook_manifest.py
 
       - name: Validate chart visual baselines
         run: scripts/verify-chart-visuals.sh

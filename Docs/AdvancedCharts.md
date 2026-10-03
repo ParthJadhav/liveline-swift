@@ -1,6 +1,6 @@
 # Advanced chart catalog
 
-Liveline includes 21 advanced chart families in addition to its original real-time, statistical, categorical, hierarchy, and flow charts. Each family has a dedicated `LivelineChart` initializer, typed data, a typed style, native scrubbing/tooltips, VoiceOver inspection, Audio Graph output, Dynamic Type-aware labels, and standard or Dither rendering.
+Liveline includes <!-- catalog:advanced -->21<!-- /catalog --> advanced chart families in addition to its original real-time, statistical, categorical, hierarchy, and flow charts. Each family has a dedicated `LivelineChart` initializer, typed data, a typed style, native scrubbing/tooltips, VoiceOver inspection, Audio Graph output, Dynamic Type-aware labels, and standard or Dither rendering.
 
 ## Choosing a chart
 
@@ -161,7 +161,7 @@ Use concise labels, avoid encoding meaning by color alone, and keep `formatValue
 
 ## Screenshots
 
-Deterministic light-mode Dither captures for all 21 families live in [`Media/storybook-new-charts`](../Media/storybook-new-charts). The authoritative scenario IDs and coverage descriptions are in the [scenario matrix](ScenarioMatrix.md).
+Deterministic light-mode Dither captures for all <!-- catalog:advanced -->21<!-- /catalog --> families live in [`Media/storybook-new-charts`](../Media/storybook-new-charts). The authoritative scenario IDs and coverage descriptions are in the [scenario matrix](ScenarioMatrix.md).
 
 | Distribution and planning | Relationships and density | Financial and proportional |
 | --- | --- | --- |
@@ -181,4 +181,4 @@ Run the complete advanced-chart gate:
 scripts/verify-advanced-charts.sh
 ```
 
-Add `--capture` to refresh the 21 deterministic screenshots before checking their PNG dimensions and presence. See [Chart quality](ChartQuality.md) for the review standard and manual visual loop.
+Add `--capture` to refresh the <!-- catalog:advanced -->21<!-- /catalog --> deterministic screenshots before checking their PNG dimensions and presence. See [Chart quality](ChartQuality.md) for the review standard and manual visual loop.
