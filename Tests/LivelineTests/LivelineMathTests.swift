@@ -288,7 +288,6 @@ final class LivelineMathTests: XCTestCase {
             3,
             accuracy: 0.001
         )
-        // The source bar is as tall as everything leaving it.
         XCTAssertEqual(
             geometry.nodes[0].rect.height,
             geometry.links[0].thickness + geometry.links[1].thickness,
@@ -619,7 +618,6 @@ final class LivelineMathTests: XCTestCase {
         XCTAssertEqual(geometry.measureRect.width, layout.chartWidth * 0.72, accuracy: 0.001)
         XCTAssertEqual(geometry.targetProgress ?? 0, 0.8, accuracy: 1e-9)
         XCTAssertEqual(geometry.targetX ?? 0, layout.plotLeftX + layout.chartWidth * 0.8, accuracy: 0.001)
-        // The measure bar is thinner than the qualitative track it sits on.
         XCTAssertLessThan(geometry.measureRect.height, geometry.trackRect.height)
         // Both are centred on the same line, so the measure reads as sitting
         // inside the bands rather than beside them.

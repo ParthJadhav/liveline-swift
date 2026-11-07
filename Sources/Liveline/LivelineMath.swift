@@ -500,8 +500,6 @@ struct LivelineLayout {
         return bottomY - CGFloat(t) * chartHeight
     }
 
-    /// ``y(for:)`` held inside the plot, for marks that must not spill into
-    /// the gutters.
     func clampedY(for value: Double) -> CGFloat {
         LivelineMath.clamp(y(for: value), padding.top, bottomY)
     }

@@ -154,7 +154,6 @@ extension LivelineRenderer {
                     font: textScale.font(10, weight: .semibold)
                 )
             }
-            // The value needs a second line, which only the taller cells have.
             guard style.showsValues else { continue }
             guard !style.showsLabels || cell.rect.height >= minimumHeight + lineHeight else { continue }
             drawText(

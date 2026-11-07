@@ -438,8 +438,6 @@ extension LivelineMath {
         let total = items.reduce(0) { $0 + $1.element }
         guard total > 0, !items.isEmpty else { return result }
 
-        // Work in pixel areas so a row's aspect ratio is comparable to the
-        // rectangle it is being packed into.
         let scale = Double(rect.width) * Double(rect.height) / total
         let areas = items.map { $0.element * scale }
 
@@ -514,9 +512,6 @@ extension LivelineMath {
                 index += 1
             } else {
                 closeRow()
-                // A closed row consumed its strip; if nothing is left the
-                // remaining values collapse to zero-area rects rather than
-                // dividing by zero.
                 if remaining.width <= 0 || remaining.height <= 0 { return result }
             }
         }
@@ -720,7 +715,6 @@ extension LivelineMath {
             outgoing[link.sourceIndex].append(position)
         }
 
-        // Iterative DFS: an edge into a node still on the stack closes a cycle.
         enum Mark { case unseen, onStack, done }
         var marks = [Mark](repeating: .unseen, count: labels.count)
         var removed = Set<Int>()
@@ -755,8 +749,6 @@ extension LivelineMath {
         dropped.append(contentsOf: removed.map { candidates[$0].linkIndex })
         dropped.sort()
 
-        // Longest-path layering over the acyclic remainder, in topological
-        // order so one relaxation pass per edge suffices.
         var indegree = [Int](repeating: 0, count: labels.count)
         var adjacency = [[Int]](repeating: [], count: labels.count)
         for (position, link) in kept.enumerated() {

@@ -416,8 +416,6 @@ struct LivelineTreemapKey: Equatable {
     var groupHeaderHeight: CGFloat
 }
 
-/// The last value computed and the key it was computed for. Derived data is
-/// reused only while the key is unchanged.
 struct LivelineMemo<Key: Equatable, Value> {
     private var key: Key?
     private var value: Value?
