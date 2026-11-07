@@ -121,8 +121,8 @@ extension LivelineRenderer {
 
         if !skipDashLine {
             let currentY = reveal < 1
-                ? centerY + (LivelineMath.clamp(layout.y(for: smoothValue), layout.padding.top, layout.bottomY) - centerY) * CGFloat(reveal)
-                : LivelineMath.clamp(layout.y(for: smoothValue), layout.padding.top, layout.bottomY)
+                ? centerY + (layout.clampedY(for: smoothValue) - centerY) * CGFloat(reveal)
+                : layout.clampedY(for: smoothValue)
             var dash = Path()
             dash.move(to: CGPoint(x: layout.plotLeftX, y: currentY))
             dash.addLine(to: CGPoint(x: layout.rightX, y: currentY))

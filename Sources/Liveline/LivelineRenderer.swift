@@ -280,8 +280,6 @@ enum LivelineRenderer {
             smoothValue: smoothValue,
             swingMagnitude: swingMagnitude,
             anchor: anchor,
-            leftEdge: leftEdge,
-            rightEdge: rightEdge,
             reveal: state.chartReveal,
             animationTimestamp: animationTimestamp,
             deltaTime: dt,

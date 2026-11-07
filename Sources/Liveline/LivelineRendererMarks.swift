@@ -15,7 +15,7 @@ extension LivelineRenderer {
         var layer = context
         layer.clip(to: plotClip(layout))
 
-        let baselineY = LivelineMath.clamp(layout.y(for: style.resolvedBaseline), layout.padding.top, layout.bottomY)
+        let baselineY = layout.clampedY(for: style.resolvedBaseline)
         if style.showsBaseline {
             var baselineLayer = layer
             baselineLayer.opacity *= min(progress * 2, 1)
@@ -34,7 +34,7 @@ extension LivelineRenderer {
             let localReveal = LivelineMath.staggeredReveal(index: index, count: points.count, reveal: reveal)
             guard localReveal > 0.001 else { continue }
             let x = layout.x(for: point.time)
-            let valueY = LivelineMath.clamp(layout.y(for: point.value), layout.padding.top, layout.bottomY)
+            let valueY = layout.clampedY(for: point.value)
             let displayedY = baselineY + (valueY - baselineY) * CGFloat(localReveal)
             let top = min(displayedY, baselineY)
             let height = max(abs(displayedY - baselineY), 1)
@@ -243,7 +243,7 @@ extension LivelineRenderer {
         guard !points.isEmpty, progress > 0.001 else { return }
         var layer = context
         layer.clip(to: plotClip(layout))
-        let baselineY = LivelineMath.clamp(layout.y(for: style.resolvedBaseline), layout.padding.top, layout.bottomY)
+        let baselineY = layout.clampedY(for: style.resolvedBaseline)
 
         if style.showsBaseline {
             var baselineLayer = layer
@@ -256,7 +256,7 @@ extension LivelineRenderer {
             guard localReveal > 0.001 else { continue }
             let targetCenter = CGPoint(
                 x: layout.x(for: point.time),
-                y: LivelineMath.clamp(layout.y(for: point.value), layout.padding.top, layout.bottomY)
+                y: layout.clampedY(for: point.value)
             )
             let center = CGPoint(
                 x: targetCenter.x,
@@ -452,8 +452,8 @@ extension LivelineRenderer {
             let localReveal = LivelineMath.staggeredReveal(index: index, count: segments.count, reveal: reveal)
             guard localReveal > 0.001 else { continue }
             let x = layout.x(for: segment.time)
-            let startY = LivelineMath.clamp(layout.y(for: segment.start), layout.padding.top, layout.bottomY)
-            let targetEndY = LivelineMath.clamp(layout.y(for: segment.end), layout.padding.top, layout.bottomY)
+            let startY = layout.clampedY(for: segment.start)
+            let targetEndY = layout.clampedY(for: segment.end)
             let endY = startY + (targetEndY - startY) * CGFloat(localReveal)
             let top = min(startY, endY)
             let height = max(abs(endY - startY), 1)

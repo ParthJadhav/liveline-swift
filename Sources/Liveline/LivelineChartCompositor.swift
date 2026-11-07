@@ -13,8 +13,6 @@ struct LivelineCompositorInput {
     var smoothValue: Double
     var swingMagnitude: Double
     var anchor: TimeInterval
-    var leftEdge: TimeInterval
-    var rightEdge: TimeInterval
     var reveal: Double
     var animationTimestamp: TimeInterval
     var deltaTime: TimeInterval
@@ -501,8 +499,8 @@ extension LivelineRenderer {
                     hover: input.hover,
                     scrubAmount: input.scrubAmount,
                     now: input.anchor,
-                    leftEdge: input.leftEdge,
-                    rightEdge: input.rightEdge,
+                    leftEdge: layout.leftEdge,
+                    rightEdge: layout.rightEdge,
                     reveal: reveal,
                     timestamp: input.animationTimestamp,
                     deltaTime: input.deltaTime,

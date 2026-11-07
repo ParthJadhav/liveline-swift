@@ -419,7 +419,7 @@ extension LivelineRenderer {
 
         let slotWidth = layout.chartWidth / CGFloat(bins.count)
         let barWidth = max(slotWidth - style.resolvedBarSpacing, 1)
-        let baselineY = LivelineMath.clamp(layout.y(for: 0), layout.padding.top, layout.bottomY)
+        let baselineY = layout.clampedY(for: 0)
         let bars = bins.enumerated().compactMap { index, bin -> LivelineHistogramBar? in
             let localReveal = LivelineMath.staggeredReveal(index: index, count: bins.count, reveal: reveal)
             guard localReveal > 0.001 else { return nil }

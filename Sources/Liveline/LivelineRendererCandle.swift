@@ -454,10 +454,10 @@ extension LivelineRenderer {
             var candleLayer = layer
             candleLayer.opacity *= candleAlpha
 
-            let highY = LivelineMath.clamp(layout.y(for: candle.high), layout.padding.top, layout.bottomY)
-            let lowY = LivelineMath.clamp(layout.y(for: candle.low), layout.padding.top, layout.bottomY)
-            let openY = LivelineMath.clamp(layout.y(for: candle.open), layout.padding.top, layout.bottomY)
-            let closeY = LivelineMath.clamp(layout.y(for: candle.close), layout.padding.top, layout.bottomY)
+            let highY = layout.clampedY(for: candle.high)
+            let lowY = layout.clampedY(for: candle.low)
+            let openY = layout.clampedY(for: candle.open)
+            let closeY = layout.clampedY(for: candle.close)
             let top = min(openY, closeY)
             let height = max(1, abs(closeY - openY))
 

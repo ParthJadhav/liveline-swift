@@ -646,7 +646,7 @@ enum LivelineInteractionBuilder {
         let x = layout.x(for: point.time)
         let anchor = CGPoint(
             x: x,
-            y: LivelineMath.clamp(layout.y(for: anchorValue), layout.padding.top, layout.bottomY)
+            y: layout.clampedY(for: anchorValue)
         )
         return LivelineInteractionTarget(
             selection: LivelineTooltipSelection(
@@ -654,7 +654,7 @@ enum LivelineInteractionBuilder {
                     time: point.time,
                     value: point.value,
                     x: x,
-                    y: LivelineMath.clamp(layout.y(for: point.value), layout.padding.top, layout.bottomY)
+                    y: layout.clampedY(for: point.value)
                 ),
                 heading: heading,
                 rows: rows,
