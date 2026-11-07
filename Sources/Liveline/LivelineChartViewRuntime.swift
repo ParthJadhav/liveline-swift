@@ -466,9 +466,9 @@ extension LivelineChart {
 
         switch momentum {
         case .up:
-            return Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255)
+            return LivelineRGBA.rise.color
         case .down:
-            return Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255)
+            return LivelineRGBA.fall.color
         case .flat:
             return configuration.theme == .dark ? Color.white.opacity(0.85) : Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255)
         }

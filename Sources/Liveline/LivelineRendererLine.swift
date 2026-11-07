@@ -156,11 +156,11 @@ extension LivelineRenderer {
 
         let dotAlpha = state.chartReveal < 0.3 ? 0 : (state.chartReveal - 0.3) / 0.7
         if config.endpointDecorations, dotAlpha > 0.01 {
-            drawDot(context: &context, at: lastPoint, palette: palette, momentum: momentum, showPulse: config.pulse && state.pauseProgress < 0.5, scrubAmount: config.fadeEffects ? scrubAmount : 0, alpha: dotAlpha, timestamp: timestamp)
+            drawDot(context: &context, at: lastPoint, palette: palette, momentum: momentum, showPulse: config.pulse && !state.isPaused, scrubAmount: config.fadeEffects ? scrubAmount : 0, alpha: dotAlpha, timestamp: timestamp)
         }
 
-        if config.endpointDecorations && (config.autoDetectMomentum || config.momentum != nil) {
-            drawMomentumArrows(context: &context, state: state, at: lastPoint, palette: palette, momentum: momentum, alpha: revealRamp(state.chartReveal, 0.60, 1) * (1 - state.pauseProgress), deltaTime: deltaTime, timestamp: timestamp, horizontalDirection: layout.forwardXDirection)
+        if config.endpointDecorations && config.showsMomentum {
+            drawMomentumArrows(context: &context, state: state, at: lastPoint, palette: palette, momentum: momentum, alpha: revealRamp(state.chartReveal, 0.60, 1) * (state.isPaused ? 0 : 1), deltaTime: deltaTime, timestamp: timestamp, horizontalDirection: layout.forwardXDirection)
         }
 
         if let degen = config.degen, state.chartReveal > 0.9 {
@@ -171,8 +171,7 @@ extension LivelineRenderer {
                 momentum: momentum,
                 swingMagnitude: swingMagnitude,
                 options: degen,
-                randomSeed: config.randomSeed,
-                deltaTime: deltaTime
+                randomSeed: config.randomSeed
             )
             drawParticles(context: &context, state: state, deltaTime: deltaTime)
         }
@@ -332,7 +331,6 @@ extension LivelineRenderer {
         let tailLength = config.badgeTail ? badgeTailLength : 0
         let pillWidth = size.width + badgePaddingX * 2
         let pillHeight = textScale.scaled(badgeLineHeight) + badgePaddingY * 2
-        let totalWidth = tailLength + pillWidth
         // Built in left-to-right coordinates hanging off the right edge, then
         // reflected as a whole so the tail keeps pointing at the live edge.
         let x = layout.rightX + 8 - badgePaddingX - tailLength
@@ -344,7 +342,7 @@ extension LivelineRenderer {
         if config.badgeVariant == .minimal {
             background = palette.badgeOuterBackground
             layer.addFilter(.shadow(color: palette.badgeOuterShadow, radius: 4, x: 0, y: 1))
-        } else if config.autoDetectMomentum || config.momentum != nil {
+        } else if config.showsMomentum {
             switch momentum {
             case .up:
                 background = palette.dotUp
@@ -364,7 +362,6 @@ extension LivelineRenderer {
 
         let textX = layout.mirrored(x + tailLength + pillWidth / 2)
         drawText(text, context: &layer, at: CGPoint(x: textX, y: badgeY + pillHeight / 2 - 1), anchor: .center, color: textColor, font: font)
-        _ = totalWidth
     }
 
     static func badgePath(origin: CGPoint, pillWidth: CGFloat, pillHeight: CGFloat, tailLength: CGFloat, tailSpread: CGFloat) -> Path {

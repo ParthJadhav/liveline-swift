@@ -529,7 +529,7 @@ extension LivelineRenderer {
                 context: &context,
                 endpoints: endpoints,
                 alpha: reveal,
-                showPulse: config.pulse && reveal > 0.6 && state.pauseProgress < 0.5,
+                showPulse: config.pulse && reveal > 0.6 && !state.isPaused,
                 timestamp: input.animationTimestamp,
                 legendSide: config.seriesLegendSide.resolved(isRTL: layout.isRTL),
                 textScale: input.textScale,
@@ -593,7 +593,7 @@ extension LivelineRenderer {
                     )
                 }
             } else {
-                drawCandleCrosshair(
+                drawHoverGuide(
                     context: &context,
                     layout: layout,
                     palette: palette,
@@ -603,7 +603,7 @@ extension LivelineRenderer {
             }
 
         case .series:
-            drawMultiCrosshair(
+            drawHoverGuide(
                 context: &context,
                 layout: layout,
                 palette: palette,

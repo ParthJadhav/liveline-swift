@@ -79,9 +79,7 @@ extension LivelineRenderer {
             let yRatio = Double((label.y - topY) / layout.chartHeight)
             let fadeOut = yRatio < 0.45 ? yRatio / 0.45 : 1
             let strength = label.intensity * fadeIn * fadeOut
-            let baseColor = label.isBid
-                ? LivelineRGBA(red: 34 / 255, green: 197 / 255, blue: 94 / 255, alpha: 1)
-                : LivelineRGBA(red: 239 / 255, green: 68 / 255, blue: 68 / 255, alpha: 1)
+            let baseColor = label.isBid ? LivelineRGBA.rise : LivelineRGBA.fall
             let fill = baseColor.blended(to: palette.backgroundRGB, t: 1 - strength)
             // The ticker column hugs the edge history scrolls off, opposite the
             // live edge, so it swaps sides with the reading direction.
@@ -104,8 +102,7 @@ extension LivelineRenderer {
         momentum: LivelineMomentum,
         swingMagnitude: Double,
         options: LivelineDegenOptions,
-        randomSeed: UInt32?,
-        deltaTime: TimeInterval
+        randomSeed: UInt32?
     ) {
         let shouldSpawn = momentum == .up || (momentum == .down && options.downMomentum)
         if shouldSpawn, state.previousMomentum != momentum {
@@ -142,7 +139,6 @@ extension LivelineRenderer {
             state.shakeAmplitude = CGFloat(3 + swingMagnitude * 4)
         }
         state.previousMomentum = momentum
-        _ = deltaTime
     }
 
     static func drawParticles(context: inout GraphicsContext, state: LivelineRenderState, deltaTime: TimeInterval) {
@@ -190,7 +186,7 @@ extension LivelineRenderer {
             context: &context,
             at: CGPoint(
                 x: point.x + (isRTL ? -orderbookTextOffsetX : orderbookTextOffsetX),
-                y: point.y + orderbookTextOffsetY
+                y: point.y
             ),
             anchor: isRTL ? .trailing : .leading,
             fill: fill.color,

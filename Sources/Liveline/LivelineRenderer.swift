@@ -38,7 +38,6 @@ enum LivelineRenderer {
     static let badgeLineHeight: CGFloat = 16
     static let axisLabelOffsetX: CGFloat = 7.33
     static let orderbookTextOffsetX: CGFloat = -4
-    static let orderbookTextOffsetY: CGFloat = 0
     static let candleLineMorphDuration: TimeInterval = 0.50
     static let candleLineDensityDuration: TimeInterval = 0.35
     static let candleLiveLerpSpeed = 0.25
@@ -86,7 +85,7 @@ enum LivelineRenderer {
         // remapping every visible time in a single one.
         let effectiveWindow = resolvedWindow(state: state, input: input, plotWidth: chartWidth)
         let anchor = anchorTime(latestTime: input.semantics.latestTime, timelineTimestamp: presentationTimestamp, window: effectiveWindow)
-        let needsArrowRoom = capabilities.isLiveLine && showBadge && (config.autoDetectMomentum || config.momentum != nil)
+        let needsArrowRoom = capabilities.isLiveLine && showBadge && config.showsMomentum
         let buffer = needsArrowRoom ? max(baseBuffer, Double(37 / chartWidth)) : baseBuffer
         let liveRightEdge = anchor + effectiveWindow * buffer
         state.liveRightEdge = liveRightEdge
@@ -125,14 +124,9 @@ enum LivelineRenderer {
         } else {
             state.chartReveal = targetReveal
         }
-        state.pauseProgress = input.motion.isPaused ? 1 : 0
+        state.isPaused = input.motion.isPaused
         if abs(state.chartReveal - targetReveal) < 0.005 {
             state.chartReveal = targetReveal
-        }
-        if state.pauseProgress < 0.005 {
-            state.pauseProgress = 0
-        } else if state.pauseProgress > 0.995 {
-            state.pauseProgress = 1
         }
         let currentValue = renderData.primaryValue
         let previousSmooth = state.smoothValue ?? currentValue
@@ -509,8 +503,7 @@ extension LivelineRenderer {
     }
 
     static func revealRamp(_ reveal: Double, _ start: Double, _ end: Double) -> Double {
-        let t = LivelineMath.clamp((reveal - start) / (end - start), 0, 1)
-        return t * t * (3 - 2 * t)
+        LivelineMath.easedReveal((reveal - start) / (end - start))
     }
 
     static func revealAmount(_ reveal: Double, over range: ClosedRange<Double>, fadeEffects: Bool) -> Double {

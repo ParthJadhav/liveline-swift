@@ -1139,8 +1139,7 @@ final class LivelineRuntimeTests: XCTestCase {
             momentum: .up,
             swingMagnitude: 0.3,
             options: LivelineDegenOptions(scale: 1),
-            randomSeed: 42,
-            deltaTime: 16
+            randomSeed: 42
         )
         LivelineRenderer.updateParticles(
             state: second,
@@ -1149,8 +1148,7 @@ final class LivelineRuntimeTests: XCTestCase {
             momentum: .up,
             swingMagnitude: 0.3,
             options: LivelineDegenOptions(scale: 1),
-            randomSeed: 42,
-            deltaTime: 16
+            randomSeed: 42
         )
 
         XCTAssertEqual(first.particles.count, second.particles.count)

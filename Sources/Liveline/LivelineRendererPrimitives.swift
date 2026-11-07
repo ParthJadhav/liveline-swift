@@ -46,6 +46,23 @@ extension LivelineRenderer {
         return min(max(width * ratio, minimum), maximum)
     }
 
+    /// The vertical hover guide for charts whose tooltip carries the values.
+    static func drawHoverGuide(
+        context: inout GraphicsContext,
+        layout: LivelineLayout,
+        palette: LivelinePalette,
+        hover: LivelineHoverPoint?,
+        alpha: Double
+    ) {
+        guard let hover, alpha > 0.01 else { return }
+        var layer = context
+        layer.opacity *= alpha
+        var vertical = Path()
+        vertical.move(to: CGPoint(x: hover.x, y: layout.padding.top))
+        vertical.addLine(to: CGPoint(x: hover.x, y: layout.bottomY))
+        layer.stroke(vertical, with: .color(palette.crosshairLine), lineWidth: 1)
+    }
+
     static func drawBaseline(
         context: inout GraphicsContext,
         layout: LivelineLayout,

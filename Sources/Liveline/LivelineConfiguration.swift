@@ -564,6 +564,9 @@ extension LivelineChartConfiguration {
     /// be hover-only.
     var resolvesTooltipSelection: Bool { scrub || showsTooltipOnHover }
 
+    /// Momentum is shown when the caller fixes it or asks for it to be detected.
+    var showsMomentum: Bool { autoDetectMomentum || momentum != nil }
+
     var initialWindow: TimeInterval {
         guard !windows.isEmpty else { return window }
         return windows.contains(where: { $0.seconds == window }) ? window : (windows.first?.seconds ?? window)

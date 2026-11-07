@@ -24,7 +24,7 @@ extension LivelineRenderer {
         smoothValue: Double,
         textScale: LivelineTextScale
     ) -> LivelineCandleOverlay {
-        let pausedDeltaTime = deltaTime * (1 - state.pauseProgress)
+        let pausedDeltaTime = deltaTime * (state.isPaused ? 0 : 1)
         let lineModeTarget = config.lineMode ? 1.0 : 0.0
         state.candleLineModeProgress = state.transitionProgress(
             current: state.candleLineModeProgress,
@@ -147,11 +147,9 @@ extension LivelineRenderer {
                 drawCurrentPriceLine(
                     context: &context,
                     layout: layout,
-                    palette: palette,
                     value: closeSource.close,
-                    isUp: closeSource.close >= closeSource.open,
                     alpha: closeAlpha * (1 - linePresence) * (1 - scrubFadeAmount * 0.3),
-                    colorOverride: candleColor(isUp: closeSource.close >= closeSource.open, bullBlend: state.candleLiveBullBlend).color
+                    color: candleColor(isUp: closeSource.close >= closeSource.open, bullBlend: state.candleLiveBullBlend).color
                 )
             }
 
@@ -159,11 +157,9 @@ extension LivelineRenderer {
                 drawCurrentPriceLine(
                     context: &context,
                     layout: layout,
-                    palette: palette,
                     value: closeSource.close,
-                    isUp: closeSource.close >= closeSource.open,
                     alpha: closeAlpha * linePresence * (1 - scrubFadeAmount * 0.2),
-                    colorOverride: palette.dashLine,
+                    color: palette.dashLine,
                     opacityScale: 1
                 )
             }
@@ -171,7 +167,7 @@ extension LivelineRenderer {
 
         let candleAlpha = reveal * (1 - linePresence)
         if candleAlpha > 0.01, !candlesToDraw.isEmpty {
-            let ohlcScale = smoothstep(reveal)
+            let ohlcScale = LivelineMath.easedReveal(reveal)
             let revealCandles = ohlcScale < 0.99
                 ? candlesToDraw.map { collapse(candle: $0, scale: ohlcScale) }
                 : candlesToDraw
@@ -203,7 +199,7 @@ extension LivelineRenderer {
                     at: lastPoint,
                     palette: palette,
                     momentum: resolvedMomentum(config: config, points: lineResult.points),
-                    showPulse: config.pulse && lineModeProgress > 0.8 && reveal > 0.6 && state.pauseProgress < 0.5,
+                    showPulse: config.pulse && lineModeProgress > 0.8 && reveal > 0.6 && !state.isPaused,
                     scrubAmount: scrubFadeAmount,
                     alpha: dotAlpha,
                     timestamp: timestamp
@@ -413,11 +409,6 @@ extension LivelineRenderer {
         )
     }
 
-    static func smoothstep(_ value: Double) -> Double {
-        let t = LivelineMath.clamp(value, 0, 1)
-        return t * t * (3 - 2 * t)
-    }
-
     static func drawCandles(
         context: inout GraphicsContext,
         layout: LivelineLayout,
@@ -494,18 +485,14 @@ extension LivelineRenderer {
                 glowLayer.fill(Path(roundedRect: rect, cornerRadius: radius), with: .color(color))
             }
         }
-
-        _ = palette
     }
 
     static func drawCurrentPriceLine(
         context: inout GraphicsContext,
         layout: LivelineLayout,
-        palette: LivelinePalette,
         value: Double,
-        isUp: Bool,
         alpha: Double,
-        colorOverride: Color? = nil,
+        color: Color,
         opacityScale: Double = 0.4
     ) {
         let y = layout.y(for: value)
@@ -515,33 +502,13 @@ extension LivelineRenderer {
         path.addLine(to: CGPoint(x: layout.rightX, y: y))
         var layer = context
         layer.opacity *= alpha * opacityScale
-        layer.stroke(path, with: .color(colorOverride ?? candleColor(isUp: isUp).color), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-        _ = palette
+        layer.stroke(path, with: .color(color), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
     }
 
     static func candleColor(isUp: Bool, bullBlend: Double? = nil) -> LivelineRGBA {
-        let bear = LivelineRGBA(red: 239 / 255, green: 68 / 255, blue: 68 / 255, alpha: 1)
-        let bull = LivelineRGBA(red: 34 / 255, green: 197 / 255, blue: 94 / 255, alpha: 1)
         if let bullBlend {
-            return bear.blended(to: bull, t: bullBlend)
+            return LivelineRGBA.fall.blended(to: .rise, t: bullBlend)
         }
-        return isUp ? bull : bear
-    }
-
-    static func drawCandleCrosshair(
-        context: inout GraphicsContext,
-        layout: LivelineLayout,
-        palette: LivelinePalette,
-        hover: LivelineHoverPoint?,
-        alpha: Double
-    ) {
-        guard let hover, alpha > 0.01 else { return }
-
-        var layer = context
-        layer.opacity *= alpha
-        var vertical = Path()
-        vertical.move(to: CGPoint(x: hover.x, y: layout.padding.top))
-        vertical.addLine(to: CGPoint(x: hover.x, y: layout.bottomY))
-        layer.stroke(vertical, with: .color(palette.crosshairLine), lineWidth: 1)
+        return isUp ? .rise : .fall
     }
 }

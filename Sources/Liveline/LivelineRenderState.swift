@@ -12,7 +12,7 @@ final class LivelineRenderState: ObservableObject {
     var displayMax: Double?
     var displayWindow: TimeInterval?
     var chartReveal: Double = 0
-    var pauseProgress: Double = 0
+    var isPaused = false
     var previousMomentum: LivelineMomentum = .flat
     var arrowUp: Double = 0
     var arrowDown: Double = 0
@@ -283,7 +283,7 @@ final class LivelineRenderState: ObservableObject {
         liveRightEdge = nil
         displayRightEdge = nil
         chartReveal = 0
-        pauseProgress = 0
+        isPaused = false
         previousMomentum = .flat
         arrowUp = 0
         arrowDown = 0
