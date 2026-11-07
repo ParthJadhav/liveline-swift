@@ -27,7 +27,7 @@ extension LivelineRenderer {
             let palette = state.palette(accent: entry.color, mode: config.theme, lineWidth: config.lineWidth)
             var layer = context
             layer.opacity *= entryAlpha * alpha
-            let visible = entry.data.livelineVisible(in: (layout.leftEdge - 2)...layout.rightEdge)
+            let visible = entry.data.livelineVisible(in: layout.sampleRange)
             guard visible.count >= 2 else { continue }
 
             let points = drawLine(

@@ -175,7 +175,7 @@ enum LivelineInteractionBuilder {
 
         case let .timeline(items, style):
             let geometry = LivelineRenderer.timelineGeometry(
-                items: items.livelineOverlapping(visibleRange),
+                items: items.livelineOverlapping(layout.visibleRange),
                 totalLaneCount: items.livelineLaneCount,
                 style: style,
                 layout: layout,
@@ -198,7 +198,7 @@ enum LivelineInteractionBuilder {
             }
 
         case let .heatmap(cells, style):
-            let visible = cells.livelineVisible(in: visibleRange)
+            let visible = cells.livelineVisible(in: layout.visibleRange)
             let geometry = LivelineRenderer.heatmapGeometry(
                 cells: visible,
                 totalRowCount: cells.livelineRowCount(rowLabels: style.rowLabels),

@@ -386,7 +386,7 @@ extension LivelineRenderer {
         textScale: LivelineTextScale,
         drawLabels: Bool = true
     ) {
-        guard points.count >= 3, geometry.progress > 0.001 else { return }
+        guard !points.livelineDrawable.isEmpty, geometry.progress > 0.001 else { return }
         let layer = context
 
         var gridLayer = layer

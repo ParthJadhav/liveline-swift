@@ -20,6 +20,11 @@ extension LivelineRenderer {
 }
 
 extension LivelineLayout {
+    /// The times the plot shows; marks are drawn for these.
+    var visibleRange: ClosedRange<TimeInterval> {
+        leftEdge...rightEdge
+    }
+
     var sampleRange: ClosedRange<TimeInterval> {
         LivelineRenderer.sampleRange(leftEdge: leftEdge, rightEdge: rightEdge)
     }

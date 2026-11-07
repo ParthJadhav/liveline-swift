@@ -225,7 +225,7 @@ enum LivelineRenderer {
         }
 
         if let referenceLine = config.referenceLine, state.chartReveal > 0.01 {
-            drawReferenceLine(context: &layer, layout: layout, palette: palette, referenceLine: referenceLine, formatValue: config.formatValue, textScale: textScale, alpha: state.chartReveal)
+            drawReferenceLine(context: &layer, layout: layout, palette: palette, referenceLine: referenceLine, textScale: textScale, alpha: state.chartReveal)
         }
 
         if !config.referenceLines.isEmpty, capabilities.usesCartesianGrid, state.chartReveal > 0.01 {

@@ -274,7 +274,7 @@ extension LivelineRenderer {
         palette: LivelinePalette,
         reveal: Double
     ) -> LivelineDonutGeometry {
-        let positive = data.filter { $0.value > 0 }
+        let positive = data.livelinePositive
         let total = positive.map(\.value).reduce(0, +)
         let progress = LivelineMath.easedReveal(reveal)
         let center = plotCenter(layout)
@@ -362,7 +362,7 @@ extension LivelineRenderer {
         palette: LivelinePalette,
         reveal: Double
     ) -> LivelineFunnelGeometry {
-        let positive = data.filter { $0.value > 0 }
+        let positive = data.livelinePositive
         let progress = LivelineMath.easedReveal(reveal)
         let maximum = positive.map(\.value).max() ?? 1
         let stageHeight = positive.isEmpty ? 0 : max(

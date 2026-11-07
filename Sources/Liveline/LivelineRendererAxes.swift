@@ -451,7 +451,6 @@ extension LivelineRenderer {
         layout: LivelineLayout,
         palette: LivelinePalette,
         referenceLine: LivelineReferenceLine,
-        formatValue: (Double) -> String,
         textScale: LivelineTextScale,
         alpha: Double
     ) {

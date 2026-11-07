@@ -378,14 +378,14 @@ extension LivelineChartContent {
             return semantics(kind: .radar, capabilities: .radial, currentValue: average, momentumPoints: [], latestTime: nil)
 
         case let .donut(data, _):
-            let positive = data.filter { $0.value > 0 }
+            let positive = data.livelinePositive
             return semantics(kind: .donut, capabilities: .radial, currentValue: positive.map(\.value).reduce(0, +), momentumPoints: [], latestTime: nil)
 
         case let .gauge(value, _, _):
             return semantics(kind: .gauge, capabilities: .radial, currentValue: value, momentumPoints: [], latestTime: nil)
 
         case let .funnel(data, _):
-            return semantics(kind: .funnel, capabilities: .radial, currentValue: data.last(where: { $0.value > 0 })?.value ?? 0, momentumPoints: [], latestTime: nil)
+            return semantics(kind: .funnel, capabilities: .radial, currentValue: data.livelinePositive.last?.value ?? 0, momentumPoints: [], latestTime: nil)
 
         case let .histogram(values, _):
             return semantics(

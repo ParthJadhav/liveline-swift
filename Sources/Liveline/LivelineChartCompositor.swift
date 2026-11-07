@@ -121,7 +121,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -132,7 +132,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -143,7 +143,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -154,7 +154,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -165,7 +165,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -176,7 +176,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -187,7 +187,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -203,7 +203,7 @@ extension LivelineRenderer {
                     initialValue: style.resolvedInitialValue,
                     state: state
                 )
-                .livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                .livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -214,7 +214,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -225,7 +225,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -236,7 +236,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -247,17 +247,17 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
             return .standard
 
         case let .timeline(data, style):
-            let visible = data.filter { $0.end >= layout.leftEdge && $0.start <= layout.rightEdge }
+            let visible = data.livelineOverlapping(layout.visibleRange)
             let geometry = timelineGeometry(
                 items: visible,
-                totalLaneCount: max((data.map(\.lane).max() ?? 0) + 1, 1),
+                totalLaneCount: data.livelineLaneCount,
                 style: style,
                 layout: layout,
                 palette: palette,
@@ -277,10 +277,10 @@ extension LivelineRenderer {
             }
 
         case let .heatmap(data, style):
-            let visible = data.livelineVisible(in: layout.leftEdge...layout.rightEdge)
+            let visible = data.livelineVisible(in: layout.visibleRange)
             let geometry = heatmapGeometry(
                 cells: visible,
-                totalRowCount: max((data.map(\.row).max() ?? 0) + 1, style.rowLabels.count, 1),
+                totalRowCount: data.livelineRowCount(rowLabels: style.rowLabels),
                 style: style,
                 layout: layout,
                 palette: palette,
