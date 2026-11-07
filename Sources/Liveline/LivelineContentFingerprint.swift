@@ -148,21 +148,34 @@ extension LivelineChartContent {
                     style.resolvedTarget ?? .infinity,
                     range.lowerBound,
                     range.upperBound,
-                ] + style.resolvedRanges.map(\.value)
+                    style.label.presence,
+                ] + style.resolvedRanges.flatMap { [$0.value, $0.label.presence] }
             )
 
         case let .treemap(nodes, style):
+            // Each node carries its child count so moving a child to another
+            // parent changes the key even when the flattened lists match.
             return .init(
                 kind: .treemap,
-                identifiers: nodes.map(\.label) + nodes.flatMap { $0.children.map(\.label) } + ["\(style.showsValues)"],
-                variants: nodes.map(\.resolvedValue) + nodes.flatMap { $0.children.map(\.resolvedValue) }
+                identifiers: nodes.flatMap { node in
+                    [node.id, node.label] + node.children.flatMap { [$0.id, $0.label] }
+                } + ["\(style.showsValues)"],
+                variants: nodes.flatMap { node in
+                    [node.resolvedValue, Double(node.children.count)] + node.children.map(\.resolvedValue)
+                }
             )
 
         case let .sunburst(nodes, style):
+            // Each node carries its child count so moving a child to another
+            // parent changes the key even when the flattened lists match.
             return .init(
                 kind: .sunburst,
-                identifiers: nodes.map(\.label) + nodes.flatMap { $0.children.map(\.label) } + ["\(style.showsValues)"],
-                variants: nodes.map(\.resolvedValue) + nodes.flatMap { $0.children.map(\.resolvedValue) }
+                identifiers: nodes.flatMap { node in
+                    [node.id, node.label] + node.children.flatMap { [$0.id, $0.label] }
+                } + ["\(style.showsValues)"],
+                variants: nodes.flatMap { node in
+                    [node.resolvedValue, Double(node.children.count)] + node.children.map(\.resolvedValue)
+                }
             )
 
         case let .sankey(links, _):
@@ -196,8 +209,15 @@ extension LivelineChartContent {
             return .init(
                 kind: .series,
                 shapes: series.map { $0.data.livelineShape(lastValue: $0.value) },
-                identifiers: series.flatMap { [$0.id, $0.label ?? ""] }
+                identifiers: series.flatMap { [$0.id, $0.label ?? ""] },
+                variants: series.map { $0.label.presence }
             )
         }
     }
+}
+
+private extension Optional where Wrapped == String {
+    /// Tells a missing label from an empty one: readers fall back to a
+    /// default for `nil` but show `""` as it is.
+    var presence: Double { self == nil ? 0 : 1 }
 }

@@ -598,4 +598,78 @@ final class LivelinePreparationTests: XCTestCase {
         XCTAssertTrue(gauge.resolvedStartAngleDegrees.isFinite)
         XCTAssertLessThan(abs(gauge.resolvedStartAngleDegrees), 360)
     }
+
+    func testFingerprintSeparatesContentThatFlattensToTheSameLists() {
+        // The same labels and values, with the child under a different parent:
+        // VoiceOver reads the cells in a different order.
+        let childUnderB = LivelineChartContent.treemap(
+            nodes: [
+                LivelineTreemapNode(label: "A", value: 5),
+                LivelineTreemapNode(label: "B", children: [LivelineTreemapNode(label: "x", value: 5)]),
+            ],
+            style: LivelineTreemapStyle()
+        )
+        let childUnderA = LivelineChartContent.treemap(
+            nodes: [
+                LivelineTreemapNode(label: "A", children: [LivelineTreemapNode(label: "x", value: 5)]),
+                LivelineTreemapNode(label: "B", value: 5),
+            ],
+            style: LivelineTreemapStyle()
+        )
+        XCTAssertNotEqual(childUnderB.fingerprint, childUnderA.fingerprint)
+
+        let sunburstUnderB = LivelineChartContent.sunburst(
+            nodes: [
+                LivelineSunburstNode(label: "A", value: 5),
+                LivelineSunburstNode(label: "B", children: [LivelineSunburstNode(label: "x", value: 5)]),
+            ],
+            style: LivelineSunburstStyle()
+        )
+        let sunburstUnderA = LivelineChartContent.sunburst(
+            nodes: [
+                LivelineSunburstNode(label: "A", children: [LivelineSunburstNode(label: "x", value: 5)]),
+                LivelineSunburstNode(label: "B", value: 5),
+            ],
+            style: LivelineSunburstStyle()
+        )
+        XCTAssertNotEqual(sunburstUnderB.fingerprint, sunburstUnderA.fingerprint)
+
+        // Node ids name the accessibility entries.
+        XCTAssertNotEqual(
+            LivelineChartContent.treemap(nodes: [LivelineTreemapNode(id: "one", label: "A", value: 1)], style: LivelineTreemapStyle()).fingerprint,
+            LivelineChartContent.treemap(nodes: [LivelineTreemapNode(id: "two", label: "A", value: 1)], style: LivelineTreemapStyle()).fingerprint
+        )
+
+        // A missing label falls back to the id; an empty one is shown as is.
+        let points = [LivelinePoint(time: 1, value: 1), LivelinePoint(time: 2, value: 2)]
+        XCTAssertNotEqual(
+            LivelineChartContent.series([LivelineSeries(id: "s", data: points, value: 2, color: .blue)]).fingerprint,
+            LivelineChartContent.series([LivelineSeries(id: "s", data: points, value: 2, color: .blue, label: "")]).fingerprint
+        )
+        XCTAssertNotEqual(
+            LivelineChartContent.bullet(style: LivelineBulletStyle(measure: 5, ranges: [LivelineBulletRange(value: 10)])).fingerprint,
+            LivelineChartContent.bullet(style: LivelineBulletStyle(measure: 5, ranges: [LivelineBulletRange(value: 10, label: "")])).fingerprint
+        )
+    }
+
+    func testCategoryContentRebuiltWithTheSameCountIsNotServedFromTheCache() {
+        let state = LivelineRenderState()
+        let configuration = LivelineChartConfiguration()
+        func prepared(_ values: [Double]) -> LivelinePreparedChart {
+            LivelineChartPreparer.prepare(
+                for: .donut(
+                    data: values.enumerated().map { LivelineCategoryValue(id: "\($0.offset)", label: "\($0.offset)", value: $0.element) },
+                    style: LivelineDonutStyle()
+                ),
+                hiddenSeries: [],
+                leftEdge: 0,
+                rightEdge: 10,
+                config: configuration,
+                state: state
+            )
+        }
+        XCTAssertEqual(prepared([1, 2, 3]).primaryValue, 6)
+        XCTAssertEqual(prepared([4, 2, 3]).primaryValue, 9)
+        XCTAssertEqual(prepared([4, 2, 3]).primaryValue, 9)
+    }
 }
