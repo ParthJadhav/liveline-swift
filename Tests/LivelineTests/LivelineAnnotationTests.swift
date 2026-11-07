@@ -221,7 +221,7 @@ final class LivelineAnnotationTests: XCTestCase {
         renderer.proposedSize = ProposedViewSize(width: 320, height: 220)
         renderer.scale = 1
         let image = try XCTUnwrap(renderer.nsImage)
-        XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
+        XCTAssertDrawsContent(image)
     }
     #endif
 }

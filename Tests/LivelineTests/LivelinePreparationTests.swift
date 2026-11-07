@@ -230,7 +230,6 @@ final class LivelinePreparationTests: XCTestCase {
             rightEdge: 10,
             config: configuration
         )
-        XCTAssertNotNil(key)
         XCTAssertNotEqual(
             key,
             LivelineChartPreparer.cacheKey(
@@ -272,16 +271,15 @@ final class LivelinePreparationTests: XCTestCase {
         XCTAssertTrue(state.histogramBins(values: values, binning: .count(4)).livelineSharesStorage(with: repeated))
         XCTAssertFalse(state.histogramBins(values: values, binning: .count(3)).livelineSharesStorage(with: repeated))
 
-        let key = try? XCTUnwrap(LivelineChartPreparer.cacheKey(
+        let key = LivelineChartPreparer.cacheKey(
             for: content,
             hiddenSeries: [],
             leftEdge: 0,
             rightEdge: 10,
             config: configuration
-        ))
-        XCTAssertNotNil(key ?? nil)
+        )
         XCTAssertNotEqual(
-            key ?? nil,
+            key,
             LivelineChartPreparer.cacheKey(
                 for: .histogram(values: values, style: LivelineHistogramStyle(binning: .count(3))),
                 hiddenSeries: [],

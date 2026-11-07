@@ -82,7 +82,7 @@ final class LivelineLegendTests: XCTestCase {
             renderer.proposedSize = ProposedViewSize(width: 200, height: 80)
             renderer.scale = 1
             let image = try XCTUnwrap(renderer.nsImage, "Failed to render \(axis) legend")
-            XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 100)
+            XCTAssertDrawsContent(image)
         }
     }
     #endif

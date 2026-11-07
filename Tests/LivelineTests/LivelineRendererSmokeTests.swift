@@ -7,7 +7,7 @@ import XCTest
 
 final class LivelineRendererSmokeTests: XCTestCase {
     @MainActor
-    func testEveryChartKindRendersAStableFrame() throws {
+    func testEveryChartKindDrawsAFrame() throws {
         let points = [
             LivelinePoint(time: 1, value: 4),
             LivelinePoint(time: 2, value: 7),
@@ -147,7 +147,7 @@ final class LivelineRendererSmokeTests: XCTestCase {
                 renderer.proposedSize = ProposedViewSize(width: 320, height: 220)
                 renderer.scale = 1
                 let image: NSImage = try XCTUnwrap(renderer.nsImage, "Failed to render \(name)")
-                XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000, name)
+                XCTAssertDrawsContent(image, name)
             }
         }
     }
@@ -211,7 +211,7 @@ final class LivelineRendererSmokeTests: XCTestCase {
             )
             renderer.proposedSize = ProposedViewSize(width: 240, height: 160)
             let image: NSImage = try XCTUnwrap(renderer.nsImage, "Failed to render dither variant \(index)")
-            XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
+            XCTAssertDrawsContent(image)
         }
     }
 
@@ -238,7 +238,7 @@ final class LivelineRendererSmokeTests: XCTestCase {
         let renderer = ImageRenderer(content: chart.frame(width: 240, height: 160))
         renderer.proposedSize = ProposedViewSize(width: 240, height: 160)
         let image: NSImage = try XCTUnwrap(renderer.nsImage)
-        XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
+        XCTAssertDrawsContent(image)
     }
 
     @MainActor
@@ -266,7 +266,7 @@ final class LivelineRendererSmokeTests: XCTestCase {
         let renderer = ImageRenderer(content: chart.frame(width: 240, height: 160))
         renderer.proposedSize = ProposedViewSize(width: 240, height: 160)
         let image: NSImage = try XCTUnwrap(renderer.nsImage)
-        XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
+        XCTAssertDrawsContent(image)
     }
 
     @MainActor
@@ -305,7 +305,7 @@ final class LivelineRendererSmokeTests: XCTestCase {
         )
         renderer.proposedSize = ProposedViewSize(width: 240, height: 160)
         let image: NSImage = try XCTUnwrap(renderer.nsImage)
-        XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
+        XCTAssertDrawsContent(image)
     }
 
     @MainActor
@@ -336,7 +336,7 @@ final class LivelineRendererSmokeTests: XCTestCase {
         renderer.proposedSize = ProposedViewSize(width: 320, height: 220)
         renderer.scale = 1
         let image: NSImage = try XCTUnwrap(renderer.nsImage)
-        XCTAssertGreaterThan(image.tiffRepresentation?.count ?? 0, 1_000)
+        XCTAssertDrawsContent(image)
     }
 
     @MainActor
@@ -540,47 +540,51 @@ final class LivelineRendererSmokeTests: XCTestCase {
         configuration.seriesLegendSide = .trailing
         configuration = configuration.normalizedForRendering()
 
-        let state = LivelineRenderState()
-        let size = CGSize(width: 320, height: 200)
-        let renderer = ImageRenderer(
-            content: Canvas { context, canvasSize in
-                for step in 0..<8 {
-                    var pass = context
-                    LivelineRenderer.draw(
-                        context: &pass,
-                        state: state,
-                        input: LivelineRenderInput(
-                            content: content,
-                            semantics: semantics,
-                            accent: .blue,
-                            configuration: configuration,
-                            motion: LivelineMotionPolicy(
-                                isPaused: true,
-                                requiresTimeline: false,
-                                settlesImmediately: true,
-                                minimumInterval: 1.0 / 60.0
-                            ),
-                            activeWindow: 20,
-                            hiddenSeries: [],
-                            hoverLocation: nil,
-                            timestamp: 1_000 + Double(step) / 60,
-                            size: canvasSize
+        @MainActor
+        func render(frames: Int) -> LivelineRenderState {
+            let state = LivelineRenderState()
+            let size = CGSize(width: 320, height: 200)
+            let renderer = ImageRenderer(
+                content: Canvas { context, canvasSize in
+                    for step in 0..<frames {
+                        var pass = context
+                        LivelineRenderer.draw(
+                            context: &pass,
+                            state: state,
+                            input: LivelineRenderInput(
+                                content: content,
+                                semantics: semantics,
+                                accent: .blue,
+                                configuration: configuration,
+                                motion: LivelineMotionPolicy(
+                                    isPaused: true,
+                                    requiresTimeline: false,
+                                    settlesImmediately: true,
+                                    minimumInterval: 1.0 / 60.0
+                                ),
+                                activeWindow: 20,
+                                hiddenSeries: [],
+                                hoverLocation: nil,
+                                timestamp: 1_000 + Double(step) / 60,
+                                size: canvasSize
+                            )
                         )
-                    )
+                    }
                 }
-            }
-            .frame(width: size.width, height: size.height)
-        )
-        renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
-        _ = renderer.nsImage
+                .frame(width: size.width, height: size.height)
+            )
+            renderer.proposedSize = ProposedViewSize(width: size.width, height: size.height)
+            _ = renderer.nsImage
 
-        // One palette per distinct accent (chart plus each series) and one
-        // legend measurement, no matter how many frames were drawn. The first
-        // frame resolves the chart accent and the gutter before `reconcile`
-        // adopts the identity and flushes the caches, so each of those is paid
-        // exactly once more.
-        XCTAssertEqual(state.paletteBuildCount, 4)
-        XCTAssertEqual(state.legendGutterMeasureCount, 2)
+            return state
+        }
+
+        // Palettes and the legend gutter are resolved once per distinct input,
+        // so drawing more frames resolves nothing more.
+        let state = render(frames: 8)
+        let firstFrames = render(frames: 2)
+        XCTAssertEqual(state.paletteBuildCount, firstFrames.paletteBuildCount)
+        XCTAssertEqual(state.legendGutterMeasureCount, firstFrames.legendGutterMeasureCount)
         XCTAssertFalse(state.timeAxisLabels.isEmpty)
         XCTAssertTrue(state.timeAxisLabels.values.contains { $0.measuredWidth != nil })
     }

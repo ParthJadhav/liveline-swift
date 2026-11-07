@@ -28,9 +28,7 @@ final class LivelineImageExportTests: XCTestCase {
             elapsedTime: 2,
             backgroundColor: .black
         )
-        guard let image = exporter.image(chart) else {
-            throw XCTSkip("This environment cannot rasterize SwiftUI views")
-        }
+        let image = try XCTUnwrap(exporter.image(chart), "The exporter returned no image")
 
         XCTAssertEqual(image.size.width, 320, accuracy: 1)
         XCTAssertEqual(image.size.height, 180, accuracy: 1)
@@ -44,9 +42,7 @@ final class LivelineImageExportTests: XCTestCase {
             elapsedTime: 1,
             backgroundColor: .black
         )
-        guard let cgImage = exporter.cgImage(chart) else {
-            throw XCTSkip("This environment cannot rasterize SwiftUI views")
-        }
+        let cgImage = try XCTUnwrap(exporter.cgImage(chart), "The exporter returned no image")
 
         XCTAssertEqual(cgImage.width, 320)
         XCTAssertEqual(cgImage.height, 180)
@@ -54,14 +50,12 @@ final class LivelineImageExportTests: XCTestCase {
 
     @MainActor
     func testPNGDataIsAValidPNGOfTheRequestedPixelSize() throws {
-        guard let data = chart.exportedPNGData(
+        let data = try XCTUnwrap(chart.exportedPNGData(
             size: CGSize(width: 240, height: 120),
             scale: 1,
             elapsedTime: 2,
             backgroundColor: .black
-        ) else {
-            throw XCTSkip("This environment cannot rasterize SwiftUI views")
-        }
+        ), "The exporter returned no image")
 
         XCTAssertGreaterThan(data.count, 1_000)
         XCTAssertEqual(Array(data.prefix(4)), [0x89, 0x50, 0x4E, 0x47])
@@ -91,14 +85,12 @@ final class LivelineImageExportTests: XCTestCase {
         )
 
         func export() throws -> Data {
-            guard let data = chart.exportedPNGData(
+            let data = try XCTUnwrap(chart.exportedPNGData(
                 size: CGSize(width: 200, height: 120),
                 scale: 1,
                 elapsedTime: 0.5,
                 backgroundColor: .black
-            ) else {
-                throw XCTSkip("This environment cannot rasterize SwiftUI views")
-            }
+            ), "The exporter returned no image")
             return data
         }
 
@@ -115,14 +107,12 @@ final class LivelineImageExportTests: XCTestCase {
             var configuration = LivelineChartConfiguration(theme: .dark, window: 10)
             configuration.fadeEffects = fadeEffects
             let chart = LivelineChart(data: points, value: 5, configuration: configuration)
-            guard let data = chart.exportedPNGData(
+            let data = try XCTUnwrap(chart.exportedPNGData(
                 size: CGSize(width: 200, height: 120),
                 scale: 1,
                 elapsedTime: 0,
                 backgroundColor: .black
-            ) else {
-                throw XCTSkip("This environment cannot rasterize SwiftUI views")
-            }
+            ), "The exporter returned no image")
             return data
         }
 

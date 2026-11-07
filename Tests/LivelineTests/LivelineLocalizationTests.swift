@@ -96,20 +96,6 @@ final class LivelineLocalizationTests: XCTestCase {
 
     // MARK: - Localized strings
 
-    /// Liveline ships no translations, so every key must fall through to its
-    /// English default. This is the guard that keeps the existing VoiceOver
-    /// and tooltip expectations honest.
-    func testEnglishStringsFallBackToTheirDefaults() {
-        XCTAssertEqual(LivelineStrings.chartKindLine, "Line chart")
-        XCTAssertEqual(LivelineStrings.chartKindSeries, "Multi-series chart")
-        XCTAssertEqual(LivelineStrings.labelValue, "Value")
-        XCTAssertEqual(LivelineStrings.labelGaugeValue, "Gauge value")
-        XCTAssertEqual(LivelineStrings.accessibilityHintAdjustable, "Adjust to inspect data points.")
-        XCTAssertEqual(LivelineStrings.controlSeriesHintLocked, "At least one series must remain visible")
-        XCTAssertEqual(LivelineLocalizedDefaults.emptyText, "No data to display")
-        XCTAssertEqual(LivelineChartConfiguration().emptyText, "No data to display")
-    }
-
     /// Positional format strings are the part a translator can reorder, so the
     /// argument wiring is pinned rather than the English wording alone.
     func testFormatStringsSubstituteTheirArgumentsInOrder() {

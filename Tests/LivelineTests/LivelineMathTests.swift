@@ -893,6 +893,8 @@ final class LivelineMathTests: XCTestCase {
         ])
     }
 
+    /// Compiling these calls is the check: every initializer overload stays
+    /// unambiguous at a plain call site.
     @MainActor
     func testAdditionalChartInitializersConstructViews() {
         let points = [
@@ -924,7 +926,7 @@ final class LivelineMathTests: XCTestCase {
             LivelineChart(waterfall: points, style: LivelineWaterfallStyle(initialValue: 20)),
         ]
 
-        XCTAssertEqual(charts.count, 8)
+        _ = charts
     }
 
     func testErrorBarAndTimelineInputsNormalizeBounds() {
@@ -1155,6 +1157,8 @@ final class LivelineMathTests: XCTestCase {
         XCTAssertEqual(heatmapStyle.resolvedCornerRadius, 0)
     }
 
+    /// Compiling these calls is the check: every initializer overload stays
+    /// unambiguous at a plain call site.
     @MainActor
     func testExtendedChartInitializersConstructViews() {
         let error = [LivelineErrorBarPoint(time: 10, value: 5, lower: 3, upper: 7)]
@@ -1185,7 +1189,7 @@ final class LivelineMathTests: XCTestCase {
             LivelineChart(funnel: categories),
         ]
 
-        XCTAssertEqual(charts.count, 10)
+        _ = charts
     }
 
     func testInterpolateFindsValueInsideSeries() {
