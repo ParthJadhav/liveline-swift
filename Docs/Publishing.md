@@ -40,8 +40,7 @@ scripts/install-xcodegen.sh .build/tools/xcodegen
 xcodebuild -scheme Liveline -destination 'generic/platform=macOS' build
 xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
 scripts/capture-storybook.sh --chart-only
-VISUAL_PARITY_EXCLUSIONS=line-show-value-windows,line-rounded-windows,line-text-windows,candle-mode-controls,multi-basic,multi-light,multi-compact,multi-two-series
-scripts/diff-storybook.sh --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12 --scenario-threshold line-orderbook:5.1:13
+scripts/verify-visual-parity.sh
 (cd remotion/tools/shotgen && SHOTGEN_MODE=frames SHOTGEN_CLIPS_ONLY=line-live,dynamic-type swift run ShotGen)
 (cd remotion && bun install --frozen-lockfile && bunx tsc --noEmit && bun audit && bun run render:070)
 ffprobe -v error -show_entries format=duration,size -show_entries stream=codec_name,width,height,r_frame_rate -of json Media/liveline-0-7-0-demo.mp4
