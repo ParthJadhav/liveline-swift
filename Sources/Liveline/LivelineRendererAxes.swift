@@ -24,7 +24,7 @@ extension LivelineRenderer {
 
         var lineContext = context
         lineContext.opacity *= LivelineMath.loadingBreath(animationTimestamp)
-        let lineColor: Color = input.configuration.loading && input.semantics.identity.kind == .line
+        let lineColor: Color = input.configuration.loading && input.semantics.capabilities.isLiveLine
             ? palette.line
             : palette.gridLabel
         lineContext.stroke(

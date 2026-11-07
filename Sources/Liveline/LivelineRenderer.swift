@@ -58,10 +58,6 @@ enum LivelineRenderer {
         let config = input.configuration
         let palette = state.palette(accent: input.accent, mode: config.theme, lineWidth: config.lineWidth)
         let capabilities = input.semantics.capabilities
-        let kind = input.semantics.identity.kind
-        let isLine = kind == .line
-        let isCandle = kind == .candle
-        let isMultiSeries = kind == .series
         let showBadge = capabilities.supportsLiveBadge && config.badge
         let reservesBadgePadding = capabilities.reservesBadgePadding && config.badge
         let isRTL = input.isRTL
@@ -76,7 +72,7 @@ enum LivelineRenderer {
         // to the left, so the horizontal insets swap with it.
         let resolvedPadding = isRTL ? ltrPadding.mirroredHorizontally() : ltrPadding
         let presentationTimestamp = state.presentationTimestamp(for: input.timestamp, isPaused: input.motion.isPaused)
-        let baseBuffer = isCandle ? windowBufferNoBadge : (showBadge ? windowBuffer : windowBufferNoBadge)
+        let baseBuffer = capabilities.isLiveLine && showBadge ? windowBuffer : windowBufferNoBadge
         let labelReveal = config.fadeEffects ? state.chartReveal : 1
         // The legend gutter is requested on a logical side, so it follows the
         // reading direction onto the physical edge that side maps to.
@@ -90,7 +86,7 @@ enum LivelineRenderer {
         // remapping every visible time in a single one.
         let effectiveWindow = resolvedWindow(state: state, input: input, plotWidth: chartWidth)
         let anchor = anchorTime(latestTime: input.semantics.latestTime, timelineTimestamp: presentationTimestamp, window: effectiveWindow)
-        let needsArrowRoom = isLine && showBadge && (config.autoDetectMomentum || config.momentum != nil)
+        let needsArrowRoom = capabilities.isLiveLine && showBadge && (config.autoDetectMomentum || config.momentum != nil)
         let buffer = needsArrowRoom ? max(baseBuffer, Double(37 / chartWidth)) : baseBuffer
         let liveRightEdge = anchor + effectiveWindow * buffer
         state.liveRightEdge = liveRightEdge
@@ -167,14 +163,15 @@ enum LivelineRenderer {
             let currentRange = max(0.001, currentMax - currentMin)
             let chartHeight = max(1, input.size.height - resolvedPadding.top - resolvedPadding.bottom)
             let rangeSpeed: Double
-            if isMultiSeries {
+            switch capabilities.valueRangeEasing {
+            case .steady:
                 rangeSpeed = config.lerpSpeed + 0.10
-            } else if isCandle {
+            case .closesGap:
                 let gapMin = abs(currentMin - range.lowerBound)
                 let gapMax = abs(currentMax - range.upperBound)
                 let gapRatio = min((gapMin + gapMax) / currentRange, 1)
                 rangeSpeed = 0.15 + (1 - gapRatio) * 0.20
-            } else {
+            case .followsValue:
                 rangeSpeed = adaptiveSpeed
             }
 
@@ -242,7 +239,7 @@ enum LivelineRenderer {
         }
 
         if config.grid, capabilities.usesCartesianGrid {
-            drawGrid(context: &layer, layout: layout, palette: palette, state: state, formatValue: config.formatValue, textScale: textScale, alpha: revealAmount(state.chartReveal, 0.15, 0.70, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
+            drawGrid(context: &layer, layout: layout, palette: palette, state: state, formatValue: config.formatValue, textScale: textScale, alpha: revealAmount(state.chartReveal, over: capabilities.axisReveal, fadeEffects: config.fadeEffects), fadeEffects: config.fadeEffects, deltaTime: dt)
         }
 
         // Bands sit between the grid and the marks: a backdrop for the data
@@ -251,7 +248,7 @@ enum LivelineRenderer {
             drawReferenceBands(context: &layer, layout: layout, palette: palette, bands: config.referenceBands, textScale: textScale, alpha: state.chartReveal)
         }
 
-        if let orderbook = config.orderbook, isLine {
+        if let orderbook = config.orderbook, capabilities.isLiveLine {
             drawOrderbook(context: &layer, layout: layout, palette: palette, state: state, orderbook: orderbook, randomSeed: config.randomSeed, textScale: textScale, deltaTime: dt, swingMagnitude: swingMagnitude, alpha: state.chartReveal)
         }
 
@@ -328,12 +325,10 @@ enum LivelineRenderer {
                     timestamp: animationTimestamp
                 )
             }
-            drawContentText(context: &layer, input: compositorInput, overlay: contentOverlay)
+            contentOverlay.deferredText?(&layer)
         }
 
         if capabilities.usesTimeAxis {
-            let axisRevealStart = isCandle ? 0.25 : 0.15
-            let axisRevealEnd = isCandle ? 0.60 : 0.70
             drawTimeAxis(
                 context: &layer,
                 layout: layout,
@@ -344,8 +339,7 @@ enum LivelineRenderer {
                 textScale: textScale,
                 alpha: revealAmount(
                     state.chartReveal,
-                    axisRevealStart,
-                    axisRevealEnd,
+                    over: capabilities.axisReveal,
                     fadeEffects: config.fadeEffects
                 ),
                 fadeEffects: config.fadeEffects,
@@ -519,8 +513,8 @@ extension LivelineRenderer {
         return t * t * (3 - 2 * t)
     }
 
-    static func revealAmount(_ reveal: Double, _ start: Double, _ end: Double, fadeEffects: Bool) -> Double {
-        fadeEffects ? revealRamp(reveal, start, end) : reveal
+    static func revealAmount(_ reveal: Double, over range: ClosedRange<Double>, fadeEffects: Bool) -> Double {
+        fadeEffects ? revealRamp(reveal, range.lowerBound, range.upperBound) : reveal
     }
 
     static func resolvedMomentum(config: LivelineChartConfiguration, points: [LivelinePoint]) -> LivelineMomentum {

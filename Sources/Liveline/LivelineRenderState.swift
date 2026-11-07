@@ -63,20 +63,14 @@ final class LivelineRenderState: ObservableObject {
     /// Every cached text measurement was taken at this scale; a Dynamic Type
     /// change invalidates them all.
     private(set) var textScale: LivelineTextScale = .standard
-    private var preparedChartKey: LivelinePreparedChartKey?
-    private var preparedChartCache: LivelinePreparedChart?
-    private var waterfallKey: LivelineWaterfallKey?
-    private var waterfallCache: [LivelineWaterfallSegment] = []
-    private var histogramKey: LivelineHistogramKey?
-    private var histogramCache: [LivelineHistogramBin] = []
-    private var treemapKey: LivelineTreemapKey?
-    private var treemapCache: LivelineTreemapLayout = .empty
-    private var sankeyKey: LivelineSankeyKey?
-    private var sankeyCache: LivelineSankeyGraph?
+    private var preparedChartMemo = LivelineMemo<LivelinePreparedChartKey, LivelinePreparedChart>()
+    private var waterfallMemo = LivelineMemo<LivelineWaterfallKey, [LivelineWaterfallSegment]>()
+    private var histogramMemo = LivelineMemo<LivelineHistogramKey, [LivelineHistogramBin]>()
+    private var treemapMemo = LivelineMemo<LivelineTreemapKey, LivelineTreemapLayout>()
+    private var sankeyMemo = LivelineMemo<LivelineDataShape, LivelineSankeyGraph>()
     private var paletteCache: [LivelinePaletteKey: LivelinePalette] = [:]
     private var legendGutterCache: [LivelineLegendGutterKey: CGFloat] = [:]
-    private var accessibilityModelKey: LivelineAccessibilityModelKey?
-    private var accessibilityModelCache: LivelineChartAccessibilityModel?
+    private var accessibilityModelMemo = LivelineMemo<LivelineAccessibilityModelKey, LivelineChartAccessibilityModel>()
 
     /// Resolving a palette bridges the accent through `UIColor`/`NSColor` and
     /// rebuilds every derived shade. That happens for the chart and for each
@@ -128,36 +122,29 @@ final class LivelineRenderState: ObservableObject {
         for key: LivelineAccessibilityModelKey,
         make: () -> LivelineChartAccessibilityModel
     ) -> LivelineChartAccessibilityModel {
-        if key == accessibilityModelKey, let cached = accessibilityModelCache {
-            return cached
+        accessibilityModelMemo.value(for: key) {
+            accessibilityModelBuildCount += 1
+            return make()
         }
-        let model = make()
-        accessibilityModelBuildCount += 1
-        accessibilityModelKey = key
-        accessibilityModelCache = model
-        return model
     }
 
     /// Frames repeat far more often than data changes. Reuse the derived
     /// arrays whenever the identity behind them is untouched.
-    func preparedChart(for key: LivelinePreparedChartKey) -> LivelinePreparedChart? {
-        preparedChartKey == key ? preparedChartCache : nil
-    }
-
-    func storePreparedChart(_ chart: LivelinePreparedChart, for key: LivelinePreparedChartKey) {
-        preparedChartKey = key
-        preparedChartCache = chart
+    func preparedChart(
+        for key: LivelinePreparedChartKey,
+        make: () -> LivelinePreparedChart
+    ) -> LivelinePreparedChart {
+        preparedChartMemo.value(for: key, make: make)
     }
 
     /// Waterfall segments are a running total over the *entire* dataset, so
     /// recomputing them per frame dominates the chart. Memoize on data identity.
     func waterfallSegments(points: [LivelinePoint], initialValue: Double) -> [LivelineWaterfallSegment] {
-        let key = LivelineWaterfallKey(shape: points.livelineShape(lastValue: points.last?.value ?? 0), initialValue: initialValue)
-        if waterfallKey == key { return waterfallCache }
-        let segments = LivelineMath.waterfallSegments(points: points, initialValue: initialValue)
-        waterfallKey = key
-        waterfallCache = segments
-        return segments
+        waterfallMemo.value(
+            for: LivelineWaterfallKey(shape: points.livelineShape(lastValue: points.last?.value ?? 0), initialValue: initialValue)
+        ) {
+            LivelineMath.waterfallSegments(points: points, initialValue: initialValue)
+        }
     }
 
     /// Binning sorts and walks the whole sample set, which is far too much to
@@ -167,18 +154,14 @@ final class LivelineRenderState: ObservableObject {
         values: [Double],
         binning: LivelineHistogramBinning
     ) -> [LivelineHistogramBin] {
-        let key = LivelineHistogramKey(
-            storage: values.livelineStorageIdentity,
-            count: values.count,
-            first: values.first ?? 0,
-            last: values.last ?? 0,
-            binning: binning
-        )
-        if histogramKey == key { return histogramCache }
-        let bins = LivelineMath.histogramBins(values: values, binning: binning)
-        histogramKey = key
-        histogramCache = bins
-        return bins
+        histogramMemo.value(
+            for: LivelineHistogramKey(
+                shape: LivelineDataShape(values, first: values.first ?? 0, last: values.last ?? 0),
+                binning: binning
+            )
+        ) {
+            LivelineMath.histogramBins(values: values, binning: binning)
+        }
     }
 
     /// Squarifying walks and sorts the whole node set, so it is memoized on the
@@ -191,42 +174,35 @@ final class LivelineRenderState: ObservableObject {
         in rect: CGRect
     ) -> LivelineTreemapLayout {
         let key = LivelineTreemapKey(
-            storage: nodes.livelineStorageIdentity,
-            count: nodes.count,
-            firstValue: nodes.first?.resolvedValue ?? 0,
-            lastValue: nodes.last?.resolvedValue ?? 0,
+            shape: LivelineDataShape(
+                nodes,
+                first: nodes.first?.resolvedValue ?? 0,
+                lastValue: nodes.last?.resolvedValue ?? 0
+            ),
             rect: rect,
             padding: style.resolvedPadding,
             groupPadding: style.resolvedGroupPadding,
             groupHeaderHeight: style.resolvedGroupHeaderHeight
         )
-        if treemapKey == key { return treemapCache }
-        let tiling = LivelineMath.treemapLayout(
-            nodes: nodes,
-            in: rect,
-            padding: style.resolvedPadding,
-            groupPadding: style.resolvedGroupPadding,
-            groupHeaderHeight: style.resolvedGroupHeaderHeight
-        )
-        treemapKey = key
-        treemapCache = tiling
-        return tiling
+        return treemapMemo.value(for: key) {
+            LivelineMath.treemapLayout(
+                nodes: nodes,
+                in: rect,
+                padding: style.resolvedPadding,
+                groupPadding: style.resolvedGroupPadding,
+                groupHeaderHeight: style.resolvedGroupHeaderHeight
+            )
+        }
     }
 
     /// Cycle breaking and layering walk every edge; the result depends only on
     /// the links, never on the plot size, so it survives a resize.
     func sankeyGraph(links: [LivelineSankeyLink]) -> LivelineSankeyGraph {
-        let key = LivelineSankeyKey(
-            storage: links.livelineStorageIdentity,
-            count: links.count,
-            firstValue: links.first?.value ?? 0,
-            lastValue: links.last?.value ?? 0
-        )
-        if sankeyKey == key, let cached = sankeyCache { return cached }
-        let graph = LivelineMath.sankeyGraph(links: links)
-        sankeyKey = key
-        sankeyCache = graph
-        return graph
+        sankeyMemo.value(
+            for: LivelineDataShape(links, first: links.first?.value ?? 0, lastValue: links.last?.value ?? 0)
+        ) {
+            LivelineMath.sankeyGraph(links: links)
+        }
     }
 
     func frame(for timestamp: TimeInterval, isPaused: Bool) -> LivelineAnimationFrame {
@@ -339,20 +315,14 @@ final class LivelineRenderState: ObservableObject {
         candleLineDensityProgress = 0
         candleLineDensityTransition = nil
         ditherGeometryCache = nil
-        preparedChartKey = nil
-        preparedChartCache = nil
-        waterfallKey = nil
-        waterfallCache.removeAll(keepingCapacity: true)
-        histogramKey = nil
-        histogramCache.removeAll(keepingCapacity: true)
-        treemapKey = nil
-        treemapCache = .empty
-        sankeyKey = nil
-        sankeyCache = nil
+        preparedChartMemo.reset()
+        waterfallMemo.reset()
+        histogramMemo.reset()
+        treemapMemo.reset()
+        sankeyMemo.reset()
         paletteCache.removeAll(keepingCapacity: true)
         legendGutterCache.removeAll(keepingCapacity: true)
-        accessibilityModelKey = nil
-        accessibilityModelCache = nil
+        accessibilityModelMemo.reset()
     }
 
     func nextRandom(seed: UInt32) -> Double {
@@ -428,30 +398,42 @@ struct LivelinePaletteKey: Hashable {
     var lineWidth: CGFloat
 }
 
+struct LivelineWaterfallKey: Equatable {
+    var shape: LivelineDataShape
+    var initialValue: Double
+}
+
 struct LivelineHistogramKey: Equatable {
-    var storage: UInt
-    var count: Int
-    var first: Double
-    var last: Double
+    var shape: LivelineDataShape
     var binning: LivelineHistogramBinning
 }
 
 struct LivelineTreemapKey: Equatable {
-    var storage: UInt
-    var count: Int
-    var firstValue: Double
-    var lastValue: Double
+    var shape: LivelineDataShape
     var rect: CGRect
     var padding: CGFloat
     var groupPadding: CGFloat
     var groupHeaderHeight: CGFloat
 }
 
-struct LivelineSankeyKey: Equatable {
-    var storage: UInt
-    var count: Int
-    var firstValue: Double
-    var lastValue: Double
+/// The last value computed and the key it was computed for. Derived data is
+/// reused only while the key is unchanged.
+struct LivelineMemo<Key: Equatable, Value> {
+    private var key: Key?
+    private var value: Value?
+
+    mutating func value(for key: Key, make: () -> Value) -> Value {
+        if key == self.key, let value { return value }
+        let value = make()
+        self.key = key
+        self.value = value
+        return value
+    }
+
+    mutating func reset() {
+        key = nil
+        value = nil
+    }
 }
 
 struct LivelineLegendGutterKey: Hashable {

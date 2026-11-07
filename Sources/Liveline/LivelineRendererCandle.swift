@@ -111,7 +111,7 @@ extension LivelineRenderer {
                 state: state,
                 formatValue: config.formatValue,
                 textScale: textScale,
-                alpha: revealAmount(reveal, 0.25, 0.60, fadeEffects: config.fadeEffects),
+                alpha: revealAmount(reveal, over: LivelineChartCapabilities.candle.axisReveal, fadeEffects: config.fadeEffects),
                 fadeEffects: config.fadeEffects,
                 deltaTime: deltaTime
             )

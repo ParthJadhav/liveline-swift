@@ -41,7 +41,7 @@ enum LivelineInteractionBuilder {
     ) -> [LivelineInteractionTarget] {
         let value = configuration.formatValue
         let time = configuration.formatTime
-        let visibleRange = (layout.leftEdge - 2)...layout.rightEdge
+        let visibleRange = layout.sampleRange
 
         switch content {
         case .line:
@@ -174,10 +174,9 @@ enum LivelineInteractionBuilder {
             return stackedTargets(data: data, mode: style.mode, baseline: style.baseline, colors: style.colors, layout: layout, palette: palette, targetLocation: targetLocation, value: value, time: time)
 
         case let .timeline(items, style):
-            let visible = items.filter { $0.end >= layout.leftEdge - 2 && $0.start <= layout.rightEdge }
             let geometry = LivelineRenderer.timelineGeometry(
-                items: visible,
-                totalLaneCount: max((items.map(\.lane).max() ?? 0) + 1, 1),
+                items: items.livelineOverlapping(visibleRange),
+                totalLaneCount: items.livelineLaneCount,
                 style: style,
                 layout: layout,
                 palette: palette,
@@ -202,28 +201,25 @@ enum LivelineInteractionBuilder {
             let visible = cells.livelineVisible(in: visibleRange)
             let geometry = LivelineRenderer.heatmapGeometry(
                 cells: visible,
-                totalRowCount: max((cells.map(\.row).max() ?? 0) + 1, style.rowLabels.count, 1),
+                totalRowCount: cells.livelineRowCount(rowLabels: style.rowLabels),
                 style: style,
                 layout: layout,
                 palette: palette,
                 reveal: 1
             )
             return interactionMarks(geometry.marks, nearestTo: targetLocation, rect: \.rect).map { mark in
-                let label = style.rowLabels.indices.contains(mark.cell.row)
-                    ? style.rowLabels[mark.cell.row]
-                    : String(format: LivelineStrings.labelRowFormat, mark.cell.row + 1)
-                return target(
+                target(
                     time: mark.cell.time,
                     value: mark.cell.value,
                     anchor: CGPoint(x: mark.rect.midX, y: mark.rect.midY),
                     heading: time(mark.cell.time),
-                    rows: [row(label, value(mark.cell.value), mark.color)],
+                    rows: [row(style.rowName(mark.cell.row), value(mark.cell.value), mark.color)],
                     region: .rect(mark.rect)
                 )
             }
 
         case let .radar(points, style):
-            guard points.count >= 3 else { return [] }
+            guard !points.livelineDrawable.isEmpty else { return [] }
             let geometry = LivelineRenderer.radarGeometry(points: points, style: style, layout: layout, reveal: 1)
             return points.enumerated().map { index, point in
                 let angle = geometry.startAngle + Double(index) * geometry.angleStep
@@ -266,7 +262,7 @@ enum LivelineInteractionBuilder {
                         row(LivelineStrings.labelValue, value(segment.entry.value), segment.color),
                         row(
                             LivelineStrings.labelShare,
-                            (segment.entry.value / geometry.total * 100).formatted(.number.precision(.fractionLength(1))) + "%",
+                            percentage(segment.entry.value / geometry.total * 100),
                             segment.color
                         ),
                     ],
@@ -507,15 +503,13 @@ enum LivelineInteractionBuilder {
                 }
             }
 
-            var visible = candles.livelineVisible(in: visibleRange, candleWidth: candleWidth)
-            if let liveCandle, liveCandle.time + candleWidth >= visibleRange.lowerBound, liveCandle.time <= visibleRange.upperBound {
-                if let index = visible.firstIndex(where: { $0.time == liveCandle.time }) {
-                    visible[index] = liveCandle
-                } else {
-                    visible.append(liveCandle)
+            let visible = LivelineMath.candles(
+                candles.livelineVisible(in: visibleRange, candleWidth: candleWidth),
+                including: liveCandle.flatMap {
+                    LivelineMath.candleIsVisible($0, width: candleWidth, in: visibleRange) ? $0 : nil
                 }
-            }
-            return visible.sorted { $0.time < $1.time }.map { candle in
+            )
+            return visible.map { candle in
                 let color = LivelineRenderer.candleColor(isUp: candle.close >= candle.open).color
                 let centerTime = candle.time + candleWidth / 2
                 return xTarget(
@@ -534,8 +528,7 @@ enum LivelineInteractionBuilder {
 
         case let .series(series):
             let visibleSeries = LivelineSeriesSelector.visibleSlices(
-                series: series,
-                hiddenSeries: hiddenSeries,
+                series: series.filter { !hiddenSeries.contains($0.id) },
                 visibleRange: visibleRange
             )
             guard let primary = visibleSeries.first else {
@@ -617,14 +610,10 @@ enum LivelineInteractionBuilder {
         value: (Double) -> String,
         time: (TimeInterval) -> String
     ) -> [LivelineInteractionTarget] {
-        let visible = data.livelineVisible(in: (layout.leftEdge - 2)...layout.rightEdge)
+        let visible = data.livelineVisible(in: layout.sampleRange)
         return interactionSlice(visible, nearestTo: targetLocation, layout: layout).map { point in
             let segments = LivelineMath.stackedSegments(values: point.values, mode: mode, baseline: baseline)
-            let signedValues = zip(point.values, segments).map { rawValue, segment in
-                rawValue < 0
-                    ? segment.lower - segment.upper
-                    : segment.upper - segment.lower
-            }
+            let signedValues = LivelineMath.stackedLayerValues(values: point.values, segments: segments)
             var rows = signedValues.enumerated().map { index, signedValue in
                 row(
                     String(format: LivelineStrings.labelSeriesFormat, index + 1),
@@ -697,7 +686,7 @@ enum LivelineInteractionBuilder {
     /// A share of a whole, to one decimal place — the same phrasing the donut
     /// chart's tooltip uses.
     private static func percentage(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(1))) + "%"
+        LivelineFormatters.share(value) + "%"
     }
 
     private static func row(_ label: String, _ value: String, _ color: Color) -> LivelineTooltipRow {
