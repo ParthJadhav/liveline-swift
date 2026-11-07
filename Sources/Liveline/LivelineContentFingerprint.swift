@@ -112,19 +112,21 @@ extension LivelineChartContent {
         case let .heatmap(data, style):
             return .init(kind: .heatmap, shapes: [data.livelineShape(lastValue: data.last?.value ?? 0)], identifiers: style.rowLabels)
 
+        // Category data is small and is usually rebuilt in place with the same
+        // count, so it is keyed by its full contents rather than by a shape.
         case let .radar(data, style):
             let range = style.resolvedRange
             return .init(
                 kind: .radar,
-                shapes: [LivelineDataShape(data, lastValue: data.last?.value ?? 0)],
-                variants: [range.lowerBound, range.upperBound]
+                identifiers: data.map(\.label),
+                variants: data.map(\.value) + [range.lowerBound, range.upperBound]
             )
 
         case let .donut(data, _):
-            return .init(kind: .donut, shapes: [LivelineDataShape(data, lastValue: data.last?.value ?? 0)])
+            return .init(kind: .donut, identifiers: data.flatMap { [$0.id, $0.label] }, variants: data.map(\.value))
 
         case let .funnel(data, _):
-            return .init(kind: .funnel, shapes: [LivelineDataShape(data, lastValue: data.last?.value ?? 0)])
+            return .init(kind: .funnel, identifiers: data.flatMap { [$0.id, $0.label] }, variants: data.map(\.value))
 
         case let .gauge(value, range, style):
             return .init(kind: .gauge, variants: [value, range.lowerBound, range.upperBound, style.resolvedTarget ?? .infinity])
@@ -153,14 +155,14 @@ extension LivelineChartContent {
             return .init(
                 kind: .treemap,
                 identifiers: nodes.map(\.label) + nodes.flatMap { $0.children.map(\.label) } + ["\(style.showsValues)"],
-                variants: nodes.map(\.resolvedValue)
+                variants: nodes.map(\.resolvedValue) + nodes.flatMap { $0.children.map(\.resolvedValue) }
             )
 
         case let .sunburst(nodes, style):
             return .init(
                 kind: .sunburst,
                 identifiers: nodes.map(\.label) + nodes.flatMap { $0.children.map(\.label) } + ["\(style.showsValues)"],
-                variants: nodes.map(\.resolvedValue)
+                variants: nodes.map(\.resolvedValue) + nodes.flatMap { $0.children.map(\.resolvedValue) }
             )
 
         case let .sankey(links, _):
