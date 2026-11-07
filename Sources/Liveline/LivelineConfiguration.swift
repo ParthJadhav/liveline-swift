@@ -613,11 +613,7 @@ extension LivelineChartConfiguration {
             )
         }
         configuration.referenceLines = configuration.referenceLines.compactMap { line in
-            guard line.value.isFinite else { return nil }
-            let normalized: TimeInterval? = line.axis == .time
-                ? LivelineScalar.time(line.value)
-                : Optional(LivelineScalar.value(line.value))
-            guard let normalized else { return nil }
+            guard line.value.isFinite, let normalized = line.axis.normalized(line.value) else { return nil }
             return LivelineReferenceLine(
                 value: normalized,
                 axis: line.axis,
@@ -628,13 +624,9 @@ extension LivelineChartConfiguration {
         }
         configuration.referenceBands = configuration.referenceBands.compactMap { band in
             guard let bounds = band.bounds else { return nil }
-            let lower: Double? = band.axis == .time
-                ? LivelineScalar.time(bounds.lowerBound)
-                : Optional(LivelineScalar.value(bounds.lowerBound))
-            let upper: Double? = band.axis == .time
-                ? LivelineScalar.time(bounds.upperBound)
-                : Optional(LivelineScalar.value(bounds.upperBound))
-            guard let lower, let upper else { return nil }
+            guard let lower = band.axis.normalized(bounds.lowerBound),
+                  let upper = band.axis.normalized(bounds.upperBound)
+            else { return nil }
             return LivelineReferenceBand(
                 axis: band.axis,
                 start: lower,
@@ -685,14 +677,19 @@ extension LivelineChartConfiguration {
     }
 }
 
+private extension LivelineAnnotationAxis {
+    /// A coordinate on this axis, held to the range the axis can draw.
+    func normalized(_ coordinate: Double) -> Double? {
+        self == .time ? LivelineScalar.time(coordinate) : LivelineScalar.value(coordinate)
+    }
+}
+
 private extension LivelinePadding {
     func normalizedForRendering() -> LivelinePadding {
-        LivelinePadding(
-            top: top.flatMap { $0.isFinite ? min(max($0, 0), LivelineScalar.maximumDrawingMagnitude) : nil },
-            right: right.flatMap { $0.isFinite ? min(max($0, 0), LivelineScalar.maximumDrawingMagnitude) : nil },
-            bottom: bottom.flatMap { $0.isFinite ? min(max($0, 0), LivelineScalar.maximumDrawingMagnitude) : nil },
-            left: left.flatMap { $0.isFinite ? min(max($0, 0), LivelineScalar.maximumDrawingMagnitude) : nil }
-        )
+        func inset(_ value: CGFloat?) -> CGFloat? {
+            value.flatMap { $0.isFinite ? min(max($0, 0), LivelineScalar.maximumDrawingMagnitude) : nil }
+        }
+        return LivelinePadding(top: inset(top), right: inset(right), bottom: inset(bottom), left: inset(left))
     }
 }
 

@@ -492,7 +492,7 @@ final class LivelinePreparationTests: XCTestCase {
         bar.widthRatio = .nan
         bar.cornerRadius = .infinity
         XCTAssertEqual(bar.resolvedBaseline, 0)
-        XCTAssertEqual(bar.resolvedWidthRatio, 0.7)
+        XCTAssertEqual(bar.resolvedWidthRatio, LivelineBarStyle().widthRatio)
         XCTAssertEqual(bar.resolvedCornerRadius, 2)
 
         var radar = LivelineRadarStyle()
