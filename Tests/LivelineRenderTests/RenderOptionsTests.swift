@@ -104,7 +104,7 @@ final class RenderOptionsTests: XCTestCase {
         options.height = 180
         options.fps = 30
         options.duration = 2 / 30
-        options.styleName = "standard"
+        options.style = .standard
         options.animatedDither = false
         options.output = outputURL.path
         try MP4Exporter(options: options).export()
@@ -133,7 +133,7 @@ final class RenderOptionsTests: XCTestCase {
         options.height = 180
         options.fps = 30
         options.duration = 2 / 30
-        options.styleName = "standard"
+        options.style = .standard
         options.animatedDither = false
         options.output = outputURL.path
         try MP4Exporter(options: options).export()
@@ -182,7 +182,7 @@ final class RenderOptionsTests: XCTestCase {
         options.height = 180
         options.fps = 30
         options.duration = 2 / 30
-        options.styleName = "standard"
+        options.style = .standard
         options.animatedDither = false
         options.grid = false
         options.fill = false
