@@ -6,9 +6,9 @@ extension LivelineRenderer {
             Color(red: 59 / 255, green: 130 / 255, blue: 246 / 255),
             Color(red: 139 / 255, green: 92 / 255, blue: 246 / 255),
             Color(red: 6 / 255, green: 182 / 255, blue: 212 / 255),
-            Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255),
+            LivelineRGBA.rise.color,
             Color(red: 249 / 255, green: 115 / 255, blue: 22 / 255),
-            Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255),
+            LivelineRGBA.fall.color,
         ]
     }
 
@@ -154,7 +154,6 @@ extension LivelineRenderer {
                     font: textScale.font(10, weight: .semibold)
                 )
             }
-            // The value needs a second line, which only the taller cells have.
             guard style.showsValues else { continue }
             guard !style.showsLabels || cell.rect.height >= minimumHeight + lineHeight else { continue }
             drawText(

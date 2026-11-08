@@ -56,7 +56,7 @@ public struct LivelineBarStyle {
         self.showsBaseline = showsBaseline
     }
 
-    var resolvedWidthRatio: CGFloat { widthRatio.livelineClamped(0.05, 1, fallback: 0.7) }
+    var resolvedWidthRatio: CGFloat { widthRatio.livelineClamped(0.05, 1, fallback: 0.72) }
     var resolvedCornerRadius: CGFloat { cornerRadius.livelineAtLeast(0, fallback: 2) }
     var resolvedBaseline: Double { LivelineScalar.value(baseline) }
 }
@@ -80,8 +80,8 @@ public struct LivelineRangeStyle {
         self.centerLineWidth = centerLineWidth
     }
 
-    var resolvedFillOpacity: Double { fillOpacity.livelineClamped(0, 1, fallback: 0.16) }
-    var resolvedBoundaryLineWidth: CGFloat { boundaryLineWidth.livelineAtLeast(0, fallback: 1.25) }
+    var resolvedFillOpacity: Double { fillOpacity.livelineClamped(0, 1, fallback: 0.18) }
+    var resolvedBoundaryLineWidth: CGFloat { boundaryLineWidth.livelineAtLeast(0, fallback: 1.5) }
     var resolvedCenterLineWidth: CGFloat { centerLineWidth.livelineAtLeast(0, fallback: 1) }
 }
 
@@ -121,7 +121,7 @@ public struct LivelineScatterStyle {
 
     var resolvedPointSize: CGFloat { pointSize.livelineAtLeast(2, fallback: 7) }
     var resolvedOutlineWidth: CGFloat { outlineWidth.livelineAtLeast(0, fallback: 1.5) }
-    var resolvedConnectionLineWidth: CGFloat { connectionLineWidth.livelineAtLeast(0, fallback: 1.5) }
+    var resolvedConnectionLineWidth: CGFloat { connectionLineWidth.livelineAtLeast(0, fallback: 1.25) }
 }
 
 /// Where a step transition occurs between two adjacent samples.

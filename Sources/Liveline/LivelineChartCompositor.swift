@@ -13,33 +13,36 @@ struct LivelineCompositorInput {
     var smoothValue: Double
     var swingMagnitude: Double
     var anchor: TimeInterval
-    var leftEdge: TimeInterval
-    var rightEdge: TimeInterval
     var reveal: Double
     var animationTimestamp: TimeInterval
     var deltaTime: TimeInterval
     var textScale: LivelineTextScale = .standard
 }
 
-enum LivelineContentOverlay {
-    case line(livePoint: CGPoint?)
-    case candle(LivelineCandleOverlay)
-    case series(
-        entries: [LivelineSeries],
-        endpoints: [(point: CGPoint, palette: LivelinePalette, label: String?, alpha: Double)]
-    )
-    case timeline(LivelineTimelineGeometry, LivelineTimelineStyle)
-    case heatmap(LivelineHeatmapGeometry, LivelineHeatmapStyle)
-    case radar(LivelineRadarGeometry, [LivelineRadarPoint], LivelineRadarStyle)
-    case donut(LivelineDonutGeometry, LivelineDonutStyle)
-    case gauge(LivelineGaugeRenderGeometry, LivelineGaugeStyle)
-    case funnel(LivelineFunnelGeometry, LivelineFunnelStyle)
-    case histogram(LivelineHistogramGeometry, LivelineHistogramStyle)
-    case bullet(LivelineBulletGeometry, LivelineBulletStyle)
-    case treemap(LivelineTreemapGeometry, LivelineTreemapStyle)
-    case sunburst(LivelineSunburstGeometry, LivelineSunburstStyle)
-    case sankey(LivelineSankeyGeometry, LivelineSankeyStyle)
-    case standard
+/// What drawing a chart's marks leaves to the passes after it: which hover
+/// guide fits those marks, and the text the dither style draws above its
+/// texture instead of inside it.
+struct LivelineContentOverlay {
+    enum Crosshair {
+        /// No hover guide and no active point.
+        case none
+        case discrete
+        case line(livePoint: CGPoint?)
+        case candle(LivelineCandleOverlay)
+        case series
+    }
+
+    var crosshair: Crosshair = .discrete
+    var deferredText: ((inout GraphicsContext) -> Void)?
+
+    /// Charts without a hover guide have no time-and-value position for an
+    /// active point either.
+    var marksPoints: Bool {
+        if case .none = crosshair { return false }
+        return true
+    }
+
+    static let standard = LivelineContentOverlay()
 }
 
 struct LivelineCandleOverlay {
@@ -97,14 +100,28 @@ extension LivelineRenderer {
                 timestamp: input.animationTimestamp,
                 deltaTime: input.deltaTime
             )
-            return .line(livePoint: points.last)
+            let livePoint = points.last
+            return LivelineContentOverlay(crosshair: .line(livePoint: livePoint)) { context in
+                guard config.badge, let livePoint else { return }
+                drawBadge(
+                    context: &context,
+                    layout: layout,
+                    palette: palette,
+                    value: input.smoothValue,
+                    momentum: momentum,
+                    y: livePoint.y,
+                    config: config,
+                    textScale: input.textScale,
+                    alpha: reveal
+                )
+            }
 
         case let .bars(data, style):
             drawBars(
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -115,7 +132,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -126,7 +143,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -137,7 +154,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -148,7 +165,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -159,7 +176,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -170,7 +187,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -186,7 +203,7 @@ extension LivelineRenderer {
                     initialValue: style.resolvedInitialValue,
                     state: state
                 )
-                .livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                .livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -197,7 +214,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -208,7 +225,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -219,7 +236,7 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
@@ -230,17 +247,17 @@ extension LivelineRenderer {
                 context: &context,
                 layout: layout,
                 palette: palette,
-                points: data.livelineVisible(in: layout.leftEdge...layout.rightEdge),
+                points: data.livelineVisible(in: layout.visibleRange),
                 style: style,
                 reveal: reveal
             )
             return .standard
 
         case let .timeline(data, style):
-            let visible = data.filter { $0.end >= layout.leftEdge && $0.start <= layout.rightEdge }
+            let visible = data.livelineOverlapping(layout.visibleRange)
             let geometry = timelineGeometry(
                 items: visible,
-                totalLaneCount: max((data.map(\.lane).max() ?? 0) + 1, 1),
+                totalLaneCount: data.livelineLaneCount,
                 style: style,
                 layout: layout,
                 palette: palette,
@@ -255,13 +272,15 @@ extension LivelineRenderer {
                 textScale: input.textScale,
                 drawLabels: drawText
             )
-            return .timeline(geometry, style)
+            return LivelineContentOverlay(crosshair: .none) { context in
+                drawTimelineLabels(context: &context, geometry: geometry, style: style, textScale: input.textScale)
+            }
 
         case let .heatmap(data, style):
-            let visible = data.livelineVisible(in: layout.leftEdge...layout.rightEdge)
+            let visible = data.livelineVisible(in: layout.visibleRange)
             let geometry = heatmapGeometry(
                 cells: visible,
-                totalRowCount: max((data.map(\.row).max() ?? 0) + 1, style.rowLabels.count, 1),
+                totalRowCount: data.livelineRowCount(rowLabels: style.rowLabels),
                 style: style,
                 layout: layout,
                 palette: palette,
@@ -277,27 +296,45 @@ extension LivelineRenderer {
                 textScale: input.textScale,
                 drawLabels: drawText
             )
-            return .heatmap(geometry, style)
+            return LivelineContentOverlay(crosshair: .none) { context in
+                drawHeatmapLabels(
+                    context: &context,
+                    layout: layout,
+                    palette: palette,
+                    geometry: geometry,
+                    style: style,
+                    formatValue: config.formatValue,
+                    textScale: input.textScale
+                )
+            }
 
         case let .radar(data, style):
             let geometry = radarGeometry(points: data, style: style, layout: layout, reveal: reveal)
             drawRadar(context: &context, palette: palette, geometry: geometry, points: data, style: style, textScale: input.textScale, drawLabels: drawText)
-            return .radar(geometry, data, style)
+            return LivelineContentOverlay(crosshair: .none) { context in
+                drawRadarLabels(context: &context, palette: palette, geometry: geometry, points: data, style: style, textScale: input.textScale)
+            }
 
         case let .donut(data, style):
             let geometry = donutGeometry(data: data, style: style, layout: layout, palette: palette, reveal: reveal)
             drawDonut(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale, drawLabels: drawText)
-            return .donut(geometry, style)
+            return LivelineContentOverlay(crosshair: .none) { context in
+                drawDonutLabels(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale)
+            }
 
         case let .gauge(value, range, style):
             let geometry = gaugeRenderGeometry(value: value, range: range, style: style, layout: layout, reveal: reveal)
             drawGauge(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale, drawLabels: drawText)
-            return .gauge(geometry, style)
+            return LivelineContentOverlay(crosshair: .none) { context in
+                drawGaugeLabel(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale)
+            }
 
         case let .funnel(data, style):
             let geometry = funnelGeometry(data: data, style: style, layout: layout, palette: palette, reveal: reveal)
             drawFunnel(context: &context, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale, drawLabels: drawText)
-            return .funnel(geometry, style)
+            return LivelineContentOverlay(crosshair: .none) { context in
+                drawFunnelLabels(context: &context, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale)
+            }
 
         case let .histogram(values, style):
             let geometry = histogramGeometry(
@@ -317,7 +354,17 @@ extension LivelineRenderer {
                 textScale: input.textScale,
                 drawLabels: drawText
             )
-            return .histogram(geometry, style)
+            return LivelineContentOverlay(crosshair: .none) { context in
+                drawHistogramLabels(
+                    context: &context,
+                    layout: layout,
+                    palette: palette,
+                    geometry: geometry,
+                    style: style,
+                    formatValue: config.formatValue,
+                    textScale: input.textScale
+                )
+            }
 
         case let .bullet(style):
             let geometry = bulletGeometry(style: style, layout: layout, palette: palette, reveal: reveal)
@@ -330,7 +377,16 @@ extension LivelineRenderer {
                 textScale: input.textScale,
                 drawLabels: drawText
             )
-            return .bullet(geometry, style)
+            return LivelineContentOverlay(crosshair: .none) { context in
+                drawBulletLabels(
+                    context: &context,
+                    palette: palette,
+                    geometry: geometry,
+                    style: style,
+                    formatValue: config.formatValue,
+                    textScale: input.textScale
+                )
+            }
 
         case let .treemap(nodes, style):
             let plotRect = CGRect(
@@ -356,7 +412,16 @@ extension LivelineRenderer {
                 textScale: input.textScale,
                 drawLabels: drawText
             )
-            return .treemap(geometry, style)
+            return LivelineContentOverlay(crosshair: .none) { context in
+                drawTreemapLabels(
+                    context: &context,
+                    layout: layout,
+                    geometry: geometry,
+                    style: style,
+                    formatValue: config.formatValue,
+                    textScale: input.textScale
+                )
+            }
 
         case let .sunburst(nodes, style):
             // Radial layout is pure trigonometry over the node values, cheap
@@ -377,7 +442,16 @@ extension LivelineRenderer {
                 textScale: input.textScale,
                 drawLabels: drawText
             )
-            return .sunburst(geometry, style)
+            return LivelineContentOverlay(crosshair: .none) { context in
+                drawSunburstLabels(
+                    context: &context,
+                    palette: palette,
+                    geometry: geometry,
+                    style: style,
+                    formatValue: config.formatValue,
+                    textScale: input.textScale
+                )
+            }
 
         case let .sankey(links, style):
             let geometry = sankeyGeometry(
@@ -398,11 +472,20 @@ extension LivelineRenderer {
                 textScale: input.textScale,
                 drawLabels: drawText
             )
-            return .sankey(geometry, style)
+            return LivelineContentOverlay(crosshair: .none) { context in
+                drawSankeyLabels(
+                    context: &context,
+                    layout: layout,
+                    palette: palette,
+                    geometry: geometry,
+                    style: style,
+                    formatValue: config.formatValue,
+                    textScale: input.textScale
+                )
+            }
 
         case let .candle(_, _, candles, candleWidth, liveCandle, lineData, lineValue):
-            return .candle(
-                drawCandleMode(
+            let candle = drawCandleMode(
                     context: &context,
                     state: state,
                     layout: layout,
@@ -416,15 +499,15 @@ extension LivelineRenderer {
                     hover: input.hover,
                     scrubAmount: input.scrubAmount,
                     now: input.anchor,
-                    leftEdge: input.leftEdge,
-                    rightEdge: input.rightEdge,
+                    leftEdge: layout.leftEdge,
+                    rightEdge: layout.rightEdge,
                     reveal: reveal,
                     timestamp: input.animationTimestamp,
                     deltaTime: input.deltaTime,
                     smoothValue: input.smoothValue,
                     textScale: input.textScale
                 )
-            )
+            return LivelineContentOverlay(crosshair: .candle(candle))
 
         case let .series(series):
             let endpoints = drawSeries(
@@ -444,125 +527,24 @@ extension LivelineRenderer {
                 context: &context,
                 endpoints: endpoints,
                 alpha: reveal,
-                showPulse: config.pulse && reveal > 0.6 && state.pauseProgress < 0.5,
+                showPulse: config.pulse && reveal > 0.6 && !state.isPaused,
                 timestamp: input.animationTimestamp,
                 legendSide: config.seriesLegendSide.resolved(isRTL: layout.isRTL),
                 textScale: input.textScale,
                 drawsLabel: drawText
             )
-            return .series(entries: series, endpoints: endpoints)
-        }
-    }
-
-    static func drawContentText(
-        context: inout GraphicsContext,
-        input: LivelineCompositorInput,
-        overlay: LivelineContentOverlay
-    ) {
-        let config = input.configuration
-        let layout = input.layout
-        let palette = input.palette
-        let reveal = input.reveal
-
-        switch overlay {
-        case let .line(livePoint):
-            guard config.badge, let livePoint else { return }
-            drawBadge(
-                context: &context,
-                layout: layout,
-                palette: palette,
-                value: input.smoothValue,
-                momentum: resolvedMomentum(config: config, points: input.prepared.primaryVisible),
-                y: livePoint.y,
-                config: config,
-                textScale: input.textScale,
-                alpha: reveal
-            )
-        case let .timeline(geometry, style):
-            drawTimelineLabels(
-                context: &context,
-                geometry: geometry,
-                style: style,
-                textScale: input.textScale
-            )
-        case let .heatmap(geometry, style):
-            drawHeatmapLabels(
-                context: &context,
-                layout: layout,
-                palette: palette,
-                geometry: geometry,
-                style: style,
-                formatValue: config.formatValue,
-                textScale: input.textScale
-            )
-        case let .radar(geometry, points, style):
-            drawRadarLabels(context: &context, palette: palette, geometry: geometry, points: points, style: style, textScale: input.textScale)
-        case let .donut(geometry, style):
-            drawDonutLabels(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale)
-        case let .gauge(geometry, style):
-            drawGaugeLabel(context: &context, palette: palette, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale)
-        case let .funnel(geometry, style):
-            drawFunnelLabels(context: &context, geometry: geometry, style: style, formatValue: config.formatValue, textScale: input.textScale)
-        case let .histogram(geometry, style):
-            drawHistogramLabels(
-                context: &context,
-                layout: layout,
-                palette: palette,
-                geometry: geometry,
-                style: style,
-                formatValue: config.formatValue,
-                textScale: input.textScale
-            )
-        case let .bullet(geometry, style):
-            drawBulletLabels(
-                context: &context,
-                palette: palette,
-                geometry: geometry,
-                style: style,
-                formatValue: config.formatValue,
-                textScale: input.textScale
-            )
-        case let .treemap(geometry, style):
-            drawTreemapLabels(
-                context: &context,
-                layout: layout,
-                geometry: geometry,
-                style: style,
-                formatValue: config.formatValue,
-                textScale: input.textScale
-            )
-        case let .sunburst(geometry, style):
-            drawSunburstLabels(
-                context: &context,
-                palette: palette,
-                geometry: geometry,
-                style: style,
-                formatValue: config.formatValue,
-                textScale: input.textScale
-            )
-        case let .sankey(geometry, style):
-            drawSankeyLabels(
-                context: &context,
-                layout: layout,
-                palette: palette,
-                geometry: geometry,
-                style: style,
-                formatValue: config.formatValue,
-                textScale: input.textScale
-            )
-        case let .series(_, endpoints):
-            drawSeriesEndpoints(
-                context: &context,
-                endpoints: endpoints,
-                alpha: reveal,
-                showPulse: false,
-                timestamp: input.animationTimestamp,
-                legendSide: config.seriesLegendSide.resolved(isRTL: layout.isRTL),
-                textScale: input.textScale,
-                drawsDot: false
-            )
-        case .candle, .standard:
-            break
+            return LivelineContentOverlay(crosshair: .series) { context in
+                drawSeriesEndpoints(
+                    context: &context,
+                    endpoints: endpoints,
+                    alpha: reveal,
+                    showPulse: false,
+                    timestamp: input.animationTimestamp,
+                    legendSide: config.seriesLegendSide.resolved(isRTL: layout.isRTL),
+                    textScale: input.textScale,
+                    drawsDot: false
+                )
+            }
         }
     }
 
@@ -580,7 +562,7 @@ extension LivelineRenderer {
         reveal: Double,
         animationTimestamp: TimeInterval
     ) {
-        switch overlay {
+        switch overlay.crosshair {
         case let .line(livePoint):
             if let hover, let livePoint {
                 drawLineCrosshair(
@@ -609,7 +591,7 @@ extension LivelineRenderer {
                     )
                 }
             } else {
-                drawCandleCrosshair(
+                drawHoverGuide(
                     context: &context,
                     layout: layout,
                     palette: palette,
@@ -619,7 +601,7 @@ extension LivelineRenderer {
             }
 
         case .series:
-            drawMultiCrosshair(
+            drawHoverGuide(
                 context: &context,
                 layout: layout,
                 palette: palette,
@@ -627,7 +609,7 @@ extension LivelineRenderer {
                 alpha: scrubAmount
             )
 
-        case .standard:
+        case .discrete:
             drawDiscreteCrosshair(
                 context: &context,
                 layout: layout,
@@ -638,16 +620,11 @@ extension LivelineRenderer {
                 alpha: scrubAmount
             )
 
-        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel, .histogram, .bullet,
-             .treemap, .sunburst, .sankey:
+        case .none:
             break
         }
 
-        switch overlay {
-        case .timeline, .heatmap, .radar, .donut, .gauge, .funnel, .histogram, .bullet,
-             .treemap, .sunburst, .sankey:
-            break
-        default:
+        if overlay.marksPoints {
             drawActivePoint(
                 context: &context,
                 layout: layout,

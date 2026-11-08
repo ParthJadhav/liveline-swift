@@ -12,7 +12,7 @@ struct ChartScene: View {
             .padding(.vertical, outerVerticalPadding)
             .frame(width: CGFloat(options.width), height: CGFloat(options.height))
             .background(options.background)
-            .environment(\.colorScheme, options.theme == "light" ? .light : .dark)
+            .environment(\.colorScheme, options.theme == .light ? .light : .dark)
     }
 
     private var chart: AnyView {

@@ -274,7 +274,7 @@ extension LivelineRenderer {
         palette: LivelinePalette,
         reveal: Double
     ) -> LivelineDonutGeometry {
-        let positive = data.filter { $0.value > 0 }
+        let positive = data.livelinePositive
         let total = positive.map(\.value).reduce(0, +)
         let progress = LivelineMath.easedReveal(reveal)
         let center = plotCenter(layout)
@@ -362,7 +362,7 @@ extension LivelineRenderer {
         palette: LivelinePalette,
         reveal: Double
     ) -> LivelineFunnelGeometry {
-        let positive = data.filter { $0.value > 0 }
+        let positive = data.livelinePositive
         let progress = LivelineMath.easedReveal(reveal)
         let maximum = positive.map(\.value).max() ?? 1
         let stageHeight = positive.isEmpty ? 0 : max(
@@ -419,7 +419,7 @@ extension LivelineRenderer {
 
         let slotWidth = layout.chartWidth / CGFloat(bins.count)
         let barWidth = max(slotWidth - style.resolvedBarSpacing, 1)
-        let baselineY = LivelineMath.clamp(layout.y(for: 0), layout.padding.top, layout.bottomY)
+        let baselineY = layout.clampedY(for: 0)
         let bars = bins.enumerated().compactMap { index, bin -> LivelineHistogramBar? in
             let localReveal = LivelineMath.staggeredReveal(index: index, count: bins.count, reveal: reveal)
             guard localReveal > 0.001 else { return nil }

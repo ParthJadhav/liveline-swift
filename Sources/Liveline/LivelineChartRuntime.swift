@@ -286,10 +286,7 @@ enum LivelineHoverResolver {
         snapshot: LivelineInteractionSnapshot?
     ) -> LivelineHoverPoint? {
         guard let location, let snapshot, snapshot.isEnabled else { return nil }
-        let direct = snapshot.targets
-            .filter { contains(location, region: $0.region) }
-            .min { distanceSquared(location, $0.selection.anchor) < distanceSquared(location, $1.selection.anchor) }
-        if let direct { return direct.selection.hover }
+        if let direct = directHit(location, in: snapshot) { return direct.hover }
         return resolveHover(location: location, snapshot: snapshot)
     }
 
@@ -305,10 +302,7 @@ enum LivelineHoverResolver {
         }
 
         if !snapshot.targets.isEmpty {
-            let direct = snapshot.targets
-                .filter { contains(location, region: $0.region) }
-                .min { distanceSquared(location, $0.selection.anchor) < distanceSquared(location, $1.selection.anchor) }
-            if let direct { return direct.selection }
+            if let direct = directHit(location, in: snapshot) { return direct }
 
             let plot = CGRect(
                 x: snapshot.layout.plotLeftX,
@@ -330,6 +324,17 @@ enum LivelineHoverResolver {
             rows: [],
             anchor: CGPoint(x: hover.x, y: hover.y)
         )
+    }
+
+    /// The target whose region holds the pointer, nearest anchor first.
+    private static func directHit(
+        _ location: CGPoint,
+        in snapshot: LivelineInteractionSnapshot
+    ) -> LivelineTooltipSelection? {
+        snapshot.targets
+            .filter { contains(location, region: $0.region) }
+            .min { distanceSquared(location, $0.selection.anchor) < distanceSquared(location, $1.selection.anchor) }?
+            .selection
     }
 
     private static func resolveHover(

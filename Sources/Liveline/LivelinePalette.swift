@@ -72,6 +72,12 @@ struct LivelineRGBA: Hashable {
     }
 }
 
+extension LivelineRGBA {
+    /// Rising and falling values: momentum, candles, and the orderbook.
+    static let rise = LivelineRGBA(red: 34 / 255, green: 197 / 255, blue: 94 / 255, alpha: 1)
+    static let fall = LivelineRGBA(red: 239 / 255, green: 68 / 255, blue: 68 / 255, alpha: 1)
+}
+
 struct LivelinePalette {
     var line: Color
     var lineRGB: LivelineRGBA?
@@ -85,12 +91,8 @@ struct LivelinePalette {
     var dotUp: Color
     var dotDown: Color
     var dotFlat: Color
-    var glowUp: Color
-    var glowDown: Color
-    var glowFlat: Color
     var badgeOuterBackground: Color
     var badgeOuterShadow: Color
-    var badgeBackground: Color
     var badgeText: Color
     var dashLine: Color
     var referenceLine: Color
@@ -120,15 +122,11 @@ extension LivelinePalette {
                 ? LivelineRGBA(red: 1, green: 1, blue: 1, alpha: 0.50)
                 : LivelineRGBA(red: 0, green: 0, blue: 0, alpha: 0.62),
             emptyText: isDark ? Color.white.opacity(0.55) : Color.black.opacity(0.55),
-            dotUp: Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255),
-            dotDown: Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255),
+            dotUp: LivelineRGBA.rise.color,
+            dotDown: LivelineRGBA.fall.color,
             dotFlat: accent,
-            glowUp: Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255).opacity(0.18),
-            glowDown: Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255).opacity(0.18),
-            glowFlat: accent.opacity(0.12),
             badgeOuterBackground: isDark ? Color(red: 40 / 255, green: 40 / 255, blue: 40 / 255).opacity(0.95) : Color.white.opacity(0.95),
             badgeOuterShadow: isDark ? Color.black.opacity(0.40) : Color.black.opacity(0.15),
-            badgeBackground: accent,
             badgeText: .white,
             dashLine: accent.opacity(0.40),
             referenceLine: isDark ? Color.white.opacity(0.15) : Color.black.opacity(0.12),

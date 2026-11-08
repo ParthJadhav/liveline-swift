@@ -83,6 +83,25 @@ struct LivelineChartCapabilities: Equatable {
     /// draws its own horizontal axis labels there.
     var reservesBottomAxisPadding: Bool = false
     var isRealtime: Bool = false
+    /// Widens the live-edge buffer so the badge and its momentum arrows fit
+    /// beside the newest sample. Also gates the line-only live extras: the
+    /// orderbook stream and the accent-colored loading wave.
+    var isLiveLine: Bool = false
+    var valueRangeEasing: LivelineValueRangeEasing = .followsValue
+    /// The stretch of the chart reveal over which the axes fade in.
+    var axisReveal: ClosedRange<Double> = 0.15...0.70
+}
+
+/// How quickly the drawn value range chases the range the data needs.
+enum LivelineValueRangeEasing: Equatable {
+    /// At the speed the current value is smoothed with.
+    case followsValue
+    /// At a fixed speed: one range spans several series, so no single value
+    /// can set its pace.
+    case steady
+    /// Faster the closer it already is, so candle wicks settle without a
+    /// visible tail.
+    case closesGap
 }
 
 struct LivelineChartIdentity: Hashable {
@@ -96,7 +115,6 @@ struct LivelineChartSemantics {
     var currentValue: Double
     var momentum: LivelineMomentum
     var latestTime: TimeInterval?
-    var seriesIDs: [String]
     /// Oldest sample on the time axis. Together with ``latestTime`` this is the
     /// domain a zoom-and-pan viewport is clamped to; charts with no time axis
     /// leave both `nil`.
@@ -111,7 +129,7 @@ extension LivelineChartContent {
         switch self {
         case let .line(data, value):
             let points = LivelineInputNormalizer.points(data)
-            let resolvedValue = LivelineInputNormalizer.value(value, fallback: points.last?.value ?? 0)
+            let resolvedValue = LivelineScalar.value(value, fallback: points.last?.value ?? 0)
             guard points.livelineSharesStorage(with: data), resolvedValue == value else {
                 return .line(data: points, value: resolvedValue)
             }
@@ -133,7 +151,7 @@ extension LivelineChartContent {
 
         case let .scatter(data, value, style):
             let points = LivelineInputNormalizer.points(data)
-            let resolvedValue = LivelineInputNormalizer.value(value, fallback: points.last?.value ?? 0)
+            let resolvedValue = LivelineScalar.value(value, fallback: points.last?.value ?? 0)
             guard points.livelineSharesStorage(with: data), resolvedValue == value else {
                 return .scatter(data: points, value: resolvedValue, style: style)
             }
@@ -141,7 +159,7 @@ extension LivelineChartContent {
 
         case let .steps(data, value, style):
             let points = LivelineInputNormalizer.points(data)
-            let resolvedValue = LivelineInputNormalizer.value(value, fallback: points.last?.value ?? 0)
+            let resolvedValue = LivelineScalar.value(value, fallback: points.last?.value ?? 0)
             guard points.livelineSharesStorage(with: data), resolvedValue == value else {
                 return .steps(data: points, value: resolvedValue, style: style)
             }
@@ -192,9 +210,9 @@ extension LivelineChartContent {
             return .donut(data: LivelineInputNormalizer.categories(data), style: style)
 
         case let .gauge(value, range, style):
-            let range = LivelineInputNormalizer.range(range, fallback: 0...1)
+            let range = LivelineScalar.nondegenerateRange(lower: range.lowerBound, upper: range.upperBound, fallback: 0...1)
             return .gauge(
-                value: LivelineInputNormalizer.value(value, fallback: range.lowerBound),
+                value: LivelineScalar.value(value, fallback: range.lowerBound),
                 range: range,
                 style: style
             )
@@ -228,8 +246,8 @@ extension LivelineChartContent {
                 ?? points.last?.value
                 ?? resolvedCandles.last?.close
                 ?? 0
-            let resolvedValue = LivelineInputNormalizer.value(value, fallback: fallback)
-            let resolvedWidth = LivelineInputNormalizer.positive(candleWidth, fallback: 1)
+            let resolvedValue = LivelineScalar.value(value, fallback: fallback)
+            let resolvedWidth = LivelineScalar.positiveDuration(candleWidth, fallback: 1)
             let resolvedLineValue = lineValue.flatMap { $0.isFinite ? $0 : nil }
             guard points.livelineSharesStorage(with: data),
                   linePoints.livelineSharesStorage(with: lineData),
@@ -360,14 +378,14 @@ extension LivelineChartContent {
             return semantics(kind: .radar, capabilities: .radial, currentValue: average, momentumPoints: [], latestTime: nil)
 
         case let .donut(data, _):
-            let positive = data.filter { $0.value > 0 }
+            let positive = data.livelinePositive
             return semantics(kind: .donut, capabilities: .radial, currentValue: positive.map(\.value).reduce(0, +), momentumPoints: [], latestTime: nil)
 
         case let .gauge(value, _, _):
             return semantics(kind: .gauge, capabilities: .radial, currentValue: value, momentumPoints: [], latestTime: nil)
 
         case let .funnel(data, _):
-            return semantics(kind: .funnel, capabilities: .radial, currentValue: data.last(where: { $0.value > 0 })?.value ?? 0, momentumPoints: [], latestTime: nil)
+            return semantics(kind: .funnel, capabilities: .radial, currentValue: data.livelinePositive.last?.value ?? 0, momentumPoints: [], latestTime: nil)
 
         case let .histogram(values, _):
             return semantics(
@@ -443,28 +461,25 @@ extension LivelineChartContent {
                activeWindow > 0,
                let latestTime {
                 let rightEdge = latestTime + activeWindow * LivelineRenderer.windowBufferNoBadge
-                let visibleRange = (rightEdge - activeWindow - 2)...rightEdge
                 windowedPrimary = LivelineSeriesSelector.visibleSlices(
                     series: renderable,
-                    hiddenSeries: [],
-                    visibleRange: visibleRange
+                    visibleRange: LivelineRenderer.sampleRange(leftEdge: rightEdge - activeWindow, rightEdge: rightEdge)
                 ).first
             } else {
                 windowedPrimary = nil
             }
-            let primary = windowedPrimary?.series
-                ?? renderable.first
-                ?? visible.first
-                ?? series.first(where: \.livelineIsRenderable)
-                ?? series.first
-            let ids = series.map(\.id)
+            let primary = series.livelinePrimary(
+                windowed: windowedPrimary?.series,
+                visible: visible,
+                renderable: renderable
+            )
             return semantics(
                 kind: .series,
                 capabilities: .series,
                 currentValue: primary?.value ?? 0,
                 momentumPoints: windowedPrimary?.points ?? primary?.data ?? [],
                 latestTime: latestTime,
-                seriesIDs: ids,
+                seriesIDs: series.map(\.id),
                 // The momentum points are a window's worth of one series; the
                 // pan domain has to span every series in full.
                 earliestTime: timeSeries.compactMap { $0.data.first?.time }.min(),
@@ -489,7 +504,6 @@ extension LivelineChartContent {
             currentValue: currentValue,
             momentum: LivelineMath.detectMomentum(points: momentumPoints),
             latestTime: latestTime,
-            seriesIDs: seriesIDs,
             // Most kinds hand over their own points, so the time domain falls
             // out of them. The kinds whose momentum points are derived — index
             // based timelines, windowed multi-series — pass theirs explicitly.
@@ -516,11 +530,9 @@ struct LivelineVisibleSeries {
 enum LivelineSeriesSelector {
     static func visibleSlices(
         series: [LivelineSeries],
-        hiddenSeries: Set<String>,
         visibleRange: ClosedRange<TimeInterval>
     ) -> [LivelineVisibleSeries] {
         series.compactMap { entry in
-            guard !hiddenSeries.contains(entry.id) else { return nil }
             let points = entry.data.livelineVisible(in: visibleRange)
             guard points.count >= 2 else { return nil }
             return LivelineVisibleSeries(series: entry, points: points)
@@ -528,7 +540,7 @@ enum LivelineSeriesSelector {
     }
 }
 
-private extension LivelineChartCapabilities {
+extension LivelineChartCapabilities {
     static let line = LivelineChartCapabilities(
         usesValueAxis: true,
         usesCartesianGrid: true,
@@ -536,7 +548,8 @@ private extension LivelineChartCapabilities {
         hoverBehavior: .interpolated,
         supportsLiveBadge: true,
         reservesBadgePadding: true,
-        isRealtime: true
+        isRealtime: true,
+        isLiveLine: true
     )
 
     static let interpolatedCartesian = LivelineChartCapabilities(
@@ -593,7 +606,9 @@ private extension LivelineChartCapabilities {
         hoverBehavior: .interpolated,
         supportsLiveBadge: true,
         reservesBadgePadding: true,
-        isRealtime: true
+        isRealtime: true,
+        valueRangeEasing: .closesGap,
+        axisReveal: 0.25...0.60
     )
 
     static let series = LivelineChartCapabilities(
@@ -602,7 +617,8 @@ private extension LivelineChartCapabilities {
         usesTimeAxis: true,
         hoverBehavior: .interpolated,
         reservesBadgePadding: true,
-        isRealtime: true
+        isRealtime: true,
+        valueRangeEasing: .steady
     )
 }
 
@@ -666,36 +682,17 @@ extension Array {
 
 extension Array where Element == LivelineCandle {
     func livelineVisible(in range: ClosedRange<TimeInterval>, candleWidth: TimeInterval) -> [LivelineCandle] {
-        let width = LivelineInputNormalizer.positive(candleWidth, fallback: 1)
+        let width = LivelineScalar.positiveDuration(candleWidth, fallback: 1)
         return livelineVisible(in: (range.lowerBound - width)...range.upperBound)
             .filter { $0.time + width >= range.lowerBound }
     }
 }
 
 enum LivelineInputNormalizer {
-    static func value(_ value: Double, fallback: Double) -> Double {
-        LivelineScalar.value(value, fallback: fallback)
-    }
-
-    static func positive(_ value: Double, fallback: Double) -> Double {
-        LivelineScalar.positiveDuration(value, fallback: fallback)
-    }
-
-    static func range(
-        _ range: ClosedRange<Double>,
-        fallback: ClosedRange<Double>
-    ) -> ClosedRange<Double> {
-        LivelineScalar.nondegenerateRange(
-            lower: range.lowerBound,
-            upper: range.upperBound,
-            fallback: fallback
-        )
-    }
-
     static func points(_ source: [LivelinePoint]) -> [LivelinePoint] {
         timed(source) { point in
             guard let time = LivelineScalar.time(point.time), point.value.isFinite else { return nil }
-            return LivelinePoint(time: time, value: value(point.value, fallback: 0))
+            return LivelinePoint(time: time, value: LivelineScalar.value(point.value, fallback: 0))
         }
     }
 
@@ -704,8 +701,8 @@ enum LivelineInputNormalizer {
             guard let time = LivelineScalar.time(point.time), point.lower.isFinite, point.upper.isFinite else { return nil }
             return LivelineRangePoint(
                 time: time,
-                lower: value(point.lower, fallback: 0),
-                upper: value(point.upper, fallback: 0)
+                lower: LivelineScalar.value(point.lower, fallback: 0),
+                upper: LivelineScalar.value(point.upper, fallback: 0)
             )
         }
     }
@@ -715,8 +712,8 @@ enum LivelineInputNormalizer {
             guard let time = LivelineScalar.time(point.time), point.value.isFinite, point.magnitude.isFinite else { return nil }
             return LivelineBubblePoint(
                 time: time,
-                value: value(point.value, fallback: 0),
-                magnitude: value(point.magnitude, fallback: 0)
+                value: LivelineScalar.value(point.value, fallback: 0),
+                magnitude: LivelineScalar.value(point.magnitude, fallback: 0)
             )
         }
     }
@@ -727,11 +724,11 @@ enum LivelineInputNormalizer {
             guard let time = LivelineScalar.time(point.time), values.allSatisfy(\.isFinite) else { return nil }
             return LivelineBoxPlotPoint(
                 time: time,
-                minimum: value(point.minimum, fallback: 0),
-                lowerQuartile: value(point.lowerQuartile, fallback: 0),
-                median: value(point.median, fallback: 0),
-                upperQuartile: value(point.upperQuartile, fallback: 0),
-                maximum: value(point.maximum, fallback: 0)
+                minimum: LivelineScalar.value(point.minimum, fallback: 0),
+                lowerQuartile: LivelineScalar.value(point.lowerQuartile, fallback: 0),
+                median: LivelineScalar.value(point.median, fallback: 0),
+                upperQuartile: LivelineScalar.value(point.upperQuartile, fallback: 0),
+                maximum: LivelineScalar.value(point.maximum, fallback: 0)
             )
         }
     }
@@ -743,10 +740,10 @@ enum LivelineInputNormalizer {
     static func candle(_ candle: LivelineCandle) -> LivelineCandle? {
         let values = [candle.open, candle.high, candle.low, candle.close]
         guard let time = LivelineScalar.time(candle.time), values.allSatisfy(\.isFinite) else { return nil }
-        let open = value(candle.open, fallback: 0)
-        let high = value(candle.high, fallback: open)
-        let low = value(candle.low, fallback: open)
-        let close = value(candle.close, fallback: open)
+        let open = LivelineScalar.value(candle.open, fallback: 0)
+        let high = LivelineScalar.value(candle.high, fallback: open)
+        let low = LivelineScalar.value(candle.low, fallback: open)
+        let close = LivelineScalar.value(candle.close, fallback: open)
         return LivelineCandle(
             time: time,
             open: open,
@@ -762,9 +759,9 @@ enum LivelineInputNormalizer {
             guard let time = LivelineScalar.time(point.time), values.allSatisfy(\.isFinite) else { return nil }
             return LivelineErrorBarPoint(
                 time: time,
-                value: value(point.value, fallback: 0),
-                lower: value(point.lower, fallback: 0),
-                upper: value(point.upper, fallback: 0)
+                value: LivelineScalar.value(point.value, fallback: 0),
+                lower: LivelineScalar.value(point.lower, fallback: 0),
+                upper: LivelineScalar.value(point.upper, fallback: 0)
             )
         }
     }
@@ -774,8 +771,8 @@ enum LivelineInputNormalizer {
             guard let time = LivelineScalar.time(point.time), point.start.isFinite, point.end.isFinite else { return nil }
             return LivelineDumbbellPoint(
                 time: time,
-                start: value(point.start, fallback: 0),
-                end: value(point.end, fallback: 0)
+                start: LivelineScalar.value(point.start, fallback: 0),
+                end: LivelineScalar.value(point.end, fallback: 0)
             )
         }
     }
@@ -785,7 +782,7 @@ enum LivelineInputNormalizer {
             guard let time = LivelineScalar.time(point.time) else { return nil }
             return LivelineStackedPoint(
                 time: time,
-                values: point.values.map { value($0, fallback: 0) }
+                values: point.values.map { LivelineScalar.value($0, fallback: 0) }
             )
         }
     }
@@ -829,7 +826,7 @@ enum LivelineInputNormalizer {
                 LivelineHeatmapCell(
                     time: time,
                     row: min(max(cell.row, 0), LivelineScalar.maximumDiscreteIndex),
-                    value: value(cell.value, fallback: 0)
+                    value: LivelineScalar.value(cell.value, fallback: 0)
                 )
             )
         }
@@ -859,7 +856,7 @@ enum LivelineInputNormalizer {
             guard let time = LivelineScalar.time(cell.time),
                   time == cell.time,
                   cell.value.isFinite,
-                  value(cell.value, fallback: 0) == cell.value,
+                  LivelineScalar.value(cell.value, fallback: 0) == cell.value,
                   cell.row >= 0,
                   cell.row <= LivelineScalar.maximumDiscreteIndex
             else {
@@ -875,7 +872,7 @@ enum LivelineInputNormalizer {
         var seen = Set<String>()
         return source.compactMap { point in
             guard !point.label.isEmpty, point.value.isFinite, seen.insert(point.label).inserted else { return nil }
-            return LivelineRadarPoint(label: point.label, value: value(point.value, fallback: 0))
+            return LivelineRadarPoint(label: point.label, value: LivelineScalar.value(point.value, fallback: 0))
         }
     }
 
@@ -892,7 +889,7 @@ enum LivelineInputNormalizer {
             return LivelineCategoryValue(
                 id: entry.id,
                 label: entry.label,
-                value: value(entry.value, fallback: 0)
+                value: LivelineScalar.value(entry.value, fallback: 0)
             )
         }
     }
@@ -907,7 +904,7 @@ enum LivelineInputNormalizer {
             return LivelineSeries(
                 id: entry.id,
                 data: data,
-                value: value(entry.value, fallback: data.last?.value ?? 0),
+                value: LivelineScalar.value(entry.value, fallback: data.last?.value ?? 0),
                 color: entry.color,
                 label: entry.label
             )
@@ -950,7 +947,7 @@ enum LivelineInputNormalizer {
         for entry in source {
             guard !entry.id.isEmpty,
                   seen.insert(entry.id).inserted,
-                  value(entry.value, fallback: entry.data.last?.value ?? 0) == entry.value,
+                  LivelineScalar.value(entry.value, fallback: entry.data.last?.value ?? 0) == entry.value,
                   points(entry.data).livelineSharesStorage(with: entry.data)
             else {
                 return false

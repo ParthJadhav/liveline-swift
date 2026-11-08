@@ -27,7 +27,7 @@ extension LivelineRenderer {
             let palette = state.palette(accent: entry.color, mode: config.theme, lineWidth: config.lineWidth)
             var layer = context
             layer.opacity *= entryAlpha * alpha
-            let visible = entry.data.livelineVisible(in: (layout.leftEdge - 2)...layout.rightEdge)
+            let visible = entry.data.livelineVisible(in: layout.sampleRange)
             guard visible.count >= 2 else { continue }
 
             let points = drawLine(
@@ -116,21 +116,5 @@ extension LivelineRenderer {
         }
 
         context.fill(Path(ellipseIn: CGRect(x: point.x - 3, y: point.y - 3, width: 6, height: 6)), with: .color(color))
-    }
-
-    static func drawMultiCrosshair(
-        context: inout GraphicsContext,
-        layout: LivelineLayout,
-        palette: LivelinePalette,
-        hover: LivelineHoverPoint?,
-        alpha: Double
-    ) {
-        guard let hover, alpha > 0.01 else { return }
-        var layer = context
-        layer.opacity *= alpha
-        var vertical = Path()
-        vertical.move(to: CGPoint(x: hover.x, y: layout.padding.top))
-        vertical.addLine(to: CGPoint(x: hover.x, y: layout.bottomY))
-        layer.stroke(vertical, with: .color(palette.crosshairLine), lineWidth: 1)
     }
 }

@@ -108,8 +108,6 @@ public struct LivelineViewportLimits: Equatable {
         let safeWindow = window.isFinite && window > 0 ? window : 30
         let extent = max(domain.upperBound - domain.lowerBound, safeWindow)
         let cap = maximumZoomOut.isFinite && maximumZoomOut >= 1 ? maximumZoomOut : defaultMaximumZoomOut
-        // Never wider than the data actually covers, and never narrower than the
-        // window the reader picked.
         let ceiling = max(safeWindow, min(extent, safeWindow * cap))
 
         let floor: TimeInterval

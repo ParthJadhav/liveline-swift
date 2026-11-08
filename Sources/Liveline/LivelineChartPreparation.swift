@@ -11,46 +11,15 @@ struct LivelinePreparedChart {
     }
 }
 
-/// Cheap stand-in for a sample array's contents: the backing buffer plus the
-/// endpoints. Matching shapes mean the samples are the same array, without
-/// walking them.
-struct LivelineDataShape: Equatable {
-    var storage: UInt
-    var count: Int
-    var firstTime: TimeInterval
-    var lastTime: TimeInterval
-    var lastValue: Double
-}
-
-struct LivelineWaterfallKey: Equatable {
-    var shape: LivelineDataShape
-    var initialValue: Double
-}
-
 /// Identity of a prepared chart. Everything `prepare` reads is either covered
 /// here or derived from it, so a matching key means a matching result.
 struct LivelinePreparedChartKey: Equatable {
-    var kind: LivelineChartKind
-    var shapes: [LivelineDataShape]
-    var identifiers: [String]
-    var variant: Double
+    var content: LivelineContentFingerprint
     var hiddenSeries: Set<String>
     var leftEdge: TimeInterval
     var rightEdge: TimeInterval
     var referenceValue: Double?
     var exaggerate: Bool
-}
-
-extension Array where Element: LivelineTimedDatum {
-    func livelineShape(lastValue: Double = 0) -> LivelineDataShape {
-        LivelineDataShape(
-            storage: livelineStorageIdentity,
-            count: count,
-            firstTime: first?.time ?? 0,
-            lastTime: last?.time ?? 0,
-            lastValue: lastValue
-        )
-    }
 }
 
 enum LivelineChartPreparer {
@@ -62,31 +31,33 @@ enum LivelineChartPreparer {
         config: LivelineChartConfiguration,
         state: LivelineRenderState? = nil
     ) -> LivelinePreparedChart {
-        let key = state.flatMap { _ in
-            cacheKey(
+        guard let state else {
+            return build(
                 for: content,
                 hiddenSeries: hiddenSeries,
                 leftEdge: leftEdge,
                 rightEdge: rightEdge,
-                config: config
+                config: config,
+                state: nil
             )
         }
-        if let state, let key, let cached = state.preparedChart(for: key) {
-            return cached
-        }
-
-        let prepared = build(
+        let key = cacheKey(
             for: content,
             hiddenSeries: hiddenSeries,
             leftEdge: leftEdge,
             rightEdge: rightEdge,
-            config: config,
-            state: state
+            config: config
         )
-        if let state, let key {
-            state.storePreparedChart(prepared, for: key)
+        return state.preparedChart(for: key) {
+            build(
+                for: content,
+                hiddenSeries: hiddenSeries,
+                leftEdge: leftEdge,
+                rightEdge: rightEdge,
+                config: config,
+                state: state
+            )
         }
-        return prepared
     }
 
     private static func build(
@@ -97,19 +68,19 @@ enum LivelineChartPreparer {
         config: LivelineChartConfiguration,
         state: LivelineRenderState?
     ) -> LivelinePreparedChart {
+        let sampleRange = LivelineRenderer.sampleRange(leftEdge: leftEdge, rightEdge: rightEdge)
         switch content {
         case let .line(data, value):
-            let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
+            let (visible, source) = window(data, range: sampleRange)
             return LivelinePreparedChart(
                 primaryVisible: visible,
-                rangePoints: visible.isEmpty ? data.livelineSuffix(8) : visible,
+                rangePoints: source,
                 rangeOverride: nil,
                 primaryValue: value
             )
 
         case let .bars(data, style):
-            let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
-            let source = visible.isEmpty ? data.livelineSuffix(8) : visible
+            let (visible, source) = window(data, range: sampleRange)
             let range = LivelineMath.barRangePoints(points: source, baseline: style.resolvedBaseline)
             return LivelinePreparedChart(
                 primaryVisible: visible,
@@ -119,8 +90,7 @@ enum LivelineChartPreparer {
             )
 
         case let .range(data, _):
-            let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
-            let source = visible.isEmpty ? data.livelineSuffix(8) : visible
+            let (_, source) = window(data, range: sampleRange)
             let midpoint = source.map { LivelinePoint(time: $0.time, value: $0.midpoint) }
             let bounds = source.flatMap { point in
                 [
@@ -132,53 +102,41 @@ enum LivelineChartPreparer {
             return LivelinePreparedChart(
                 primaryVisible: midpoint,
                 rangePoints: midpoint,
-                rangeOverride: bounds.isEmpty ? nil : LivelineMath.computeRange(
-                    points: bounds,
-                    currentValue: primaryValue,
-                    referenceValue: config.referenceLine?.value,
-                    exaggerate: config.exaggerate
-                ),
+                rangeOverride: rangeOverride(bounds: bounds, primaryValue: primaryValue, config: config),
                 primaryValue: primaryValue
             )
 
         case let .scatter(data, value, _):
-            let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
+            let (visible, source) = window(data, range: sampleRange)
             return LivelinePreparedChart(
                 primaryVisible: visible,
-                rangePoints: visible.isEmpty ? data.livelineSuffix(8) : visible,
+                rangePoints: source,
                 rangeOverride: nil,
                 primaryValue: value
             )
 
         case let .steps(data, value, _):
-            let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
+            let (visible, source) = window(data, range: sampleRange)
             return LivelinePreparedChart(
                 primaryVisible: visible,
-                rangePoints: visible.isEmpty ? data.livelineSuffix(8) : visible,
+                rangePoints: source,
                 rangeOverride: nil,
                 primaryValue: value
             )
 
         case let .lollipops(data, style):
-            let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
-            let source = visible.isEmpty ? data.livelineSuffix(8) : visible
+            let (visible, source) = window(data, range: sampleRange)
             let primaryValue = data.last?.value ?? style.resolvedBaseline
             let bounds = LivelineMath.barRangePoints(points: source, baseline: style.resolvedBaseline)
             return LivelinePreparedChart(
                 primaryVisible: visible,
                 rangePoints: source,
-                rangeOverride: bounds.isEmpty ? nil : LivelineMath.computeRange(
-                    points: bounds,
-                    currentValue: primaryValue,
-                    referenceValue: config.referenceLine?.value,
-                    exaggerate: config.exaggerate
-                ),
+                rangeOverride: rangeOverride(bounds: bounds, primaryValue: primaryValue, config: config),
                 primaryValue: primaryValue
             )
 
         case let .bubbles(data, _):
-            let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
-            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let (visible, source) = window(data, range: sampleRange)
             let visiblePoints = visible.map { LivelinePoint(time: $0.time, value: $0.value) }
             let rangePoints = source.map { LivelinePoint(time: $0.time, value: $0.value) }
             return LivelinePreparedChart(
@@ -189,8 +147,7 @@ enum LivelineChartPreparer {
             )
 
         case let .boxPlots(data, _):
-            let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
-            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let (visible, source) = window(data, range: sampleRange)
             let medians = source.map { LivelinePoint(time: $0.time, value: $0.median) }
             let bounds = source.flatMap { point in
                 [
@@ -202,12 +159,7 @@ enum LivelineChartPreparer {
             return LivelinePreparedChart(
                 primaryVisible: visible.map { LivelinePoint(time: $0.time, value: $0.median) },
                 rangePoints: medians,
-                rangeOverride: bounds.isEmpty ? nil : LivelineMath.computeRange(
-                    points: bounds,
-                    currentValue: primaryValue,
-                    referenceValue: config.referenceLine?.value,
-                    exaggerate: config.exaggerate
-                ),
+                rangeOverride: rangeOverride(bounds: bounds, primaryValue: primaryValue, config: config),
                 primaryValue: primaryValue
             )
 
@@ -217,8 +169,7 @@ enum LivelineChartPreparer {
                 initialValue: style.resolvedInitialValue,
                 state: state
             )
-            let visible = segments.livelineVisible(in: (leftEdge - 2)...rightEdge)
-            let source = visible.isEmpty ? Array(segments.suffix(8)) : visible
+            let (visible, source) = window(segments, range: sampleRange)
             let endpointPoints = source.map { LivelinePoint(time: $0.time, value: $0.end) }
             let bounds = source.flatMap { segment in
                 [
@@ -230,18 +181,12 @@ enum LivelineChartPreparer {
             return LivelinePreparedChart(
                 primaryVisible: visible.map { LivelinePoint(time: $0.time, value: $0.end) },
                 rangePoints: endpointPoints,
-                rangeOverride: bounds.isEmpty ? nil : LivelineMath.computeRange(
-                    points: bounds,
-                    currentValue: primaryValue,
-                    referenceValue: config.referenceLine?.value,
-                    exaggerate: config.exaggerate
-                ),
+                rangeOverride: rangeOverride(bounds: bounds, primaryValue: primaryValue, config: config),
                 primaryValue: primaryValue
             )
 
         case let .errorBars(data, _):
-            let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
-            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let (visible, source) = window(data, range: sampleRange)
             let values = source.map { LivelinePoint(time: $0.time, value: $0.value) }
             let bounds = source.flatMap {
                 [
@@ -253,18 +198,12 @@ enum LivelineChartPreparer {
             return LivelinePreparedChart(
                 primaryVisible: visible.map { LivelinePoint(time: $0.time, value: $0.value) },
                 rangePoints: values,
-                rangeOverride: bounds.isEmpty ? nil : LivelineMath.computeRange(
-                    points: bounds,
-                    currentValue: primaryValue,
-                    referenceValue: config.referenceLine?.value,
-                    exaggerate: config.exaggerate
-                ),
+                rangeOverride: rangeOverride(bounds: bounds, primaryValue: primaryValue, config: config),
                 primaryValue: primaryValue
             )
 
         case let .dumbbells(data, _):
-            let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
-            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let (visible, source) = window(data, range: sampleRange)
             let endpoints = source.flatMap {
                 [
                     LivelinePoint(time: $0.time, value: $0.start),
@@ -275,18 +214,12 @@ enum LivelineChartPreparer {
             return LivelinePreparedChart(
                 primaryVisible: visible.map { LivelinePoint(time: $0.time, value: $0.end) },
                 rangePoints: source.map { LivelinePoint(time: $0.time, value: $0.end) },
-                rangeOverride: endpoints.isEmpty ? nil : LivelineMath.computeRange(
-                    points: endpoints,
-                    currentValue: primaryValue,
-                    referenceValue: config.referenceLine?.value,
-                    exaggerate: config.exaggerate
-                ),
+                rangeOverride: rangeOverride(bounds: endpoints, primaryValue: primaryValue, config: config),
                 primaryValue: primaryValue
             )
 
         case let .stackedBars(data, style):
-            let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
-            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let (visible, source) = window(data, range: sampleRange)
             let rangePoints = LivelineMath.stackedRangePoints(points: source, mode: style.mode)
             let primaryValue = LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode)
             return LivelinePreparedChart(
@@ -294,18 +227,12 @@ enum LivelineChartPreparer {
                     LivelinePoint(time: $0.time, value: LivelineMath.stackedPrimaryValue(point: $0, mode: style.mode))
                 },
                 rangePoints: rangePoints,
-                rangeOverride: rangePoints.isEmpty ? nil : LivelineMath.computeRange(
-                    points: rangePoints,
-                    currentValue: primaryValue,
-                    referenceValue: config.referenceLine?.value,
-                    exaggerate: config.exaggerate
-                ),
+                rangeOverride: rangeOverride(bounds: rangePoints, primaryValue: primaryValue, config: config),
                 primaryValue: primaryValue
             )
 
         case let .stackedAreas(data, style):
-            let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
-            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
+            let (visible, source) = window(data, range: sampleRange)
             let rangePoints = LivelineMath.stackedRangePoints(
                 points: source,
                 mode: style.mode,
@@ -317,19 +244,14 @@ enum LivelineChartPreparer {
                     LivelinePoint(time: $0.time, value: LivelineMath.stackedPrimaryValue(point: $0, mode: style.mode))
                 },
                 rangePoints: rangePoints,
-                rangeOverride: rangePoints.isEmpty ? nil : LivelineMath.computeRange(
-                    points: rangePoints,
-                    currentValue: primaryValue,
-                    referenceValue: config.referenceLine?.value,
-                    exaggerate: config.exaggerate
-                ),
+                rangeOverride: rangeOverride(bounds: rangePoints, primaryValue: primaryValue, config: config),
                 primaryValue: primaryValue
             )
 
         case let .timeline(data, _):
-            let visible = data.filter { $0.end >= leftEdge - 2 && $0.start <= rightEdge }
-            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
-            let laneCount = max((data.map(\.lane).max() ?? 0) + 1, 1)
+            let visible = data.livelineOverlapping(sampleRange)
+            let source = visible.isEmpty ? data.livelineSuffix(LivelineRenderer.fallbackSampleCount) : visible
+            let laneCount = data.livelineLaneCount
             let lastDuration = data.last.map { $0.end - $0.start } ?? 0
             return LivelinePreparedChart(
                 primaryVisible: [],
@@ -339,9 +261,8 @@ enum LivelineChartPreparer {
             )
 
         case let .heatmap(data, style):
-            let visible = data.livelineVisible(in: (leftEdge - 2)...rightEdge)
-            let source = visible.isEmpty ? Array(data.suffix(8)) : visible
-            let rowCount = max((data.map(\.row).max() ?? 0) + 1, style.rowLabels.count, 1)
+            let (_, source) = window(data, range: sampleRange)
+            let rowCount = data.livelineRowCount(rowLabels: style.rowLabels)
             return LivelinePreparedChart(
                 primaryVisible: [],
                 rangePoints: source.map { LivelinePoint(time: $0.time, value: $0.value) },
@@ -350,7 +271,7 @@ enum LivelineChartPreparer {
             )
 
         case let .radar(data, style):
-            let hasData = data.count >= 3
+            let hasData = !data.livelineDrawable.isEmpty
             let average = data.isEmpty ? 0 : data.map(\.value).reduce(0, +) / Double(data.count)
             return LivelinePreparedChart(
                 primaryVisible: [],
@@ -360,7 +281,7 @@ enum LivelineChartPreparer {
             )
 
         case let .donut(data, _):
-            let total = data.filter { $0.value > 0 }.map(\.value).reduce(0, +)
+            let total = data.livelinePositive.map(\.value).reduce(0, +)
             return LivelinePreparedChart(
                 primaryVisible: [],
                 rangePoints: total > 0 ? [LivelinePoint(time: 0, value: total)] : [],
@@ -380,7 +301,7 @@ enum LivelineChartPreparer {
             )
 
         case let .funnel(data, _):
-            let positive = data.filter { $0.value > 0 }
+            let positive = data.livelinePositive
             let lastValue = positive.last?.value ?? 0
             return LivelinePreparedChart(
                 primaryVisible: [],
@@ -443,18 +364,16 @@ enum LivelineChartPreparer {
             )
 
         case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
-            let visibleRange = (leftEdge - 2)...rightEdge
             let lineSource = lineData.isEmpty ? data : lineData
-            let visible = lineSource.livelineVisible(in: visibleRange)
+            let visible = lineSource.livelineVisible(in: sampleRange)
             var range = visible
-            for candle in candles.livelineVisible(in: visibleRange, candleWidth: candleWidth) {
+            for candle in candles.livelineVisible(in: sampleRange, candleWidth: candleWidth) {
                 range.append(LivelinePoint(time: candle.time, value: candle.high))
                 range.append(LivelinePoint(time: candle.time, value: candle.low))
             }
 
             let liveCandleIsVisible = liveCandle.map {
-                $0.time + candleWidth >= visibleRange.lowerBound
-                    && $0.time <= visibleRange.upperBound
+                LivelineMath.candleIsVisible($0, width: candleWidth, in: sampleRange)
             } ?? false
             if let liveCandle, liveCandleIsVisible {
                 range.append(LivelinePoint(time: liveCandle.time, value: liveCandle.high))
@@ -463,7 +382,7 @@ enum LivelineChartPreparer {
 
             let usesFallbackRange = range.isEmpty
             if usesFallbackRange {
-                range = lineSource.livelineSuffix(8)
+                range = lineSource.livelineSuffix(LivelineRenderer.fallbackSampleCount)
                 if let fallback = liveCandle ?? candles.last {
                     range.append(LivelinePoint(time: fallback.time, value: fallback.high))
                     range.append(LivelinePoint(time: fallback.time, value: fallback.low))
@@ -480,20 +399,18 @@ enum LivelineChartPreparer {
 
         case let .series(series):
             let visibleSeries = series.filter { !hiddenSeries.contains($0.id) }
-            let visibleRange = (leftEdge - 2)...rightEdge
             let renderableSlices = LivelineSeriesSelector.visibleSlices(
                 series: visibleSeries,
-                hiddenSeries: [],
-                visibleRange: visibleRange
+                visibleRange: sampleRange
             )
             let globallyRenderableSeries = visibleSeries.filter(\.livelineIsRenderable)
             let visiblePoints = renderableSlices.flatMap { $0.points }
-            let fallback = globallyRenderableSeries.flatMap { $0.data.livelineSuffix(8) }
-            let firstSeries = renderableSlices.first?.series
-                ?? globallyRenderableSeries.first
-                ?? visibleSeries.first
-                ?? series.first(where: \.livelineIsRenderable)
-                ?? series.first
+            let fallback = globallyRenderableSeries.flatMap { $0.data.livelineSuffix(LivelineRenderer.fallbackSampleCount) }
+            let firstSeries = series.livelinePrimary(
+                windowed: renderableSlices.first?.series,
+                visible: visibleSeries,
+                renderable: globallyRenderableSeries
+            )
             let primaryVisible = renderableSlices.first?.points ?? []
             var lower = Double.infinity
             var upper = -Double.infinity
@@ -516,140 +433,39 @@ enum LivelineChartPreparer {
         }
     }
 
-    /// Returns `nil` for the kinds whose preparation depends on more than a
-    /// cheap identity — those keep recomputing every frame.
+    /// The samples in the window, and the ones the value range is fitted to:
+    /// the same samples, or the most recent few when none are in the window.
+    private static func window<Element: LivelineTimedDatum>(
+        _ data: [Element],
+        range: ClosedRange<TimeInterval>
+    ) -> (visible: [Element], source: [Element]) {
+        let visible = data.livelineVisible(in: range)
+        return (visible, visible.isEmpty ? data.livelineSuffix(LivelineRenderer.fallbackSampleCount) : visible)
+    }
+
+    private static func rangeOverride(
+        bounds: [LivelinePoint],
+        primaryValue: Double,
+        config: LivelineChartConfiguration
+    ) -> ClosedRange<Double>? {
+        guard !bounds.isEmpty else { return nil }
+        return LivelineMath.computeRange(
+            points: bounds,
+            currentValue: primaryValue,
+            referenceValue: config.referenceLine?.value,
+            exaggerate: config.exaggerate
+        )
+    }
+
     static func cacheKey(
         for content: LivelineChartContent,
         hiddenSeries: Set<String>,
         leftEdge: TimeInterval,
         rightEdge: TimeInterval,
         config: LivelineChartConfiguration
-    ) -> LivelinePreparedChartKey? {
-        let shapes: [LivelineDataShape]
-        let kind: LivelineChartKind
-        var identifiers: [String] = []
-        var variant: Double = 0
-
-        switch content {
-        case let .line(data, value):
-            kind = .line
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-            variant = value
-
-        case let .bars(data, style):
-            kind = .bars
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-            variant = style.resolvedBaseline
-
-        case let .range(data, _):
-            kind = .range
-            shapes = [data.livelineShape(lastValue: data.last?.midpoint ?? 0)]
-
-        case let .scatter(data, value, _):
-            kind = .scatter
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-            variant = value
-
-        case let .steps(data, value, _):
-            kind = .steps
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-            variant = value
-
-        case let .lollipops(data, style):
-            kind = .lollipops
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-            variant = style.resolvedBaseline
-
-        case let .bubbles(data, _):
-            kind = .bubbles
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-
-        case let .boxPlots(data, _):
-            kind = .boxPlots
-            shapes = [data.livelineShape(lastValue: data.last?.median ?? 0)]
-
-        case let .waterfall(data, style):
-            kind = .waterfall
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-            variant = style.resolvedInitialValue
-
-        case let .errorBars(data, _):
-            kind = .errorBars
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-
-        case let .dumbbells(data, _):
-            kind = .dumbbells
-            shapes = [data.livelineShape(lastValue: data.last?.end ?? 0)]
-
-        case let .stackedBars(data, style):
-            kind = .stackedBars
-            shapes = [data.livelineShape(lastValue: LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode))]
-            identifiers = [style.mode.rawValue]
-
-        case let .stackedAreas(data, style):
-            kind = .stackedAreas
-            shapes = [data.livelineShape(lastValue: LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode))]
-            identifiers = [style.mode.rawValue, style.baseline.rawValue]
-
-        case let .timeline(data, _):
-            kind = .timeline
-            shapes = [
-                LivelineDataShape(
-                    storage: data.livelineStorageIdentity,
-                    count: data.count,
-                    firstTime: data.first?.start ?? 0,
-                    lastTime: data.last?.end ?? 0,
-                    lastValue: 0
-                ),
-            ]
-
-        case let .heatmap(data, style):
-            kind = .heatmap
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-            variant = Double(style.rowLabels.count)
-
-        case let .series(series):
-            kind = .series
-            shapes = series.map { $0.data.livelineShape(lastValue: $0.value) }
-            identifiers = series.map(\.id)
-
-        case let .histogram(values, style):
-            kind = .histogram
-            shapes = [
-                LivelineDataShape(
-                    storage: values.livelineStorageIdentity,
-                    count: values.count,
-                    firstTime: values.first ?? 0,
-                    lastTime: values.last ?? 0,
-                    lastValue: 0
-                ),
-            ]
-            identifiers = [style.binning.cacheIdentifier]
-
-        case let .sankey(links, style):
-            kind = .sankey
-            shapes = [
-                LivelineDataShape(
-                    storage: links.livelineStorageIdentity,
-                    count: links.count,
-                    firstTime: 0,
-                    lastTime: 0,
-                    lastValue: links.last?.value ?? 0
-                ),
-            ]
-            identifiers = [links.first?.source ?? "", links.last?.target ?? "", "\(style.resolvedNodeWidth)"]
-
-        case .radar, .donut, .gauge, .funnel, .bullet, .treemap, .sunburst, .candle:
-            // Aggregates over unordered data or a live candle: not worth a key
-            // that would have to restate the whole payload.
-            return nil
-        }
-
-        return LivelinePreparedChartKey(
-            kind: kind,
-            shapes: shapes,
-            identifiers: identifiers,
-            variant: variant,
+    ) -> LivelinePreparedChartKey {
+        LivelinePreparedChartKey(
+            content: content.fingerprint,
             hiddenSeries: hiddenSeries,
             leftEdge: leftEdge,
             rightEdge: rightEdge,

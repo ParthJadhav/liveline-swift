@@ -103,12 +103,7 @@ struct LivelineChartAccessibilityModel: Equatable {
             mode: LivelineStackMode
         ) -> [LivelineAccessibilityEntry] {
             data.enumerated().map { index, point in
-                let segments = LivelineMath.stackedSegments(values: point.values, mode: mode)
-                let signedValues = zip(point.values, segments).map { rawValue, segment in
-                    rawValue < 0
-                        ? segment.lower - segment.upper
-                        : segment.upper - segment.lower
-                }
+                let signedValues = LivelineMath.stackedLayerValues(point: point, mode: mode)
                 let values = signedValues.enumerated()
                     .map {
                         String(
@@ -243,18 +238,19 @@ struct LivelineChartAccessibilityModel: Equatable {
 
         case let .heatmap(data, style):
             entries = data.enumerated().map { index, cell in
-                let row = style.rowLabels.indices.contains(cell.row)
-                    ? style.rowLabels[cell.row]
-                    : String(format: LivelineStrings.labelRowFormat, cell.row + 1)
-                return LivelineAccessibilityEntry(
+                LivelineAccessibilityEntry(
                     id: "heatmap-\(cell.id)-\(index)",
-                    label: String(format: LivelineStrings.accessibilityHeatmapLabelFormat, row, formatTime(cell.time)),
+                    label: String(
+                        format: LivelineStrings.accessibilityHeatmapLabelFormat,
+                        style.rowName(cell.row),
+                        formatTime(cell.time)
+                    ),
                     value: formatValue(cell.value)
                 )
             }
 
         case let .radar(data, _):
-            entries = (data.count >= 3 ? data : []).enumerated().map { index, point in
+            entries = data.livelineDrawable.enumerated().map { index, point in
                 LivelineAccessibilityEntry(
                     id: "radar-\(point.id)-\(index)",
                     label: point.label,
@@ -263,18 +259,13 @@ struct LivelineChartAccessibilityModel: Equatable {
             }
 
         case let .donut(data, _):
-            let positive = data.filter { $0.value > 0 }
+            let positive = data.livelinePositive
             let total = positive.reduce(0) { $0 + $1.value }
             entries = positive.enumerated().map { index, entry in
-                let share = entry.value / total * 100
-                return LivelineAccessibilityEntry(
+                LivelineAccessibilityEntry(
                     id: "donut-\(entry.id)-\(index)",
                     label: entry.label,
-                    value: String(
-                        format: LivelineStrings.accessibilityDonutValueFormat,
-                        formatValue(entry.value),
-                        share.formatted(.number.precision(.fractionLength(1)))
-                    )
+                    value: shareDescription(entry.value, total: total, formatValue: formatValue)
                 )
             }
 
@@ -301,7 +292,7 @@ struct LivelineChartAccessibilityModel: Equatable {
             ]
 
         case let .funnel(data, _):
-            entries = data.filter { $0.value > 0 }.enumerated().map { index, entry in
+            entries = data.livelinePositive.enumerated().map { index, entry in
                 LivelineAccessibilityEntry(
                     id: "funnel-\(entry.id)-\(index)",
                     label: entry.label,
@@ -369,11 +360,7 @@ struct LivelineChartAccessibilityModel: Equatable {
             entries = graph.links.enumerated().map { index, link in
                 LivelineAccessibilityEntry(
                     id: "sankey-\(link.linkIndex)-\(index)",
-                    label: String(
-                        format: LivelineStrings.labelFlowRouteFormat,
-                        graph.nodes[link.sourceIndex].label,
-                        graph.nodes[link.targetIndex].label
-                    ),
+                    label: graph.routeLabel(link),
                     value: formatValue(link.value)
                 )
             }
@@ -382,15 +369,7 @@ struct LivelineChartAccessibilityModel: Equatable {
             if configuration.lineMode, !lineData.isEmpty {
                 entries = pointEntries(lineData)
             } else if !candles.isEmpty || liveCandle != nil {
-                var values = candles
-                if let liveCandle {
-                    if let index = values.firstIndex(where: { $0.time == liveCandle.time }) {
-                        values[index] = liveCandle
-                    } else {
-                        values.append(liveCandle)
-                    }
-                }
-                entries = values.sorted { $0.time < $1.time }.enumerated().map { index, candle in
+                entries = LivelineMath.candles(candles, including: liveCandle).enumerated().map { index, candle in
                     LivelineAccessibilityEntry(
                         id: "candle-\(candle.time)-\(index)",
                         label: formatTime(candle.time),
@@ -409,7 +388,7 @@ struct LivelineChartAccessibilityModel: Equatable {
 
         case let .series(series):
             entries = series
-                .filter { !hiddenSeries.contains($0.id) && $0.livelineIsRenderable }
+                .livelineRenderable(hiding: hiddenSeries)
                 .flatMap { entry in
                     pointEntries(entry.data, prefix: entry.label ?? entry.id)
                 }
@@ -504,7 +483,7 @@ struct LivelineChartAccessibilityModel: Equatable {
         return String(
             format: LivelineStrings.accessibilityDonutValueFormat,
             formatValue(value),
-            (value / total * 100).formatted(.number.precision(.fractionLength(1)))
+            LivelineFormatters.share(value / total * 100)
         )
     }
 
@@ -514,19 +493,14 @@ struct LivelineChartAccessibilityModel: Equatable {
         hiddenSeries: Set<String>
     ) -> Int {
         switch content {
-        case let .line(data, _),
-             let .bars(data, _),
-             let .scatter(data, _, _),
-             let .steps(data, _, _),
-             let .lollipops(data, _):
+        case let .line(data, _), let .bars(data, _), let .scatter(data, _, _),
+             let .steps(data, _, _), let .lollipops(data, _), let .waterfall(data, _):
             return data.count
         case let .range(data, _):
             return data.count
         case let .bubbles(data, _):
             return data.count
         case let .boxPlots(data, _):
-            return data.count
-        case let .waterfall(data, _):
             return data.count
         case let .errorBars(data, _):
             return data.count
@@ -539,11 +513,9 @@ struct LivelineChartAccessibilityModel: Equatable {
         case let .heatmap(data, _):
             return data.count
         case let .radar(data, _):
-            return data.count >= 3 ? data.count : 0
+            return data.livelineDrawable.count
         case let .donut(data, _), let .funnel(data, _):
-            return data.reduce(into: 0) { count, entry in
-                if entry.value > 0 { count += 1 }
-            }
+            return data.livelinePositive.count
         case .gauge:
             return 1
         case let .histogram(values, style):
@@ -561,18 +533,11 @@ struct LivelineChartAccessibilityModel: Equatable {
                 return lineData.count
             }
             if !candles.isEmpty || liveCandle != nil {
-                guard let liveCandle else { return candles.count }
-                return candles.contains(where: { $0.time == liveCandle.time })
-                    ? candles.count
-                    : candles.count + 1
+                return LivelineMath.candles(candles, including: liveCandle).count
             }
             return data.count
         case let .series(series):
-            return series.reduce(into: 0) { count, entry in
-                if !hiddenSeries.contains(entry.id), entry.livelineIsRenderable {
-                    count += entry.data.count
-                }
-            }
+            return series.livelineRenderable(hiding: hiddenSeries).reduce(0) { $0 + $1.data.count }
         }
     }
 }
@@ -583,10 +548,7 @@ struct LivelineChartAccessibilityModel: Equatable {
 /// not have to be reformatted. Formatters are closures and cannot be compared,
 /// so they are represented by what they produce for a fixed probe.
 struct LivelineAccessibilityModelKey: Equatable {
-    var kind: LivelineChartKind
-    var shapes: [LivelineDataShape]
-    var identifiers: [String]
-    var variants: [Double]
+    var content: LivelineContentFingerprint
     var hiddenSeries: Set<String>
     var includeEntries: Bool
     var loading: Bool
@@ -603,121 +565,8 @@ struct LivelineAccessibilityModelKey: Equatable {
         hiddenSeries: Set<String>,
         includeEntries: Bool
     ) -> LivelineAccessibilityModelKey {
-        var shapes: [LivelineDataShape] = []
-        var identifiers: [String] = []
-        var variants: [Double] = []
-
-        switch content {
-        case let .line(data, value):
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-            variants = [value]
-
-        case let .bars(data, _), let .lollipops(data, _):
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-
-        case let .range(data, _):
-            shapes = [data.livelineShape(lastValue: data.last?.upper ?? 0)]
-
-        case let .scatter(data, value, _), let .steps(data, value, _):
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-            variants = [value]
-
-        case let .bubbles(data, _):
-            shapes = [data.livelineShape(lastValue: data.last?.magnitude ?? 0)]
-
-        case let .boxPlots(data, _):
-            shapes = [data.livelineShape(lastValue: data.last?.median ?? 0)]
-
-        case let .waterfall(data, style):
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-            variants = [style.resolvedInitialValue]
-
-        case let .errorBars(data, _):
-            shapes = [data.livelineShape(lastValue: data.last?.upper ?? 0)]
-
-        case let .dumbbells(data, _):
-            shapes = [data.livelineShape(lastValue: data.last?.end ?? 0)]
-
-        case let .stackedBars(data, style):
-            shapes = [data.livelineShape(lastValue: LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode))]
-            identifiers = [style.mode.rawValue]
-
-        case let .stackedAreas(data, style):
-            shapes = [data.livelineShape(lastValue: LivelineMath.stackedPrimaryValue(point: data.last, mode: style.mode))]
-            identifiers = [style.mode.rawValue, style.baseline.rawValue]
-
-        case let .timeline(data, _):
-            shapes = [untimedShape(data, lastValue: data.last?.end ?? 0)]
-            identifiers = [data.last?.label ?? ""]
-
-        case let .heatmap(data, style):
-            shapes = [data.livelineShape(lastValue: data.last?.value ?? 0)]
-            identifiers = style.rowLabels
-
-        case let .radar(data, _):
-            shapes = [untimedShape(data, lastValue: data.last?.value ?? 0)]
-
-        case let .donut(data, _), let .funnel(data, _):
-            shapes = [untimedShape(data, lastValue: data.last?.value ?? 0)]
-
-        case let .gauge(value, range, style):
-            variants = [value, range.lowerBound, range.upperBound, style.resolvedTarget ?? .infinity]
-
-        case let .histogram(values, style):
-            shapes = [untimedShape(values, lastValue: values.last ?? 0)]
-            identifiers = [style.binning.cacheIdentifier]
-
-        case let .bullet(style):
-            let range = style.resolvedAxisRange
-            variants = [
-                style.resolvedMeasure,
-                style.resolvedTarget ?? .infinity,
-                range.lowerBound,
-                range.upperBound,
-            ] + style.resolvedRanges.map(\.value)
-            identifiers = [style.label ?? ""] + style.resolvedRanges.map { $0.label ?? "" }
-
-        case let .treemap(nodes, style):
-            variants = nodes.map(\.resolvedValue)
-            identifiers = nodes.map(\.label) + nodes.flatMap { $0.children.map(\.label) }
-                + ["\(style.showsValues)"]
-
-        case let .sunburst(nodes, style):
-            variants = nodes.map(\.resolvedValue)
-            identifiers = nodes.map(\.label) + nodes.flatMap { $0.children.map(\.label) }
-                + ["\(style.showsValues)"]
-
-        case let .sankey(links, _):
-            variants = links.map(\.value)
-            identifiers = links.flatMap { [$0.source, $0.target] }
-
-        case let .candle(data, value, candles, candleWidth, liveCandle, lineData, lineValue):
-            shapes = [
-                data.livelineShape(lastValue: data.last?.value ?? 0),
-                candles.livelineShape(lastValue: candles.last?.close ?? 0),
-                lineData.livelineShape(lastValue: lineData.last?.value ?? 0),
-            ]
-            variants = [
-                value,
-                candleWidth,
-                lineValue ?? .infinity,
-                liveCandle?.time ?? .infinity,
-                liveCandle?.open ?? .infinity,
-                liveCandle?.high ?? .infinity,
-                liveCandle?.low ?? .infinity,
-                liveCandle?.close ?? .infinity,
-            ]
-
-        case let .series(series):
-            shapes = series.map { $0.data.livelineShape(lastValue: $0.value) }
-            identifiers = series.flatMap { [$0.id, $0.label ?? ""] }
-        }
-
-        return LivelineAccessibilityModelKey(
-            kind: semantics.identity.kind,
-            shapes: shapes,
-            identifiers: identifiers,
-            variants: variants,
+        LivelineAccessibilityModelKey(
+            content: content.fingerprint,
             hiddenSeries: hiddenSeries,
             includeEntries: includeEntries,
             loading: configuration.loading,
@@ -732,16 +581,6 @@ struct LivelineAccessibilityModelKey: Equatable {
                 configuration.formatTime(0),
                 configuration.formatTime(1_700_000_000),
             ]
-        )
-    }
-
-    private static func untimedShape<Element>(_ array: [Element], lastValue: Double) -> LivelineDataShape {
-        LivelineDataShape(
-            storage: array.livelineStorageIdentity,
-            count: array.count,
-            firstTime: 0,
-            lastTime: 0,
-            lastValue: lastValue
         )
     }
 }

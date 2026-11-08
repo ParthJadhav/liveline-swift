@@ -408,13 +408,18 @@ extension LivelineChart {
     }
 
     func jumpToLive(configuration: LivelineChartConfiguration, semantics: LivelineChartSemantics) {
+        let limits = viewportLimits(configuration: configuration, semantics: semantics)
+        let live = limits.map { currentViewport().followingLive(limits: $0) }
+        resetViewport()
+        viewport = live
+    }
+
+    /// Drops any zoom or pan and the gesture baselines they were measured
+    /// from, returning the chart to its window at the live edge.
+    func resetViewport() {
+        viewport = nil
         zoomBaseline = nil
         panBaseline = nil
-        guard let limits = viewportLimits(configuration: configuration, semantics: semantics) else {
-            viewport = nil
-            return
-        }
-        viewport = currentViewport().followingLive(limits: limits)
     }
 
     /// True once panning has left the live edge — the only time the "Live"
@@ -466,9 +471,9 @@ extension LivelineChart {
 
         switch momentum {
         case .up:
-            return Color(red: 34 / 255, green: 197 / 255, blue: 94 / 255)
+            return LivelineRGBA.rise.color
         case .down:
-            return Color(red: 239 / 255, green: 68 / 255, blue: 68 / 255)
+            return LivelineRGBA.fall.color
         case .flat:
             return configuration.theme == .dark ? Color.white.opacity(0.85) : Color(red: 17 / 255, green: 17 / 255, blue: 17 / 255)
         }
@@ -509,7 +514,7 @@ extension LivelineChart {
                     .padding(.horizontal, configuration.windowStyle == .text ? 6 : 10)
                     .frame(
                         minWidth: resolvedControlHitDimension,
-                        minHeight: controlButtonHeight(configuration)
+                        minHeight: resolvedControlHitDimension
                     )
                     .foregroundColor(activeControlColor(configuration))
                     .background(controlBackground(active: true, configuration: configuration))
@@ -556,7 +561,7 @@ extension LivelineChart {
                             .padding(.horizontal, configuration.windowStyle == .text ? 6 : 10)
                             .frame(
                                 minWidth: resolvedControlHitDimension,
-                                minHeight: controlButtonHeight(configuration)
+                                minHeight: resolvedControlHitDimension
                             )
                             .foregroundColor(active ? activeControlColor(configuration) : inactiveControlColor(configuration))
                             .background(controlBackground(active: active, configuration: configuration))
@@ -596,7 +601,7 @@ extension LivelineChart {
                 .frame(width: 16, height: 16)
                 .frame(
                     minWidth: resolvedControlHitDimension,
-                    minHeight: controlButtonHeight(configuration)
+                    minHeight: resolvedControlHitDimension
                 )
                 .background(controlBackground(active: active, configuration: configuration))
         }
@@ -640,7 +645,7 @@ extension LivelineChart {
                         .padding(.horizontal, seriesButtonHorizontalPadding(configuration))
                         .frame(
                             minWidth: resolvedControlHitDimension,
-                            minHeight: seriesButtonHeight(configuration)
+                            minHeight: resolvedControlHitDimension
                         )
                         .foregroundColor(visible ? activeControlColor(configuration) : inactiveControlColor(configuration))
                         .background(controlBackground(active: visible, configuration: configuration))
@@ -726,28 +731,8 @@ extension LivelineChart {
     }
 
     func controlRowHeight(_ configuration: LivelineChartConfiguration) -> CGFloat {
-        var buttonHeight: CGFloat = 0
-        if !configuration.windows.isEmpty {
-            buttonHeight = max(buttonHeight, controlButtonHeight(configuration))
-        }
-        if shouldShowModeControls(configuration) {
-            buttonHeight = max(buttonHeight, controlButtonHeight(configuration))
-        }
-        if shouldShowSeriesControls(configuration) {
-            buttonHeight = max(buttonHeight, seriesButtonHeight(configuration))
-        }
-        if shouldShowLiveControl(configuration) {
-            buttonHeight = max(buttonHeight, controlButtonHeight(configuration))
-        }
+        let buttonHeight = hasControls(configuration) ? resolvedControlHitDimension : 0
         return buttonHeight + controlGroupPadding(configuration) * 2
-    }
-
-    func controlButtonHeight(_ configuration: LivelineChartConfiguration) -> CGFloat {
-        resolvedControlHitDimension
-    }
-
-    func seriesButtonHeight(_ configuration: LivelineChartConfiguration) -> CGFloat {
-        resolvedControlHitDimension
     }
 
     var resolvedControlHitDimension: CGFloat {

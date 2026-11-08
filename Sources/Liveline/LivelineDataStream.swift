@@ -126,8 +126,6 @@ public final class LivelineDataStream: ObservableObject {
 
     // MARK: - Internals
 
-    /// Inserts one sample and reports whether the buffer changed. The common
-    /// case — a sample newer than everything buffered — is a plain append.
     @discardableResult
     private func insert(_ point: LivelinePoint) -> Bool {
         guard point.time.isFinite, point.value.isFinite else { return false }

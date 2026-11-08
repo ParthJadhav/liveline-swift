@@ -32,7 +32,6 @@ struct LivelineScrollPanView: NSViewRepresentable {
         coordinator.stop()
     }
 
-    /// Invisible to the mouse: every hit test falls through to the chart below.
     final class PassthroughView: NSView {
         override func hitTest(_ point: NSPoint) -> NSView? { nil }
     }

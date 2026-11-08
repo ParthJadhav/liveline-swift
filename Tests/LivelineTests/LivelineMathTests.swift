@@ -288,7 +288,6 @@ final class LivelineMathTests: XCTestCase {
             3,
             accuracy: 0.001
         )
-        // The source bar is as tall as everything leaving it.
         XCTAssertEqual(
             geometry.nodes[0].rect.height,
             geometry.links[0].thickness + geometry.links[1].thickness,
@@ -619,7 +618,6 @@ final class LivelineMathTests: XCTestCase {
         XCTAssertEqual(geometry.measureRect.width, layout.chartWidth * 0.72, accuracy: 0.001)
         XCTAssertEqual(geometry.targetProgress ?? 0, 0.8, accuracy: 1e-9)
         XCTAssertEqual(geometry.targetX ?? 0, layout.plotLeftX + layout.chartWidth * 0.8, accuracy: 0.001)
-        // The measure bar is thinner than the qualitative track it sits on.
         XCTAssertLessThan(geometry.measureRect.height, geometry.trackRect.height)
         // Both are centred on the same line, so the measure reads as sitting
         // inside the bands rather than beside them.
@@ -895,6 +893,8 @@ final class LivelineMathTests: XCTestCase {
         ])
     }
 
+    /// Compiling these calls is the check: every initializer overload stays
+    /// unambiguous at a plain call site.
     @MainActor
     func testAdditionalChartInitializersConstructViews() {
         let points = [
@@ -926,7 +926,7 @@ final class LivelineMathTests: XCTestCase {
             LivelineChart(waterfall: points, style: LivelineWaterfallStyle(initialValue: 20)),
         ]
 
-        XCTAssertEqual(charts.count, 8)
+        _ = charts
     }
 
     func testErrorBarAndTimelineInputsNormalizeBounds() {
@@ -1157,6 +1157,8 @@ final class LivelineMathTests: XCTestCase {
         XCTAssertEqual(heatmapStyle.resolvedCornerRadius, 0)
     }
 
+    /// Compiling these calls is the check: every initializer overload stays
+    /// unambiguous at a plain call site.
     @MainActor
     func testExtendedChartInitializersConstructViews() {
         let error = [LivelineErrorBarPoint(time: 10, value: 5, lower: 3, upper: 7)]
@@ -1187,7 +1189,7 @@ final class LivelineMathTests: XCTestCase {
             LivelineChart(funnel: categories),
         ]
 
-        XCTAssertEqual(charts.count, 10)
+        _ = charts
     }
 
     func testInterpolateFindsValueInsideSeries() {

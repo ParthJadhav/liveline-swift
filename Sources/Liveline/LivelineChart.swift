@@ -512,9 +512,7 @@ public struct LivelineChart: View {
         .onChange(of: activeWindow) { _ in
             // Picking a window is a fresh choice of span: it clears any zoom
             // and returns the chart to the live edge.
-            viewport = nil
-            zoomBaseline = nil
-            panBaseline = nil
+            resetViewport()
         }
         .onChange(of: baseConfiguration.lineMode) { newValue in
             lineMode = newValue
@@ -526,9 +524,7 @@ public struct LivelineChart: View {
             )
             accessibilityIndex = nil
             accessibilityInspectionRequested = false
-            viewport = nil
-            zoomBaseline = nil
-            panBaseline = nil
+            resetViewport()
         }
         .onChange(of: accessibilityModel.entryCount) { count in
             if let accessibilityIndex, accessibilityIndex >= count {

@@ -34,13 +34,55 @@ enum RenderValueMotion: String, CaseIterable {
     case stream
 }
 
+enum RenderStyle: String, CaseIterable {
+    case standard
+    case dither
+}
+
+enum RenderTheme: String, CaseIterable {
+    case dark
+    case light
+}
+
+enum RenderDitherVariant: String, CaseIterable {
+    case gradient
+    case dotted
+    case hatched
+    case solid
+
+    var variant: LivelineDitherVariant {
+        switch self {
+        case .gradient: .gradient
+        case .dotted: .dotted
+        case .hatched: .hatched
+        case .solid: .solid
+        }
+    }
+}
+
+enum RenderBloom: String, CaseIterable {
+    case off
+    case low
+    case high
+    case aura
+
+    var bloom: LivelineDitherBloom {
+        switch self {
+        case .off: .off
+        case .low: .low
+        case .high: .high
+        case .aura: .aura
+        }
+    }
+}
+
 struct RenderOptions {
     var chart: RenderChart = .line
     var values: [Double] = [98, 101, 100, 104, 108, 106, 111, 109, 113, 110, 116, 114]
     var labels: [String] = []
-    var styleName = "dither"
-    var ditherVariant = "gradient"
-    var bloom = "aura"
+    var style: RenderStyle = .dither
+    var ditherVariant: RenderDitherVariant = .gradient
+    var bloom: RenderBloom = .aura
     var cellSize = 2.0
     var intensity = 1.0
     var sparkleDensity = 0.035
@@ -52,7 +94,7 @@ struct RenderOptions {
     var height = 1080
     var fps = 30
     var duration = 4.0
-    var theme = "dark"
+    var theme: RenderTheme = .dark
     var accentHex = "3B82F6"
     var backgroundHex: String?
     var minimum = 0.0
@@ -148,9 +190,12 @@ struct RenderOptions {
                     throw RenderCommandError.message("Unknown value motion '\(raw)'. Expected static, pulse, or stream.")
                 }
                 options.valueMotion = motion
-            case "--style": options.styleName = try value(after: argument)
-            case "--variant": options.ditherVariant = try value(after: argument)
-            case "--bloom": options.bloom = try value(after: argument)
+            case "--style":
+                options.style = try choice(try value(after: argument)) { _ in "--style must be standard or dither" }
+            case "--variant":
+                options.ditherVariant = try choice(try value(after: argument)) { "Unknown dither variant '\($0)'" }
+            case "--bloom":
+                options.bloom = try choice(try value(after: argument)) { "Unknown bloom '\($0)'" }
             case "--cell-size": options.cellSize = try parseDouble(try value(after: argument), flag: argument)
             case "--intensity": options.intensity = try parseDouble(try value(after: argument), flag: argument)
             case "--sparkle-density": options.sparkleDensity = try parseDouble(try value(after: argument), flag: argument)
@@ -161,7 +206,8 @@ struct RenderOptions {
             case "--height": options.height = try parseInt(try value(after: argument), flag: argument)
             case "--fps": options.fps = try parseInt(try value(after: argument), flag: argument)
             case "--duration": options.duration = try parseDouble(try value(after: argument), flag: argument)
-            case "--theme": options.theme = try value(after: argument)
+            case "--theme":
+                options.theme = try choice(try value(after: argument)) { _ in "--theme must be dark or light" }
             case "--accent": options.accentHex = try value(after: argument)
             case "--background": options.backgroundHex = try value(after: argument)
             case "--min": options.minimum = try parseDouble(try value(after: argument), flag: argument)
@@ -207,16 +253,6 @@ struct RenderOptions {
         guard minimum.isFinite, maximum.isFinite, minimum < maximum else {
             throw RenderCommandError.message("--min must be less than --max")
         }
-        guard ["standard", "dither"].contains(styleName) else {
-            throw RenderCommandError.message("--style must be standard or dither")
-        }
-        guard ["dark", "light"].contains(theme) else { throw RenderCommandError.message("--theme must be dark or light") }
-        guard ["gradient", "dotted", "hatched", "solid"].contains(ditherVariant) else {
-            throw RenderCommandError.message("Unknown dither variant '\(ditherVariant)'")
-        }
-        guard ["off", "low", "high", "aura"].contains(bloom) else {
-            throw RenderCommandError.message("Unknown bloom '\(bloom)'")
-        }
         _ = try Color(hex: accentHex)
         if let backgroundHex { _ = try Color(hex: backgroundHex) }
         guard outputURL.pathExtension.lowercased() == "mp4" else {
@@ -234,22 +270,10 @@ struct RenderOptions {
     }
 
     var chartStyle: LivelineChartStyle {
-        guard styleName == "dither" else { return .standard }
-        let variant: LivelineDitherVariant = switch ditherVariant {
-        case "dotted": .dotted
-        case "hatched": .hatched
-        case "solid": .solid
-        default: .gradient
-        }
-        let resolvedBloom: LivelineDitherBloom = switch bloom {
-        case "off": .off
-        case "high": .high
-        case "aura": .aura
-        default: .low
-        }
+        guard style == .dither else { return .standard }
         return .dither(LivelineDitherStyle(
-            variant: variant,
-            bloom: resolvedBloom,
+            variant: ditherVariant.variant,
+            bloom: bloom.bloom,
             cellSize: cellSize,
             intensity: intensity,
             sparkleDensity: sparkleDensity,
@@ -259,11 +283,19 @@ struct RenderOptions {
         ))
     }
 
-    var themeMode: LivelineThemeMode { theme == "light" ? .light : .dark }
+    var themeMode: LivelineThemeMode { theme == .light ? .light : .dark }
     var accent: Color { try! Color(hex: accentHex) }
     var background: Color {
         if let backgroundHex { return try! Color(hex: backgroundHex) }
-        return theme == "light" ? .white : Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255)
+        return theme == .light ? .white : Color(red: 10 / 255, green: 10 / 255, blue: 10 / 255)
+    }
+
+    private static func choice<Choice: RawRepresentable>(
+        _ raw: String,
+        unknown message: (String) -> String
+    ) throws -> Choice where Choice.RawValue == String {
+        guard let choice = Choice(rawValue: raw) else { throw RenderCommandError.message(message(raw)) }
+        return choice
     }
 
     private static func splitCSV(_ string: String) -> [String] {

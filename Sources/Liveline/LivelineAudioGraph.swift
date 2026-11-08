@@ -92,16 +92,10 @@ struct LivelineAudioGraphModel: Equatable {
         var explicitValueRange: ClosedRange<Double>?
 
         switch content {
-        case let .line(data, _):
+        case let .line(data, _), let .steps(data, _, _):
             series = [timed(LivelineStrings.labelValue, isContinuous: true, data.map { ($0.time, $0.value) })]
 
-        case let .steps(data, _, _):
-            series = [timed(LivelineStrings.labelValue, isContinuous: true, data.map { ($0.time, $0.value) })]
-
-        case let .bars(data, _), let .lollipops(data, _):
-            series = [timed(LivelineStrings.labelValue, isContinuous: false, data.map { ($0.time, $0.value) })]
-
-        case let .scatter(data, _, _):
+        case let .bars(data, _), let .lollipops(data, _), let .scatter(data, _, _):
             series = [timed(LivelineStrings.labelValue, isContinuous: false, data.map { ($0.time, $0.value) })]
 
         case let .range(data, _):
@@ -163,26 +157,22 @@ struct LivelineAudioGraphModel: Equatable {
             ]
 
         case let .heatmap(data, style):
-            let rowCount = max((data.map(\.row).max() ?? -1) + 1, style.rowLabels.count)
-            series = (0..<max(rowCount, 0)).map { row in
-                let name = style.rowLabels.indices.contains(row)
-                    ? style.rowLabels[row]
-                    : String(format: LivelineStrings.labelRowFormat, row + 1)
-                return timed(
-                    name,
+            series = (0..<data.livelineRowCount(rowLabels: style.rowLabels)).map { row in
+                timed(
+                    style.rowName(row),
                     isContinuous: false,
                     data.filter { $0.row == row }.map { ($0.time, $0.value) }
                 )
             }
 
         case let .radar(data, _):
-            let points = data.count >= 3 ? data : []
+            let points = data.livelineDrawable
             isCategorical = true
             categoryOrder = points.map(\.label)
             series = [categorical(LivelineStrings.labelValue, isContinuous: false, points.map { ($0.label, $0.value) })]
 
         case let .donut(data, _), let .funnel(data, _):
-            let positive = data.filter { $0.value > 0 }
+            let positive = data.livelinePositive
             isCategorical = true
             categoryOrder = positive.map(\.label)
             series = [categorical(LivelineStrings.labelValue, isContinuous: false, positive.map { ($0.label, $0.value) })]
@@ -250,16 +240,7 @@ struct LivelineAudioGraphModel: Equatable {
             // rank meaningfully against each other, so they sonify as one
             // categorical series in the order the caller wrote them.
             let graph = LivelineMath.sankeyGraph(links: links)
-            let samples = graph.links.map { link in
-                (
-                    String(
-                        format: LivelineStrings.labelFlowRouteFormat,
-                        graph.nodes[link.sourceIndex].label,
-                        graph.nodes[link.targetIndex].label
-                    ),
-                    link.value
-                )
-            }
+            let samples = graph.links.map { (graph.routeLabel($0), $0.value) }
             isCategorical = true
             categoryOrder = samples.map(\.0)
             series = [categorical(LivelineStrings.labelFlow, isContinuous: false, samples)]
@@ -268,15 +249,7 @@ struct LivelineAudioGraphModel: Equatable {
             if configuration.lineMode, !lineData.isEmpty {
                 series = [timed(LivelineStrings.labelPrice, isContinuous: true, lineData.map { ($0.time, $0.value) })]
             } else if !candles.isEmpty || liveCandle != nil {
-                var values = candles
-                if let liveCandle {
-                    if let index = values.firstIndex(where: { $0.time == liveCandle.time }) {
-                        values[index] = liveCandle
-                    } else {
-                        values.append(liveCandle)
-                    }
-                }
-                values.sort { $0.time < $1.time }
+                let values = LivelineMath.candles(candles, including: liveCandle)
                 series = [
                     timed(LivelineStrings.labelClose, isContinuous: true, values.map { ($0.time, $0.close) }),
                     timed(LivelineStrings.labelOpen, isContinuous: false, values.map { ($0.time, $0.open) }),
@@ -289,7 +262,7 @@ struct LivelineAudioGraphModel: Equatable {
 
         case let .series(entries):
             series = entries
-                .filter { !hiddenSeries.contains($0.id) && $0.livelineIsRenderable }
+                .livelineRenderable(hiding: hiddenSeries)
                 .map { entry in
                     timed(
                         entry.label ?? entry.id,
@@ -328,17 +301,7 @@ struct LivelineAudioGraphModel: Equatable {
     ) -> [LivelineAudioGraphSeries] {
         let depth = data.map(\.values.count).max() ?? 0
         guard depth > 0 else { return [] }
-        let signed = data.map { point -> (TimeInterval, [Double]) in
-            let segments = LivelineMath.stackedSegments(values: point.values, mode: mode)
-            return (
-                point.time,
-                zip(point.values, segments).map { rawValue, segment in
-                    rawValue < 0
-                        ? segment.lower - segment.upper
-                        : segment.upper - segment.lower
-                }
-            )
-        }
+        let signed = data.map { ($0.time, LivelineMath.stackedLayerValues(point: $0, mode: mode)) }
         return (0..<depth).map { index in
             timed(
                 String(format: LivelineStrings.labelSeriesFormat, index + 1),

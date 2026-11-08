@@ -208,29 +208,6 @@ enum LivelineMath {
         )
     }
 
-    static func computeCandleRange(
-        candles: [LivelineCandle],
-        liveCandle: LivelineCandle?,
-        referenceValue: Double?,
-        exaggerate: Bool
-    ) -> ClosedRange<Double> {
-        var points: [LivelinePoint] = []
-        points.reserveCapacity(candles.count * 2 + 2)
-
-        for candle in candles {
-            points.append(LivelinePoint(time: candle.time, value: candle.high))
-            points.append(LivelinePoint(time: candle.time, value: candle.low))
-        }
-
-        if let liveCandle {
-            points.append(LivelinePoint(time: liveCandle.time, value: liveCandle.high))
-            points.append(LivelinePoint(time: liveCandle.time, value: liveCandle.low))
-        }
-
-        let current = liveCandle?.close ?? candles.last?.close ?? 0
-        return computeRange(points: points, currentValue: current, referenceValue: referenceValue, exaggerate: exaggerate)
-    }
-
     static func interpolate(points: [LivelinePoint], at time: TimeInterval) -> Double? {
         interpolateOrdered(points: LivelineInputNormalizer.points(points), at: time)
     }
@@ -498,6 +475,10 @@ struct LivelineLayout {
         let range = max(0.001, maxValue - minValue)
         let t = (value - minValue) / range
         return bottomY - CGFloat(t) * chartHeight
+    }
+
+    func clampedY(for value: Double) -> CGFloat {
+        LivelineMath.clamp(y(for: value), padding.top, bottomY)
     }
 
     func time(for x: CGFloat) -> TimeInterval {

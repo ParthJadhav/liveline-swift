@@ -95,7 +95,7 @@ final class DemoRegressionUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["1 of 71 scenarios"].waitForExistence(timeout: 3))
         let card = element("storybook-card-sankey-basic")
         XCTAssertTrue(card.waitForExistence(timeout: 3))
-        XCTAssertFalse(element("storybook-card-line-basic").exists)
+        XCTAssertFalse(element("storybook-card-line-basic-dark").exists)
 
         card.tap()
         XCTAssertTrue(app.staticTexts["SwiftUI example"].waitForExistence(timeout: 3))

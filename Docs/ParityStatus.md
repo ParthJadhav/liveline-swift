@@ -18,8 +18,7 @@ This document tracks the native renderer against the upstream React/canvas Livel
 swift test
 xcodebuild -project Examples/LivelineDemo/LivelineDemo.xcodeproj -scheme LivelineDemo -destination 'generic/platform=iOS Simulator' build
 scripts/capture-storybook.sh --chart-only
-VISUAL_PARITY_EXCLUSIONS=line-show-value-windows,line-rounded-windows,line-text-windows,candle-mode-controls,multi-basic,multi-light,multi-compact,multi-two-series
-scripts/diff-storybook.sh --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12 --scenario-threshold line-orderbook:5.1:13
+scripts/verify-visual-parity.sh
 ```
 
 `scripts/capture-storybook.sh` injects the scenario wait through the testing SPI environment, advances native animations with a fixed 60fps snapshot cursor, and waits an extra 0.60 seconds before screenshotting so captures are repeatable. It uses the upstream orderbook seed `12345`. `line-orderbook` defaults to a `3.10` second snapshot elapsed time to align the seeded label stream with the browser reference after Playwright navigation and layout. The loading/empty-state scenarios default to `2.80` seconds to align the deterministic native waveform with the checked-in browser references. Other scenarios use the default 2.2 second snapshot elapsed time unless overridden. `STORYBOOK_ORDERBOOK_RANDOM_SEED` can override the Storybook orderbook seed for local tuning.
@@ -52,7 +51,7 @@ The intentionally excluded upstream scenarios are `line-show-value-windows`, `li
 
 ## Accepted Parity Gate
 
-- The release gate is `scripts/diff-storybook.sh --exclude-scenarios "$VISUAL_PARITY_EXCLUSIONS" --fail-changed-pct 5 --fail-rms 12 --scenario-threshold line-orderbook:5.1:13`, with `VISUAL_PARITY_EXCLUSIONS` set to the eight scenarios listed above. Only the orderbook scenario receives the narrow 5.1% / 13 RMS allowance needed for the intentionally stronger native secondary labels; the other 18 strict comparisons retain the 5% / 12 RMS gate.
+- The release gate is `scripts/verify-visual-parity.sh`, which excludes the eight scenarios listed above and fails any other comparison over 5% changed pixels or 12 RMS. Only the orderbook scenario receives the narrow 5.1% / 13 RMS allowance needed for the intentionally stronger native secondary labels; the other 18 strict comparisons retain the 5% / 12 RMS gate.
 - `line-orderbook` is the largest remaining outlier and passes its explicit 5.1% / 13 RMS allowance. Weighted label picks, seed, and stream phase align with the upstream reference without allocating platform bitmaps in the render loop; the remaining delta is stronger native secondary-label contrast plus cross-platform text antialiasing.
 - The excluded control-layout scenarios and all native-only chart forms remain covered by deterministic screenshot review even though they are not thresholded against structurally different upstream output.
 - Remaining strict-comparison deltas are text/grid halo differences, mostly from SwiftUI text rasterization versus canvas text drawing, plus the intentional native contrast increase.
