@@ -46,6 +46,19 @@ enum LivelineRenderer {
     static let candleLineLerpBase = 0.08
     static let candleLineAdaptiveBoost = 0.20
 
+    // MARK: Framing + reveal timing
+    // One set of speeds (per-16.7ms-frame lerp share) so loading, reveal, and re-framing read as
+    // a single motion. A share s settles in about ln(0.005) / ln(1 - s) frames.
+    /// Fade-in once data is ready: ~0.45s.
+    static let revealInSpeed = 0.18
+    /// Fade-out when a reload starts: ~0.25s, so the placeholder shows up promptly.
+    static let revealOutSpeed = 0.30
+    /// Window (time span) and value-range easing on a visible chart: ~0.5s.
+    static let framingSpeed = 0.16
+    /// Below this reveal the chart is effectively invisible, so framing snaps instead of easing.
+    /// The fade-in then shows the final framing rather than zooming into it after appearing.
+    static let hiddenRevealThreshold = 0.02
+
     static func draw(context: inout GraphicsContext, state: LivelineRenderState, input: LivelineRenderInput) {
         guard input.size.width > 8, input.size.height > 8 else {
             state.interactionSnapshot = nil
@@ -88,7 +101,10 @@ enum LivelineRenderer {
         // Everything below is derived from the *drawn* window rather than the
         // requested one, so a window change eases across frames instead of
         // remapping every visible time in a single one.
-        let effectiveWindow = resolvedWindow(state: state, input: input, plotWidth: chartWidth)
+        // Framing snaps while the chart is invisible (loading, or between a fade-out and the next
+        // fade-in), so a reload never fades in at the old framing and then zooms to the new one.
+        let framingSnaps = state.chartReveal < hiddenRevealThreshold
+        let effectiveWindow = resolvedWindow(state: state, input: input, plotWidth: chartWidth, snaps: framingSnaps)
         let anchor = anchorTime(latestTime: input.semantics.latestTime, timelineTimestamp: presentationTimestamp, window: effectiveWindow)
         let needsArrowRoom = isLine && showBadge && (config.autoDetectMomentum || config.momentum != nil)
         let buffer = needsArrowRoom ? max(baseBuffer, Double(37 / chartWidth)) : baseBuffer
@@ -101,7 +117,8 @@ enum LivelineRenderer {
             target: input.frozenRightEdge ?? liveRightEdge,
             window: effectiveWindow,
             state: state,
-            input: input
+            input: input,
+            snaps: framingSnaps
         )
         let leftEdge = rightEdge - effectiveWindow
 
@@ -124,7 +141,7 @@ enum LivelineRenderer {
         let hasRenderableData = renderData.hasData
         let targetReveal = hasRenderableData && !config.loading ? 1.0 : 0.0
         if config.fadeEffects && !input.motion.settlesImmediately && !input.motion.isPaused {
-            let revealSpeed = targetReveal > state.chartReveal ? 0.09 : 0.14
+            let revealSpeed = targetReveal > state.chartReveal ? revealInSpeed : revealOutSpeed
             state.chartReveal = LivelineMath.lerp(state.chartReveal, targetReveal, speed: revealSpeed, deltaTime: dt)
         } else {
             state.chartReveal = targetReveal
@@ -148,7 +165,7 @@ enum LivelineRenderer {
         let adaptiveSpeed = config.lerpSpeed + (1 - min(valueGap / rangeForSpeed, 1)) * 0.20
         if input.motion.isPaused {
             state.smoothValue = previousSmooth
-        } else if input.motion.settlesImmediately {
+        } else if input.motion.settlesImmediately || framingSnaps {
             state.smoothValue = currentValue
         } else {
             state.smoothValue = LivelineMath.lerp(previousSmooth, currentValue, speed: adaptiveSpeed, deltaTime: dt)
@@ -161,7 +178,7 @@ enum LivelineRenderer {
             visibleTimeRange: leftEdge...rightEdge,
             config: config
         )
-        if state.displayMin == nil || state.displayMax == nil || input.motion.settlesImmediately {
+        if state.displayMin == nil || state.displayMax == nil || input.motion.settlesImmediately || framingSnaps {
             state.displayMin = range.lowerBound
             state.displayMax = range.upperBound
         } else {
@@ -178,7 +195,8 @@ enum LivelineRenderer {
                 let gapRatio = min((gapMin + gapMax) / currentRange, 1)
                 rangeSpeed = 0.15 + (1 - gapRatio) * 0.20
             } else {
-                rangeSpeed = adaptiveSpeed
+                // Live ticks keep the adaptive speed; a re-frame never eases slower than the window.
+                rangeSpeed = max(adaptiveSpeed, framingSpeed)
             }
 
             var nextMin = LivelineMath.lerp(currentMin, range.lowerBound, speed: rangeSpeed, deltaTime: dt)
@@ -443,12 +461,15 @@ extension LivelineRenderer {
     static func resolvedWindow(
         state: LivelineRenderState,
         input: LivelineRenderInput,
-        plotWidth: CGFloat
+        plotWidth: CGFloat,
+        snaps: Bool = false
     ) -> TimeInterval {
         let target = input.activeWindow
-        // Reduce Motion, a settled single-frame export, and a chart that just
-        // changed identity all cut to the new span rather than animate to it.
+        // Reduce Motion, a settled single-frame export, a chart that just
+        // changed identity, and a hidden (loading) chart all cut to the new
+        // span rather than animate to it.
         guard !input.motion.settlesImmediately,
+              !snaps,
               state.chartIdentity == input.semantics.identity,
               let current = state.displayWindow,
               current.isFinite, current > 0,
@@ -462,7 +483,7 @@ extension LivelineRenderer {
         // reconcile that may reset it — so read the delta without consuming it.
         // While paused the delta is zero and the eased span simply holds.
         let dt = state.peekDeltaMilliseconds(for: input.timestamp, isPaused: input.motion.isPaused)
-        var next = LivelineMath.lerp(current, target, speed: 0.08, deltaTime: dt)
+        var next = LivelineMath.lerp(current, target, speed: framingSpeed, deltaTime: dt)
         // Settle once the remainder is worth less than half a pixel of plot,
         // the same convergence rule the value range uses, so the span does not
         // asymptote toward its target forever.
@@ -486,10 +507,12 @@ extension LivelineRenderer {
         target: TimeInterval,
         window: TimeInterval,
         state: LivelineRenderState,
-        input: LivelineRenderInput
+        input: LivelineRenderInput,
+        snaps: Bool = false
     ) -> TimeInterval {
         guard input.configuration.zoomAndPan,
               !input.motion.settlesImmediately,
+              !snaps,
               !input.motion.isPaused,
               let previous = state.displayRightEdge,
               previous.isFinite,
