@@ -298,7 +298,7 @@ extension LivelineRenderer {
             return
         }
 
-        let range = max(0.001, displayMax - displayMin)
+        let range = LivelineScalar.valueSpan(lower: displayMin, upper: displayMax)
 
         if let liveCandle {
             if let current = state.candleCloseLineSmooth {

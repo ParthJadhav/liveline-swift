@@ -140,7 +140,10 @@ enum LivelineRenderer {
         }
         let currentValue = renderData.primaryValue
         let previousSmooth = state.smoothValue ?? currentValue
-        let rangeForSpeed = max(0.001, (state.displayMax ?? currentValue + 0.2) - (state.displayMin ?? currentValue - 0.2))
+        let rangeForSpeed = LivelineScalar.valueSpan(
+            lower: state.displayMin ?? currentValue,
+            upper: state.displayMax ?? currentValue
+        )
         let valueGap = abs(currentValue - previousSmooth)
         let adaptiveSpeed = config.lerpSpeed + (1 - min(valueGap / rangeForSpeed, 1)) * 0.20
         if input.motion.isPaused {
@@ -164,7 +167,7 @@ enum LivelineRenderer {
         } else {
             let currentMin = state.displayMin ?? range.lowerBound
             let currentMax = state.displayMax ?? range.upperBound
-            let currentRange = max(0.001, currentMax - currentMin)
+            let currentRange = LivelineScalar.valueSpan(lower: currentMin, upper: currentMax)
             let chartHeight = max(1, input.size.height - resolvedPadding.top - resolvedPadding.bottom)
             let rangeSpeed: Double
             if isMultiSeries {
@@ -180,7 +183,7 @@ enum LivelineRenderer {
 
             var nextMin = LivelineMath.lerp(currentMin, range.lowerBound, speed: rangeSpeed, deltaTime: dt)
             var nextMax = LivelineMath.lerp(currentMax, range.upperBound, speed: rangeSpeed, deltaTime: dt)
-            let pixelThreshold = max(0.001, 0.5 * currentRange / Double(chartHeight))
+            let pixelThreshold = 0.5 * currentRange / Double(chartHeight)
             if abs(nextMin - range.lowerBound) < pixelThreshold { nextMin = range.lowerBound }
             if abs(nextMax - range.upperBound) < pixelThreshold { nextMax = range.upperBound }
             state.displayMin = nextMin

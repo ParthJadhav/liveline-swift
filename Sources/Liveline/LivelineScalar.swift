@@ -28,6 +28,19 @@ enum LivelineScalar {
         return min(duration, maximumTimeMagnitude)
     }
 
+    /// A price-relative span for constant data; zero has no magnitude to scale from.
+    static func flatValueSpan(at value: Double, exaggerate: Bool = false) -> Double {
+        let magnitude = abs(Self.value(value))
+        guard magnitude > 0 else { return exaggerate ? 0.04 : 0.40 }
+        return max(magnitude * (exaggerate ? 0.0004 : 0.004), magnitude.ulp * 4)
+    }
+
+    /// Keep every valid positive span, even below a cent or a single token price tick.
+    static func valueSpan(lower: Double, upper: Double) -> Double {
+        let span = upper - lower
+        return span.isFinite && span > 0 ? span : flatValueSpan(at: lower)
+    }
+
     static func nondegenerateRange(
         lower: Double,
         upper: Double,
@@ -39,8 +52,9 @@ enum LivelineScalar {
         guard lower <= upper else { return fallback }
         if lower < upper { return lower...upper }
 
-        let expandedLower = lower - 0.5
-        let expandedUpper = upper + 0.5
+        let halfSpan = flatValueSpan(at: lower) / 2
+        let expandedLower = lower - halfSpan
+        let expandedUpper = upper + halfSpan
         if expandedLower.isFinite, expandedUpper.isFinite, expandedLower < expandedUpper {
             return expandedLower...expandedUpper
         }

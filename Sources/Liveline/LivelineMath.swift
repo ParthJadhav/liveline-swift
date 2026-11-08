@@ -188,7 +188,7 @@ enum LivelineMath {
         let rawRange = targetMax - targetMin
         let marginFactor = exaggerate ? 0.01 : 0.12
         let minRange = rawRange * (exaggerate ? 0.02 : 0.10)
-        let floorRange = exaggerate ? 0.04 : 0.40
+        let floorRange = LivelineScalar.flatValueSpan(at: targetMin, exaggerate: exaggerate)
         let requiredRange = minRange == 0 ? floorRange : minRange
 
         if rawRange < requiredRange {
@@ -495,7 +495,7 @@ struct LivelineLayout {
     }
 
     func y(for value: Double) -> CGFloat {
-        let range = max(0.001, maxValue - minValue)
+        let range = LivelineScalar.valueSpan(lower: minValue, upper: maxValue)
         let t = (value - minValue) / range
         return bottomY - CGFloat(t) * chartHeight
     }
